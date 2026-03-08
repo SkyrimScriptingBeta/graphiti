@@ -32,15 +32,26 @@ struct NodeSearchConfig {
     int bfs_max_depth = 3;
 };
 
+enum class CommunitySearchMethod { cosine_similarity, bm25 };
+
 struct EpisodeSearchConfig {
     std::vector<EpisodeSearchMethod> search_methods = {EpisodeSearchMethod::bm25};
     Reranker reranker = Reranker::rrf;
+};
+
+struct CommunitySearchConfig {
+    std::vector<CommunitySearchMethod> search_methods = {CommunitySearchMethod::cosine_similarity,
+                                                          CommunitySearchMethod::bm25};
+    Reranker reranker = Reranker::rrf;
+    float sim_min_score = 0.0f;
+    float mmr_lambda = 0.5f;
 };
 
 struct SearchConfig {
     std::optional<EdgeSearchConfig> edge_config;
     std::optional<NodeSearchConfig> node_config;
     std::optional<EpisodeSearchConfig> episode_config;
+    std::optional<CommunitySearchConfig> community_config;
     int limit = 10;
     float reranker_min_score = 0.0f;
 };
@@ -52,6 +63,8 @@ struct SearchResults {
     std::vector<float> node_scores;
     std::vector<EpisodicNode> episodes;
     std::vector<float> episode_scores;
+    std::vector<CommunityNode> communities;
+    std::vector<float> community_scores;
 };
 
 // Pre-built search config recipes
@@ -68,6 +81,10 @@ SearchConfig node_hybrid_search_rrf();
 SearchConfig node_hybrid_search_mmr();
 SearchConfig node_hybrid_search_node_distance();
 SearchConfig node_hybrid_search_episode_mentions();
+
+// Community-only recipes
+SearchConfig community_hybrid_search_rrf();
+SearchConfig community_hybrid_search_mmr();
 
 // Combined recipes (edges + nodes + episodes)
 SearchConfig combined_hybrid_search_rrf();

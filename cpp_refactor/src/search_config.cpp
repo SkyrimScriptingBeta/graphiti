@@ -93,6 +93,30 @@ SearchConfig node_hybrid_search_episode_mentions() {
 }
 
 // ============================================================================
+// Community-only recipes
+// ============================================================================
+
+SearchConfig community_hybrid_search_rrf() {
+    SearchConfig config;
+    config.community_config = CommunitySearchConfig{
+        .search_methods = {CommunitySearchMethod::cosine_similarity, CommunitySearchMethod::bm25},
+        .reranker = Reranker::rrf,
+    };
+    config.limit = 3;
+    return config;
+}
+
+SearchConfig community_hybrid_search_mmr() {
+    SearchConfig config;
+    config.community_config = CommunitySearchConfig{
+        .search_methods = {CommunitySearchMethod::cosine_similarity, CommunitySearchMethod::bm25},
+        .reranker = Reranker::mmr,
+    };
+    config.limit = 3;
+    return config;
+}
+
+// ============================================================================
 // Combined recipes (edges + nodes + episodes)
 // ============================================================================
 

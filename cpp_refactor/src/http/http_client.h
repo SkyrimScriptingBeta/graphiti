@@ -14,7 +14,7 @@ struct HttpResponse {
 
 class HttpClient {
 public:
-    HttpClient() = default;
+    HttpClient();
     ~HttpClient();
 
     HttpClient(const HttpClient&) = delete;
@@ -33,8 +33,6 @@ public:
 private:
     struct Impl;
     Impl* impl_ = nullptr;
-
-    Impl* get_or_create(const std::string& host);
 };
 
 } // namespace graphiti

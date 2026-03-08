@@ -53,6 +53,7 @@ void to_json(nlohmann::json& j, const EntityNode& n) {
         {"created_at", timepoint_to_json(n.created_at)},
         {"summary", n.summary},
         {"attributes", n.attributes},
+        {"agent_ids", n.agent_ids},
     };
     if (n.name_embedding)
         j["name_embedding"] = *n.name_embedding;
@@ -72,6 +73,8 @@ void from_json(const nlohmann::json& j, EntityNode& n) {
         n.name_embedding = j.at("name_embedding").get<std::vector<float>>();
     else
         n.name_embedding = std::nullopt;
+    if (j.contains("agent_ids"))
+        j.at("agent_ids").get_to(n.agent_ids);
 }
 
 // --- EpisodicNode ---
@@ -87,6 +90,7 @@ void to_json(nlohmann::json& j, const EpisodicNode& n) {
         {"content", n.content},
         {"valid_at", timepoint_to_json(n.valid_at)},
         {"entity_edges", n.entity_edges},
+        {"agent_id", n.agent_id},
     };
 }
 
@@ -100,6 +104,8 @@ void from_json(const nlohmann::json& j, EpisodicNode& n) {
     j.at("content").get_to(n.content);
     n.valid_at = timepoint_from_json(j.at("valid_at"));
     j.at("entity_edges").get_to(n.entity_edges);
+    if (j.contains("agent_id"))
+        j.at("agent_id").get_to(n.agent_id);
 }
 
 // --- CommunityNode ---
@@ -111,6 +117,7 @@ void to_json(nlohmann::json& j, const CommunityNode& n) {
         {"group_id", n.group_id},
         {"created_at", timepoint_to_json(n.created_at)},
         {"summary", n.summary},
+        {"agent_ids", n.agent_ids},
     };
     if (n.name_embedding)
         j["name_embedding"] = *n.name_embedding;
@@ -128,6 +135,8 @@ void from_json(const nlohmann::json& j, CommunityNode& n) {
         n.name_embedding = j.at("name_embedding").get<std::vector<float>>();
     else
         n.name_embedding = std::nullopt;
+    if (j.contains("agent_ids"))
+        j.at("agent_ids").get_to(n.agent_ids);
 }
 
 // --- SagaNode ---
@@ -164,6 +173,7 @@ void to_json(nlohmann::json& j, const EntityEdge& e) {
         {"valid_at", optional_timepoint_to_json(e.valid_at)},
         {"invalid_at", optional_timepoint_to_json(e.invalid_at)},
         {"attributes", e.attributes},
+        {"agent_ids", e.agent_ids},
     };
     if (e.fact_embedding)
         j["fact_embedding"] = *e.fact_embedding;
@@ -188,6 +198,8 @@ void from_json(const nlohmann::json& j, EntityEdge& e) {
         e.fact_embedding = j.at("fact_embedding").get<std::vector<float>>();
     else
         e.fact_embedding = std::nullopt;
+    if (j.contains("agent_ids"))
+        j.at("agent_ids").get_to(e.agent_ids);
 }
 
 // --- Simple edge types (all share the same structure) ---
@@ -217,10 +229,13 @@ static void simple_edge_from_json(const nlohmann::json& j, std::string& uuid,
 void to_json(nlohmann::json& j, const EpisodicEdge& e) {
     simple_edge_to_json(j, e.uuid, e.group_id, e.source_node_uuid, e.target_node_uuid,
                         e.created_at);
+    j["agent_id"] = e.agent_id;
 }
 void from_json(const nlohmann::json& j, EpisodicEdge& e) {
     simple_edge_from_json(j, e.uuid, e.group_id, e.source_node_uuid, e.target_node_uuid,
                           e.created_at);
+    if (j.contains("agent_id"))
+        j.at("agent_id").get_to(e.agent_id);
 }
 
 void to_json(nlohmann::json& j, const CommunityEdge& e) {

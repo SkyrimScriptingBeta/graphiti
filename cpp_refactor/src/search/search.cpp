@@ -571,6 +571,61 @@ Result<SearchResults> search_orchestrator(
         }
     }
 
+    // --- Community search ---
+    if (config.community_config.has_value()) {
+        auto& cc = config.community_config.value();
+
+        bool do_bm25 = false, do_cosine = false;
+        for (auto m : cc.search_methods) {
+            switch (m) {
+                case CommunitySearchMethod::bm25: do_bm25 = true; break;
+                case CommunitySearchMethod::cosine_similarity: do_cosine = true; break;
+            }
+        }
+
+        std::vector<float> query_embedding;
+        if (do_cosine) {
+            try {
+                query_embedding = embedder.create(query);
+            } catch (...) {}
+        }
+
+        std::unordered_map<std::string, CommunityNode> community_map;
+        std::vector<std::string> bm25_uuids, cosine_uuids;
+
+        if (do_bm25) {
+            auto r = driver.search_communities_bm25(query, group_id, limit);
+            if (r.has_value()) {
+                for (auto& c : r.value()) {
+                    bm25_uuids.push_back(c.uuid);
+                    community_map.emplace(c.uuid, std::move(c));
+                }
+            }
+        }
+
+        if (do_cosine && !query_embedding.empty()) {
+            auto r = driver.search_communities_cosine(
+                query_embedding, group_id, cc.sim_min_score, limit);
+            if (r.has_value()) {
+                for (auto& c : r.value()) {
+                    cosine_uuids.push_back(c.uuid);
+                    if (!community_map.contains(c.uuid))
+                        community_map.emplace(c.uuid, std::move(c));
+                }
+            }
+        }
+
+        auto [ranked_uuids, ranked_scores] = rrf({bm25_uuids, cosine_uuids}, 1, reranker_min);
+
+        for (size_t i = 0; i < ranked_uuids.size() && static_cast<int>(i) < limit; ++i) {
+            auto it = community_map.find(ranked_uuids[i]);
+            if (it != community_map.end()) {
+                results.communities.push_back(std::move(it->second));
+                results.community_scores.push_back(ranked_scores[i]);
+            }
+        }
+    }
+
     return results;
 }
 

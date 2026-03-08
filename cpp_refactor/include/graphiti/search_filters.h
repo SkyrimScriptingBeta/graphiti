@@ -57,6 +57,11 @@ struct SearchFilters {
 
     // Generic property filters (future use)
     std::vector<PropertyFilter> property_filters;
+
+    // Agent attribution filter (optional, empty = no filter)
+    // When set, results are filtered to items attributed to any of these agents.
+    // Uses: any(aid IN e.agent_ids WHERE list_contains($agent_ids, aid))
+    std::vector<std::string> agent_ids;
 };
 
 // Convert ComparisonOp to Cypher operator string

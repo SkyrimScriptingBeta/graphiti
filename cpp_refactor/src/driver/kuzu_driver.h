@@ -101,6 +101,55 @@ public:
         const SearchFilters* filters = nullptr
     );
 
+    // Community node operations
+    VoidResult save_community_node(const CommunityNode& node);
+    Result<CommunityNode> get_community_node(std::string_view uuid);
+    VoidResult delete_community_node(std::string_view uuid);
+    VoidResult save_community_node_embedding(std::string_view uuid, const std::vector<float>& embedding);
+
+    // Community edge operations (HAS_MEMBER: Community -> Entity or Community -> Community)
+    VoidResult save_community_edge(const CommunityEdge& edge);
+    VoidResult delete_community_edge(std::string_view uuid);
+
+    // Community queries
+    Result<std::optional<CommunityNode>> get_entity_community(std::string_view entity_uuid);
+    Result<std::vector<CommunityNode>> get_neighbor_communities(std::string_view entity_uuid);
+    struct Neighbor { std::string node_uuid; int64_t edge_count; };
+    Result<std::vector<Neighbor>> get_entity_neighbors(std::string_view entity_uuid, std::string_view group_id);
+
+    // Community search
+    Result<std::vector<CommunityNode>> search_communities_bm25(
+        std::string_view query, std::string_view group_id, int limit = 10);
+    Result<std::vector<CommunityNode>> search_communities_cosine(
+        const std::vector<float>& query_embedding, std::string_view group_id,
+        float min_score = 0.0f, int limit = 10);
+
+    // Saga node operations
+    VoidResult save_saga_node(const SagaNode& node);
+    Result<SagaNode> get_saga_node(std::string_view uuid);
+    Result<std::optional<SagaNode>> get_saga_by_name(std::string_view name, std::string_view group_id);
+    VoidResult delete_saga_node(std::string_view uuid);
+
+    // HAS_EPISODE edge operations (Saga -> Episodic)
+    VoidResult save_has_episode_edge(std::string_view uuid, std::string_view saga_uuid,
+                                     std::string_view episode_uuid, std::string_view group_id,
+                                     TimePoint created_at);
+
+    // NEXT_EPISODE edge operations (Episodic -> Episodic)
+    VoidResult save_next_episode_edge(std::string_view uuid, std::string_view source_episode_uuid,
+                                      std::string_view target_episode_uuid, std::string_view group_id,
+                                      TimePoint created_at);
+
+    // Saga queries
+    Result<std::optional<std::string>> get_last_episode_in_saga(std::string_view saga_uuid,
+                                                                 std::string_view exclude_episode_uuid = "");
+
+    // Saga-aware episode retrieval
+    Result<std::vector<EpisodicNode>> retrieve_episodes_by_saga(
+        std::string_view saga_name, std::string_view group_id,
+        TimePoint reference_time, int last_n = 20
+    );
+
     // Reranker queries
     Result<int64_t> count_episode_mentions(std::string_view entity_uuid);
     Result<bool> check_node_adjacency(std::string_view center_uuid, std::string_view node_uuid);

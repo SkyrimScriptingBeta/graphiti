@@ -26,6 +26,7 @@ struct EntityNode {
     std::optional<std::vector<float>> name_embedding;
     std::string summary;
     nlohmann::json attributes = nlohmann::json::object();
+    std::vector<std::string> agent_ids;
 };
 
 struct EpisodicNode {
@@ -38,6 +39,7 @@ struct EpisodicNode {
     std::string content;
     TimePoint valid_at;
     std::vector<std::string> entity_edges;
+    std::string agent_id;
 };
 
 struct CommunityNode {
@@ -47,6 +49,7 @@ struct CommunityNode {
     TimePoint created_at;
     std::optional<std::vector<float>> name_embedding;
     std::string summary;
+    std::vector<std::string> agent_ids;
 };
 
 struct SagaNode {
@@ -72,6 +75,7 @@ struct EntityEdge {
     std::optional<TimePoint> valid_at;
     std::optional<TimePoint> invalid_at;
     nlohmann::json attributes = nlohmann::json::object();
+    std::vector<std::string> agent_ids;
 };
 
 struct EpisodicEdge {
@@ -80,6 +84,7 @@ struct EpisodicEdge {
     std::string source_node_uuid;
     std::string target_node_uuid;
     TimePoint created_at;
+    std::string agent_id;
 };
 
 struct CommunityEdge {

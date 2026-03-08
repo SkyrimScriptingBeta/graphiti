@@ -22,7 +22,8 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         source_description STRING,
         content STRING,
         valid_at TIMESTAMP,
-        entity_edges STRING[]
+        entity_edges STRING[],
+        agent_id STRING DEFAULT ''
     ))",
 
     R"(CREATE NODE TABLE IF NOT EXISTS Entity (
@@ -33,7 +34,8 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         created_at TIMESTAMP,
         name_embedding FLOAT[],
         summary STRING,
-        attributes STRING
+        attributes STRING,
+        agent_ids STRING[] DEFAULT []
     ))",
 
     R"(CREATE NODE TABLE IF NOT EXISTS Community (
@@ -42,7 +44,8 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         group_id STRING,
         created_at TIMESTAMP,
         name_embedding FLOAT[],
-        summary STRING
+        summary STRING,
+        agent_ids STRING[] DEFAULT []
     ))",
 
     R"(CREATE NODE TABLE IF NOT EXISTS RelatesToNode_ (
@@ -56,7 +59,8 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         expired_at TIMESTAMP,
         valid_at TIMESTAMP,
         invalid_at TIMESTAMP,
-        attributes STRING
+        attributes STRING,
+        agent_ids STRING[] DEFAULT []
     ))",
 
     R"(CREATE NODE TABLE IF NOT EXISTS Saga (
@@ -75,7 +79,8 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         FROM Episodic TO Entity,
         uuid STRING PRIMARY KEY,
         group_id STRING,
-        created_at TIMESTAMP
+        created_at TIMESTAMP,
+        agent_id STRING DEFAULT ''
     ))",
 
     R"(CREATE REL TABLE IF NOT EXISTS HAS_MEMBER(

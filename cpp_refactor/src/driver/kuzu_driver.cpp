@@ -144,7 +144,7 @@ auto get_json_attr(kuzu::common::Value* v) -> nlohmann::json {
 // Row -> struct converters
 // ============================================================================
 
-// Columns: uuid(0), name(1), group_id(2), labels(3), created_at(4), summary(5), attributes(6)
+// Columns: uuid(0), name(1), group_id(2), labels(3), created_at(4), summary(5), attributes(6), agent_ids(7)
 auto entity_from_row(kuzu::main::QueryResult* result) -> EntityNode {
     auto tuple = result->getNext();
     return EntityNode{
@@ -156,6 +156,7 @@ auto entity_from_row(kuzu::main::QueryResult* result) -> EntityNode {
         .name_embedding = std::nullopt,
         .summary = get_str(tuple->getValue(5)),
         .attributes = get_json_attr(tuple->getValue(6)),
+        .agent_ids = get_string_list(tuple->getValue(7)),
     };
 }
 
@@ -172,13 +173,14 @@ auto collect_entities(kuzu::main::QueryResult* result) -> std::vector<EntityNode
             .name_embedding = std::nullopt,
             .summary = get_str(tuple->getValue(5)),
             .attributes = get_json_attr(tuple->getValue(6)),
+            .agent_ids = get_string_list(tuple->getValue(7)),
         });
     }
     return nodes;
 }
 
 // Columns: uuid(0), name(1), group_id(2), created_at(3), source(4),
-//          source_description(5), content(6), valid_at(7), entity_edges(8)
+//          source_description(5), content(6), valid_at(7), entity_edges(8), agent_id(9)
 auto episodic_from_row(kuzu::main::QueryResult* result) -> EpisodicNode {
     auto tuple = result->getNext();
     return EpisodicNode{
@@ -191,6 +193,7 @@ auto episodic_from_row(kuzu::main::QueryResult* result) -> EpisodicNode {
         .content = get_str(tuple->getValue(6)),
         .valid_at = get_ts(tuple->getValue(7)),
         .entity_edges = get_string_list(tuple->getValue(8)),
+        .agent_id = get_str(tuple->getValue(9)),
     };
 }
 
@@ -208,6 +211,7 @@ auto collect_episodes(kuzu::main::QueryResult* result) -> std::vector<EpisodicNo
             .content = get_str(tuple->getValue(6)),
             .valid_at = get_ts(tuple->getValue(7)),
             .entity_edges = get_string_list(tuple->getValue(8)),
+            .agent_id = get_str(tuple->getValue(9)),
         });
     }
     return nodes;
@@ -215,7 +219,7 @@ auto collect_episodes(kuzu::main::QueryResult* result) -> std::vector<EpisodicNo
 
 // Columns: uuid(0), source_node_uuid(1), target_node_uuid(2), group_id(3),
 //          created_at(4), name(5), fact(6), episodes(7),
-//          expired_at(8), valid_at(9), invalid_at(10), attributes(11)
+//          expired_at(8), valid_at(9), invalid_at(10), attributes(11), agent_ids(12)
 auto collect_entity_edges(kuzu::main::QueryResult* result) -> std::vector<EntityEdge> {
     std::vector<EntityEdge> edges;
     while (result->hasNext()) {
@@ -234,6 +238,7 @@ auto collect_entity_edges(kuzu::main::QueryResult* result) -> std::vector<Entity
             .valid_at = get_opt_ts(tuple->getValue(9)),
             .invalid_at = get_opt_ts(tuple->getValue(10)),
             .attributes = get_json_attr(tuple->getValue(11)),
+            .agent_ids = get_string_list(tuple->getValue(12)),
         });
     }
     return edges;
@@ -252,7 +257,8 @@ constexpr std::string_view ENTITY_EDGE_RETURN = R"(
     e.expired_at AS expired_at,
     e.valid_at AS valid_at,
     e.invalid_at AS invalid_at,
-    e.attributes AS attributes
+    e.attributes AS attributes,
+    e.agent_ids AS agent_ids
 )";
 
 // Entity node RETURN clause
@@ -263,7 +269,8 @@ constexpr std::string_view ENTITY_NODE_RETURN = R"(
     n.labels AS labels,
     n.created_at AS created_at,
     n.summary AS summary,
-    n.attributes AS attributes
+    n.attributes AS attributes,
+    n.agent_ids AS agent_ids
 )";
 
 // Episodic node RETURN clause
@@ -276,8 +283,37 @@ constexpr std::string_view EPISODIC_NODE_RETURN = R"(
     e.source_description AS source_description,
     e.content AS content,
     e.valid_at AS valid_at,
-    e.entity_edges AS entity_edges
+    e.entity_edges AS entity_edges,
+    e.agent_id AS agent_id
 )";
+
+// Community node RETURN clause
+constexpr std::string_view COMMUNITY_NODE_RETURN = R"(
+    c.uuid AS uuid,
+    c.name AS name,
+    c.group_id AS group_id,
+    c.created_at AS created_at,
+    c.name_embedding AS name_embedding,
+    c.summary AS summary,
+    c.agent_ids AS agent_ids
+)";
+
+auto collect_communities(kuzu::main::QueryResult* result) -> std::vector<CommunityNode> {
+    std::vector<CommunityNode> nodes;
+    while (result->hasNext()) {
+        auto tuple = result->getNext();
+        nodes.push_back(CommunityNode{
+            .uuid = get_str(tuple->getValue(0)),
+            .name = get_str(tuple->getValue(1)),
+            .group_id = get_str(tuple->getValue(2)),
+            .created_at = get_ts(tuple->getValue(3)),
+            .name_embedding = get_opt_float_list(tuple->getValue(4)),
+            .summary = get_str(tuple->getValue(5)),
+            .agent_ids = get_string_list(tuple->getValue(6)),
+        });
+    }
+    return nodes;
+}
 
 } // anonymous namespace
 
@@ -397,7 +433,8 @@ SET
     n.created_at = $created_at,
     n.name_embedding = $name_embedding,
     n.summary = $summary,
-    n.attributes = $attributes
+    n.attributes = $attributes,
+    n.agent_ids = $agent_ids
 RETURN n.uuid AS uuid)");
 
     ParamMap params;
@@ -409,6 +446,7 @@ RETURN n.uuid AS uuid)");
     params["name_embedding"] = opt_float_list_val(node.name_embedding);
     params["summary"] = str_val(node.summary);
     params["attributes"] = str_val(node.attributes.dump());
+    params["agent_ids"] = string_list_val(node.agent_ids);
 
     return impl_->run_params(query, std::move(params));
 }
@@ -487,7 +525,8 @@ SET
     n.source_description = $source_description,
     n.content = $content,
     n.valid_at = $valid_at,
-    n.entity_edges = $entity_edges
+    n.entity_edges = $entity_edges,
+    n.agent_id = $agent_id
 RETURN n.uuid AS uuid)";
 
     ParamMap params;
@@ -500,6 +539,7 @@ RETURN n.uuid AS uuid)";
     params["content"] = str_val(node.content);
     params["valid_at"] = ts_val(node.valid_at);
     params["entity_edges"] = string_list_val(node.entity_edges);
+    params["agent_id"] = str_val(node.agent_id);
 
     return impl_->run_params(query, std::move(params));
 }
@@ -571,7 +611,8 @@ SET
     e.expired_at = $expired_at,
     e.valid_at = $valid_at,
     e.invalid_at = $invalid_at,
-    e.attributes = $attributes
+    e.attributes = $attributes,
+    e.agent_ids = $agent_ids
 RETURN e.uuid AS uuid)";
 
     ParamMap params;
@@ -588,6 +629,7 @@ RETURN e.uuid AS uuid)";
     params["valid_at"] = opt_ts_val(edge.valid_at);
     params["invalid_at"] = opt_ts_val(edge.invalid_at);
     params["attributes"] = str_val(edge.attributes.dump());
+    params["agent_ids"] = string_list_val(edge.agent_ids);
 
     return impl_->run_params(query, std::move(params));
 }
@@ -686,7 +728,8 @@ MATCH (node:Entity {uuid: $entity_uuid})
 MERGE (episode)-[e:MENTIONS {uuid: $uuid}]->(node)
 SET
     e.group_id = $group_id,
-    e.created_at = $created_at
+    e.created_at = $created_at,
+    e.agent_id = $agent_id
 RETURN e.uuid AS uuid)";
 
     ParamMap params;
@@ -695,6 +738,7 @@ RETURN e.uuid AS uuid)";
     params["uuid"] = str_val(edge.uuid);
     params["group_id"] = str_val(edge.group_id);
     params["created_at"] = ts_val(edge.created_at);
+    params["agent_id"] = str_val(edge.agent_id);
 
     return impl_->run_params(query, std::move(params));
 }
@@ -1103,6 +1147,426 @@ LIMIT {})", combined_depth, group_filter, extra_where, ENTITY_NODE_RETURN, limit
 }
 
 // ============================================================================
+// Community Node Operations
+// ============================================================================
+
+VoidResult KuzuDriver::save_community_node(const CommunityNode& node) {
+    static const std::string query =
+        R"(MERGE (n:Community {uuid: $uuid})
+SET
+    n.name = $name,
+    n.group_id = $group_id,
+    n.created_at = $created_at,
+    n.name_embedding = $name_embedding,
+    n.summary = $summary,
+    n.agent_ids = $agent_ids
+RETURN n.uuid AS uuid)";
+
+    ParamMap params;
+    params["uuid"] = str_val(node.uuid);
+    params["name"] = str_val(node.name);
+    params["group_id"] = str_val(node.group_id);
+    params["created_at"] = ts_val(node.created_at);
+    params["name_embedding"] = opt_float_list_val(node.name_embedding);
+    params["summary"] = str_val(node.summary);
+    params["agent_ids"] = string_list_val(node.agent_ids);
+
+    return impl_->run_params(query, std::move(params));
+}
+
+Result<CommunityNode> KuzuDriver::get_community_node(std::string_view uuid) {
+    auto cypher = std::format(
+        R"(MATCH (c:Community {{uuid: $uuid}})
+RETURN {})", COMMUNITY_NODE_RETURN);
+
+    ParamMap params;
+    params["uuid"] = str_val(uuid);
+
+    auto result = impl_->query_params(cypher, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    auto* qr = result->get();
+    if (!qr->hasNext()) {
+        return std::unexpected(
+            GraphitiError{ErrorCode::not_found,
+                          std::format("Community node '{}' not found", uuid)});
+    }
+
+    auto nodes = collect_communities(qr);
+    return std::move(nodes[0]);
+}
+
+VoidResult KuzuDriver::delete_community_node(std::string_view uuid) {
+    ParamMap params;
+    params["uuid"] = str_val(uuid);
+    return impl_->run_params(
+        R"(MATCH (n:Community {uuid: $uuid}) DETACH DELETE n)",
+        std::move(params));
+}
+
+VoidResult KuzuDriver::save_community_node_embedding(
+    std::string_view uuid, const std::vector<float>& embedding) {
+    static const std::string query =
+        R"(MATCH (n:Community {uuid: $uuid})
+SET n.name_embedding = $embedding)";
+
+    ParamMap params;
+    params["uuid"] = str_val(uuid);
+    params["embedding"] = float_list_val(embedding);
+
+    return impl_->run_params(query, std::move(params));
+}
+
+// ============================================================================
+// Community Edge Operations (HAS_MEMBER)
+// ============================================================================
+
+VoidResult KuzuDriver::save_community_edge(const CommunityEdge& edge) {
+    // Try Entity target first, then Community target (UNION pattern)
+    static const std::string query =
+        R"(MATCH (community:Community {uuid: $community_uuid})
+MATCH (node:Entity {uuid: $entity_uuid})
+MERGE (community)-[e:HAS_MEMBER {uuid: $uuid}]->(node)
+SET
+    e.group_id = $group_id,
+    e.created_at = $created_at
+RETURN e.uuid AS uuid
+UNION
+MATCH (community:Community {uuid: $community_uuid})
+MATCH (node:Community {uuid: $entity_uuid})
+MERGE (community)-[e:HAS_MEMBER {uuid: $uuid}]->(node)
+SET
+    e.group_id = $group_id,
+    e.created_at = $created_at
+RETURN e.uuid AS uuid)";
+
+    ParamMap params;
+    params["community_uuid"] = str_val(edge.source_node_uuid);
+    params["entity_uuid"] = str_val(edge.target_node_uuid);
+    params["uuid"] = str_val(edge.uuid);
+    params["group_id"] = str_val(edge.group_id);
+    params["created_at"] = ts_val(edge.created_at);
+
+    return impl_->run_params(query, std::move(params));
+}
+
+VoidResult KuzuDriver::delete_community_edge(std::string_view uuid) {
+    ParamMap params;
+    params["uuid"] = str_val(uuid);
+    return impl_->run_params(
+        R"(MATCH (n:Community)-[e:HAS_MEMBER {uuid: $uuid}]->(m) DELETE e)",
+        std::move(params));
+}
+
+// ============================================================================
+// Community Queries
+// ============================================================================
+
+Result<std::optional<CommunityNode>> KuzuDriver::get_entity_community(
+    std::string_view entity_uuid) {
+    auto cypher = std::format(
+        R"(MATCH (c:Community)-[:HAS_MEMBER]->(n:Entity {{uuid: $entity_uuid}})
+RETURN {})", COMMUNITY_NODE_RETURN);
+
+    ParamMap params;
+    params["entity_uuid"] = str_val(entity_uuid);
+
+    auto result = impl_->query_params(cypher, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    auto* qr = result->get();
+    if (!qr->hasNext()) return std::optional<CommunityNode>(std::nullopt);
+
+    auto nodes = collect_communities(qr);
+    return std::optional<CommunityNode>(std::move(nodes[0]));
+}
+
+Result<std::vector<CommunityNode>> KuzuDriver::get_neighbor_communities(
+    std::string_view entity_uuid) {
+    auto cypher = std::format(
+        R"(MATCH (c:Community)-[:HAS_MEMBER]->(m:Entity)-[:RELATES_TO]-(e:RelatesToNode_)-[:RELATES_TO]-(n:Entity {{uuid: $entity_uuid}})
+RETURN {})", COMMUNITY_NODE_RETURN);
+
+    ParamMap params;
+    params["entity_uuid"] = str_val(entity_uuid);
+
+    auto result = impl_->query_params(cypher, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    return collect_communities(result->get());
+}
+
+Result<std::vector<KuzuDriver::Neighbor>> KuzuDriver::get_entity_neighbors(
+    std::string_view entity_uuid, std::string_view group_id) {
+    static const std::string cypher =
+        R"(MATCH (n:Entity {group_id: $group_id, uuid: $uuid})-[:RELATES_TO]-(e:RelatesToNode_)-[:RELATES_TO]-(m:Entity {group_id: $group_id})
+WITH count(e) AS cnt, m.uuid AS uuid
+RETURN uuid, cnt)";
+
+    ParamMap params;
+    params["uuid"] = str_val(entity_uuid);
+    params["group_id"] = str_val(group_id);
+
+    auto result = impl_->query_params(cypher, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    std::vector<Neighbor> neighbors;
+    auto* qr = result->get();
+    while (qr->hasNext()) {
+        auto tuple = qr->getNext();
+        neighbors.push_back({
+            .node_uuid = get_str(tuple->getValue(0)),
+            .edge_count = tuple->getValue(1)->getValue<int64_t>(),
+        });
+    }
+    return neighbors;
+}
+
+// ============================================================================
+// Community Search
+// ============================================================================
+
+Result<std::vector<CommunityNode>> KuzuDriver::search_communities_bm25(
+    std::string_view query, std::string_view group_id, int limit) {
+    auto cypher = std::format(
+        R"(CALL QUERY_FTS_INDEX('Community', 'community_name', $query) YIELD node, score
+WITH node AS c, score
+WHERE c.group_id = $group_id
+RETURN {}
+ORDER BY score DESC
+LIMIT $limit)", COMMUNITY_NODE_RETURN);
+
+    ParamMap params;
+    params["query"] = str_val(query);
+    params["group_id"] = str_val(group_id);
+    params["limit"] = int_val(limit);
+
+    auto result = impl_->query_params(cypher, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    return collect_communities(result->get());
+}
+
+Result<std::vector<CommunityNode>> KuzuDriver::search_communities_cosine(
+    const std::vector<float>& query_embedding, std::string_view group_id,
+    float min_score, int limit) {
+    // Kuzu array_cosine_similarity with CAST
+    auto cypher = std::format(
+        R"(MATCH (c:Community)
+WHERE c.group_id = $group_id AND c.name_embedding IS NOT NULL
+WITH c, array_cosine_similarity(c.name_embedding, CAST($embedding AS FLOAT[{}])) AS score
+WHERE score > $min_score
+RETURN {}
+ORDER BY score DESC
+LIMIT $limit)", query_embedding.size(), COMMUNITY_NODE_RETURN);
+
+    ParamMap params;
+    params["embedding"] = float_list_val(query_embedding);
+    params["group_id"] = str_val(group_id);
+    params["min_score"] = float_val(static_cast<double>(min_score));
+    params["limit"] = int_val(limit);
+
+    auto result = impl_->query_params(cypher, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    return collect_communities(result->get());
+}
+
+// ============================================================================
+// Saga Node Operations
+// ============================================================================
+
+VoidResult KuzuDriver::save_saga_node(const SagaNode& node) {
+    static const std::string query =
+        R"(MERGE (n:Saga {uuid: $uuid})
+SET
+    n.name = $name,
+    n.group_id = $group_id,
+    n.created_at = $created_at
+RETURN n.uuid AS uuid)";
+
+    ParamMap params;
+    params["uuid"] = str_val(node.uuid);
+    params["name"] = str_val(node.name);
+    params["group_id"] = str_val(node.group_id);
+    params["created_at"] = ts_val(node.created_at);
+
+    return impl_->run_params(query, std::move(params));
+}
+
+Result<SagaNode> KuzuDriver::get_saga_node(std::string_view uuid) {
+    static const std::string query =
+        R"(MATCH (s:Saga {uuid: $uuid})
+RETURN s.uuid AS uuid, s.name AS name, s.group_id AS group_id, s.created_at AS created_at)";
+
+    ParamMap params;
+    params["uuid"] = str_val(uuid);
+
+    auto result = impl_->query_params(query, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    auto* qr = result->get();
+    if (!qr->hasNext()) {
+        return std::unexpected(
+            GraphitiError{ErrorCode::not_found,
+                          std::format("Saga node '{}' not found", uuid)});
+    }
+
+    auto tuple = qr->getNext();
+    return SagaNode{
+        .uuid = get_str(tuple->getValue(0)),
+        .name = get_str(tuple->getValue(1)),
+        .group_id = get_str(tuple->getValue(2)),
+        .created_at = get_ts(tuple->getValue(3)),
+    };
+}
+
+Result<std::optional<SagaNode>> KuzuDriver::get_saga_by_name(
+    std::string_view name, std::string_view group_id) {
+    static const std::string query =
+        R"(MATCH (s:Saga {name: $name, group_id: $group_id})
+RETURN s.uuid AS uuid, s.name AS name, s.group_id AS group_id, s.created_at AS created_at)";
+
+    ParamMap params;
+    params["name"] = str_val(name);
+    params["group_id"] = str_val(group_id);
+
+    auto result = impl_->query_params(query, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    auto* qr = result->get();
+    if (!qr->hasNext()) {
+        return std::optional<SagaNode>(std::nullopt);
+    }
+
+    auto tuple = qr->getNext();
+    return std::optional<SagaNode>(SagaNode{
+        .uuid = get_str(tuple->getValue(0)),
+        .name = get_str(tuple->getValue(1)),
+        .group_id = get_str(tuple->getValue(2)),
+        .created_at = get_ts(tuple->getValue(3)),
+    });
+}
+
+VoidResult KuzuDriver::delete_saga_node(std::string_view uuid) {
+    ParamMap params;
+    params["uuid"] = str_val(uuid);
+    return impl_->run_params(
+        R"(MATCH (n:Saga {uuid: $uuid}) DETACH DELETE n)",
+        std::move(params));
+}
+
+// ============================================================================
+// HAS_EPISODE Edge Operations (Saga -> Episodic)
+// ============================================================================
+
+VoidResult KuzuDriver::save_has_episode_edge(
+    std::string_view uuid, std::string_view saga_uuid,
+    std::string_view episode_uuid, std::string_view group_id,
+    TimePoint created_at) {
+    static const std::string query =
+        R"(MATCH (saga:Saga {uuid: $saga_uuid})
+MATCH (episode:Episodic {uuid: $episode_uuid})
+MERGE (saga)-[e:HAS_EPISODE {uuid: $uuid}]->(episode)
+SET
+    e.group_id = $group_id,
+    e.created_at = $created_at
+RETURN e.uuid AS uuid)";
+
+    ParamMap params;
+    params["uuid"] = str_val(uuid);
+    params["saga_uuid"] = str_val(saga_uuid);
+    params["episode_uuid"] = str_val(episode_uuid);
+    params["group_id"] = str_val(group_id);
+    params["created_at"] = ts_val(created_at);
+
+    return impl_->run_params(query, std::move(params));
+}
+
+// ============================================================================
+// NEXT_EPISODE Edge Operations (Episodic -> Episodic)
+// ============================================================================
+
+VoidResult KuzuDriver::save_next_episode_edge(
+    std::string_view uuid, std::string_view source_episode_uuid,
+    std::string_view target_episode_uuid, std::string_view group_id,
+    TimePoint created_at) {
+    static const std::string query =
+        R"(MATCH (source:Episodic {uuid: $source_uuid})
+MATCH (target:Episodic {uuid: $target_uuid})
+MERGE (source)-[e:NEXT_EPISODE {uuid: $uuid}]->(target)
+SET
+    e.group_id = $group_id,
+    e.created_at = $created_at
+RETURN e.uuid AS uuid)";
+
+    ParamMap params;
+    params["uuid"] = str_val(uuid);
+    params["source_uuid"] = str_val(source_episode_uuid);
+    params["target_uuid"] = str_val(target_episode_uuid);
+    params["group_id"] = str_val(group_id);
+    params["created_at"] = ts_val(created_at);
+
+    return impl_->run_params(query, std::move(params));
+}
+
+// ============================================================================
+// Saga Queries
+// ============================================================================
+
+Result<std::optional<std::string>> KuzuDriver::get_last_episode_in_saga(
+    std::string_view saga_uuid, std::string_view exclude_episode_uuid) {
+    std::string cypher;
+    ParamMap params;
+    params["saga_uuid"] = str_val(saga_uuid);
+
+    if (exclude_episode_uuid.empty()) {
+        cypher = R"(MATCH (s:Saga {uuid: $saga_uuid})-[:HAS_EPISODE]->(e:Episodic)
+RETURN e.uuid AS uuid
+ORDER BY e.valid_at DESC, e.created_at DESC
+LIMIT 1)";
+    } else {
+        cypher = R"(MATCH (s:Saga {uuid: $saga_uuid})-[:HAS_EPISODE]->(e:Episodic)
+WHERE e.uuid <> $exclude_uuid
+RETURN e.uuid AS uuid
+ORDER BY e.valid_at DESC, e.created_at DESC
+LIMIT 1)";
+        params["exclude_uuid"] = str_val(exclude_episode_uuid);
+    }
+
+    auto result = impl_->query_params(cypher, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    auto* qr = result->get();
+    if (!qr->hasNext()) return std::optional<std::string>(std::nullopt);
+
+    auto tuple = qr->getNext();
+    return std::optional<std::string>(get_str(tuple->getValue(0)));
+}
+
+Result<std::vector<EpisodicNode>> KuzuDriver::retrieve_episodes_by_saga(
+    std::string_view saga_name, std::string_view group_id,
+    TimePoint reference_time, int last_n) {
+    auto cypher = std::format(
+        R"(MATCH (s:Saga {{name: $saga_name, group_id: $group_id}})-[:HAS_EPISODE]->(e:Episodic)
+WHERE e.valid_at <= $ref_time
+RETURN {}
+ORDER BY e.valid_at DESC
+LIMIT $limit)", EPISODIC_NODE_RETURN);
+
+    ParamMap params;
+    params["saga_name"] = str_val(saga_name);
+    params["group_id"] = str_val(group_id);
+    params["ref_time"] = ts_val(reference_time);
+    params["limit"] = int_val(last_n);
+
+    auto result = impl_->query_params(cypher, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    return collect_episodes(result->get());
+}
+
+// ============================================================================
 // Reranker queries
 // ============================================================================
 
@@ -1150,7 +1614,7 @@ VoidResult KuzuDriver::clear_data(const std::vector<std::string>& group_ids) {
 
     // Delete by group_ids, in order to respect foreign key constraints
     static const std::string tables[] = {
-        "RelatesToNode_", "Entity", "Episodic", "Community"};
+        "RelatesToNode_", "Entity", "Episodic", "Community", "Saga"};
 
     for (const auto& table : tables) {
         auto cypher = std::format(

@@ -14,8 +14,8 @@ struct HttpClient::Impl {
     std::mutex mutex;
     std::unordered_map<std::string, std::unique_ptr<httplib::Client>> clients;
 
-    httplib::Client* get_or_create(const std::string& host) {
-        std::lock_guard lock(mutex);
+    // Must be called with mutex already held
+    httplib::Client* get_or_create_locked(const std::string& host) {
         auto it = clients.find(host);
         if (it != clients.end()) return it->second.get();
         auto client = std::make_unique<httplib::Client>(host);
@@ -25,6 +25,8 @@ struct HttpClient::Impl {
         return ptr;
     }
 };
+
+HttpClient::HttpClient() : impl_(new Impl()) {}
 
 HttpClient::~HttpClient() { delete impl_; }
 
@@ -41,11 +43,6 @@ HttpClient& HttpClient::operator=(HttpClient&& other) noexcept {
     return *this;
 }
 
-HttpClient::Impl* HttpClient::get_or_create(const std::string& host) {
-    if (!impl_) impl_ = new Impl();
-    return impl_;
-}
-
 Result<HttpResponse> HttpClient::post_json(
     const std::string& host,
     const std::string& path,
@@ -53,8 +50,10 @@ Result<HttpResponse> HttpClient::post_json(
     const std::string& json_body,
     int timeout_seconds
 ) {
-    auto* pimpl = get_or_create(host);
-    auto* client = pimpl->get_or_create(host);
+    // Hold the Impl mutex for the entire HTTP call to prevent
+    // concurrent use of the same httplib::Client (not thread-safe).
+    std::lock_guard lock(impl_->mutex);
+    auto* client = impl_->get_or_create_locked(host);
 
     client->set_read_timeout(timeout_seconds, 0);
     client->set_write_timeout(timeout_seconds, 0);

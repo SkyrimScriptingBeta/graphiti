@@ -101,6 +101,17 @@ FilterQueryResult build_edge_filter_clauses(const SearchFilters& filters) {
         result.clauses.push_back(std::format("list_has_all(m.labels, [{}])", labels_list));
     }
 
+    // Agent attribution filter
+    if (!filters.agent_ids.empty()) {
+        std::string agents_list;
+        for (size_t i = 0; i < filters.agent_ids.size(); ++i) {
+            if (i > 0) agents_list += ", ";
+            agents_list += std::format("'{}'", filters.agent_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(aid IN e.agent_ids WHERE list_contains([{}], aid))", agents_list));
+    }
+
     // Temporal filters
     if (filters.valid_at.has_value()) {
         auto expr = build_date_filter_expr("e.valid_at", filters.valid_at.value(), param_counter);
@@ -133,6 +144,17 @@ FilterQueryResult build_node_filter_clauses(const SearchFilters& filters) {
             labels_list += std::format("'{}'", filters.node_labels[i]);
         }
         result.clauses.push_back(std::format("list_has_all(n.labels, [{}])", labels_list));
+    }
+
+    // Agent attribution filter
+    if (!filters.agent_ids.empty()) {
+        std::string agents_list;
+        for (size_t i = 0; i < filters.agent_ids.size(); ++i) {
+            if (i > 0) agents_list += ", ";
+            agents_list += std::format("'{}'", filters.agent_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(aid IN n.agent_ids WHERE list_contains([{}], aid))", agents_list));
     }
 
     return result;

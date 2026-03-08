@@ -19,6 +19,7 @@ VoidResult create_episodic_edges(
         edge.source_node_uuid = episode.uuid;
         edge.target_node_uuid = node.uuid;
         edge.created_at = now;
+        edge.agent_id = episode.agent_id;
 
         auto result = driver.save_episodic_edge(edge);
         if (!result.has_value()) {

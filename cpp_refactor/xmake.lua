@@ -44,3 +44,19 @@ target("graphiti_integration_tests")
     add_packages("catch2")
     add_packages("nlohmann_json")
     add_packages("kuzu")
+
+-- Agent attribution example programs (run in order: 1, 2, 3)
+for _, name in ipairs({
+    "1_ingest_two_agents",
+    "2_search_with_agent_filter",
+    "3_inspect_graph_data",
+}) do
+    target("example_" .. name)
+        set_kind("binary")
+        set_default(false)
+        add_files("examples/agent_attribution/" .. name .. ".cpp")
+        add_includedirs("src")
+        add_deps("graphiti")
+        add_packages("nlohmann_json")
+        add_packages("kuzu")
+end

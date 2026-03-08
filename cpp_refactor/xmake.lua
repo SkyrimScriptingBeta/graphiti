@@ -1,0 +1,44 @@
+set_project("graphiti")
+set_version("0.1.0")
+set_languages("c++23")
+
+add_repositories("SkyrimScriptingBeta https://github.com/SkyrimScriptingBeta/Packages.git")
+
+add_requires("kuzu")
+add_requires("nlohmann_json")
+add_requires("catch2")
+
+-- HTTP dependencies (Phase 1b: API Clients)
+-- add_requires("cpp-httplib")
+-- add_requires("openssl3")
+
+target("graphiti")
+    set_kind("static")
+    add_files("src/**.cpp")
+    add_includedirs("include", {public = true})
+    add_includedirs("src", {private = true})
+    add_packages("kuzu", {public = true})
+    add_packages("nlohmann_json", {public = true})
+    -- add_packages("cpp-httplib")
+    -- add_packages("openssl3")
+    if is_plat("windows") then
+        add_syslinks("bcrypt")
+    end
+
+target("graphiti_unit_tests")
+    set_kind("binary")
+    set_default(false)
+    add_files("tests/unit/**.cpp")
+    add_deps("graphiti")
+    add_packages("catch2")
+    add_packages("nlohmann_json")
+    add_packages("kuzu")
+
+target("graphiti_integration_tests")
+    set_kind("binary")
+    set_default(false)
+    add_files("tests/integration/**.cpp")
+    add_deps("graphiti")
+    add_packages("catch2")
+    add_packages("nlohmann_json")
+    add_packages("kuzu")

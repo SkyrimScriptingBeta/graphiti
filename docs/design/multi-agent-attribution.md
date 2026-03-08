@@ -42,9 +42,14 @@ Episodes get a single `agent_id: str` since each episode comes from exactly one 
 
 ### Dedup behavior
 
-Dedup remains scoped to `group_id` (project). When nodes or edges are deduped:
+> **CRITICAL: Dedup scoping stays on `group_id` (project), NOT `agent_id`.**
+>
+> Two agents saying the same fact about the same entity in the same project MUST merge, not create duplicate nodes/edges. The dedup search queries (BM25 + embedding lookup for candidate matches) must continue to filter on `group_id` only. Do NOT add `agent_id` filtering to any dedup query. Agent attribution is purely additive metadata — it never affects whether two things are considered duplicates.
+
+When nodes or edges are deduped:
 - The surviving node/edge's `agent_ids` list is extended with the incoming agent_id (deduplicated)
 - No change to dedup logic itself — just merge the attribution lists
+- The dedup candidate search remains scoped to `group_id` only
 
 ### Kuzu array support (verified)
 

@@ -46,6 +46,7 @@ class KuzuEntityNodeOperations(EntityNodeOperations):
             'name': node.name,
             'name_embedding': node.name_embedding,
             'group_id': node.group_id,
+            'agent_ids': node.agent_ids,
             'summary': node.summary,
             'created_at': node.created_at,
             'labels': list(set(node.labels + ['Entity'])),

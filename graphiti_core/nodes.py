@@ -315,6 +315,7 @@ class EpisodicNode(Node):
         description='list of entity edges referenced in this episode',
         default_factory=list,
     )
+    agent_id: str = Field(default='', description='agent that produced this episode')
 
     async def save(self, driver: GraphDriver):
         if driver.graph_operations_interface:
@@ -327,6 +328,7 @@ class EpisodicNode(Node):
             'uuid': self.uuid,
             'name': self.name,
             'group_id': self.group_id,
+            'agent_id': self.agent_id,
             'source_description': self.source_description,
             'content': self.content,
             'entity_edges': self.entity_edges,
@@ -487,6 +489,9 @@ class EntityNode(Node):
     attributes: dict[str, Any] = Field(
         default={}, description='Additional attributes of the node. Dependent on node labels'
     )
+    agent_ids: list[str] = Field(
+        default_factory=list, description='agents that contributed to this entity'
+    )
 
     async def generate_name_embedding(self, embedder: EmbedderClient):
         start = time()
@@ -538,6 +543,7 @@ class EntityNode(Node):
             'name': self.name,
             'name_embedding': self.name_embedding,
             'group_id': self.group_id,
+            'agent_ids': self.agent_ids,
             'summary': self.summary,
             'created_at': self.created_at,
         }
@@ -666,6 +672,9 @@ class EntityNode(Node):
 class CommunityNode(Node):
     name_embedding: list[float] | None = Field(default=None, description='embedding of the name')
     summary: str = Field(description='region summary of member nodes', default_factory=str)
+    agent_ids: list[str] = Field(
+        default_factory=list, description='agents that contributed to this community'
+    )
 
     async def save(self, driver: GraphDriver):
         if driver.graph_operations_interface:
@@ -684,6 +693,7 @@ class CommunityNode(Node):
             uuid=self.uuid,
             name=self.name,
             group_id=self.group_id,
+            agent_ids=self.agent_ids,
             summary=self.summary,
             name_embedding=self.name_embedding,
             created_at=self.created_at,
@@ -1006,6 +1016,7 @@ def get_episodic_node_from_record(record: Any) -> EpisodicNode:
         name=record['name'],
         source_description=record['source_description'],
         entity_edges=record['entity_edges'],
+        agent_id=record.get('agent_id') or '',
     )
 
 
@@ -1036,6 +1047,7 @@ def get_entity_node_from_record(record: Any, provider: GraphProvider) -> EntityN
         created_at=parse_db_date(record['created_at']),  # type: ignore
         summary=record['summary'],
         attributes=attributes,
+        agent_ids=record.get('agent_ids') or [],
     )
 
     return entity_node
@@ -1049,6 +1061,7 @@ def get_community_node_from_record(record: Any) -> CommunityNode:
         name_embedding=record['name_embedding'],
         created_at=parse_db_date(record['created_at']),  # type: ignore
         summary=record['summary'],
+        agent_ids=record.get('agent_ids') or [],
     )
 
 

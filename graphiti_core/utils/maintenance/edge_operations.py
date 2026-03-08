@@ -51,6 +51,7 @@ def build_episodic_edges(
     entity_nodes: list[EntityNode],
     episode_uuid: str,
     created_at: datetime,
+    agent_id: str = '',
 ) -> list[EpisodicEdge]:
     episodic_edges: list[EpisodicEdge] = [
         EpisodicEdge(
@@ -58,6 +59,7 @@ def build_episodic_edges(
             target_node_uuid=node.uuid,
             created_at=created_at,
             group_id=node.group_id,
+            agent_id=agent_id,
         )
         for node in entity_nodes
     ]
@@ -94,6 +96,7 @@ async def extract_edges(
     group_id: str = '',
     edge_types: dict[str, type[BaseModel]] | None = None,
     custom_extraction_instructions: str | None = None,
+    agent_id: str = '',
 ) -> list[EntityEdge]:
     start = time()
 
@@ -223,6 +226,7 @@ async def extract_edges(
             created_at=utc_now(),
             valid_at=valid_at_datetime,
             invalid_at=invalid_at_datetime,
+            agent_ids=[agent_id] if agent_id else [],
         )
         edges.append(edge)
         logger.debug(
@@ -522,6 +526,7 @@ async def resolve_extracted_edge(
             resolved = edge
             if episode is not None and episode.uuid not in resolved.episodes:
                 resolved.episodes.append(episode.uuid)
+            resolved.agent_ids = list(set(resolved.agent_ids + extracted_edge.agent_ids))
             return resolved, [], []
 
     start = time()
@@ -580,6 +585,7 @@ async def resolve_extracted_edge(
 
     if duplicate_fact_ids and episode is not None:
         resolved_edge.episodes.append(episode.uuid)
+        resolved_edge.agent_ids = list(set(resolved_edge.agent_ids + extracted_edge.agent_ids))
 
     # Process contradicted facts (continuous indexing across both lists)
     contradicted_facts: list[int] = response_object.contradicted_facts

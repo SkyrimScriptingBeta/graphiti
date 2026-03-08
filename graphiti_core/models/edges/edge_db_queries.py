@@ -22,6 +22,7 @@ EPISODIC_EDGE_SAVE = """
     MERGE (episode)-[e:MENTIONS {uuid: $uuid}]->(node)
     SET
         e.group_id = $group_id,
+        e.agent_id = $agent_id,
         e.created_at = $created_at
     RETURN e.uuid AS uuid
 """
@@ -35,6 +36,7 @@ def get_episodic_edge_save_bulk_query(provider: GraphProvider) -> str:
             MERGE (episode)-[e:MENTIONS {uuid: $uuid}]->(node)
             SET
                 e.group_id = $group_id,
+                e.agent_id = $agent_id,
                 e.created_at = $created_at
             RETURN e.uuid AS uuid
         """
@@ -54,6 +56,7 @@ def get_episodic_edge_save_bulk_query(provider: GraphProvider) -> str:
 EPISODIC_EDGE_RETURN = """
     e.uuid AS uuid,
     e.group_id AS group_id,
+    e.agent_id AS agent_id,
     n.uuid AS source_node_uuid,
     m.uuid AS target_node_uuid,
     e.created_at AS created_at
@@ -88,6 +91,7 @@ def get_entity_edge_save_query(provider: GraphProvider, has_aoss: bool = False) 
                 MERGE (source)-[:RELATES_TO]->(e:RelatesToNode_ {uuid: $uuid})-[:RELATES_TO]->(target)
                 SET
                     e.group_id = $group_id,
+                    e.agent_ids = $agent_ids,
                     e.created_at = $created_at,
                     e.name = $name,
                     e.fact = $fact,
@@ -152,6 +156,7 @@ def get_entity_edge_save_bulk_query(provider: GraphProvider, has_aoss: bool = Fa
                 MERGE (source)-[:RELATES_TO]->(e:RelatesToNode_ {uuid: $uuid})-[:RELATES_TO]->(target)
                 SET
                     e.group_id = $group_id,
+                    e.agent_ids = $agent_ids,
                     e.created_at = $created_at,
                     e.name = $name,
                     e.fact = $fact,
@@ -203,6 +208,23 @@ def get_entity_edge_return_query(provider: GraphProvider) -> str:
         properties(e) AS attributes
     """
 
+    if provider == GraphProvider.KUZU:
+        return """
+        e.uuid AS uuid,
+        n.uuid AS source_node_uuid,
+        m.uuid AS target_node_uuid,
+        e.group_id AS group_id,
+        e.agent_ids AS agent_ids,
+        e.created_at AS created_at,
+        e.name AS name,
+        e.fact AS fact,
+        e.episodes AS episodes,
+        e.expired_at AS expired_at,
+        e.valid_at AS valid_at,
+        e.invalid_at AS invalid_at,
+        e.attributes AS attributes
+    """
+
     return """
         e.uuid AS uuid,
         n.uuid AS source_node_uuid,
@@ -215,11 +237,8 @@ def get_entity_edge_return_query(provider: GraphProvider) -> str:
         e.expired_at AS expired_at,
         e.valid_at AS valid_at,
         e.invalid_at AS invalid_at,
-    """ + (
-        'e.attributes AS attributes'
-        if provider == GraphProvider.KUZU
-        else 'properties(e) AS attributes'
-    )
+        properties(e) AS attributes
+    """
 
 
 def get_community_edge_save_query(provider: GraphProvider) -> str:

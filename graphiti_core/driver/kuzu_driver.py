@@ -56,6 +56,7 @@ SCHEMA_QUERIES = """
         uuid STRING PRIMARY KEY,
         name STRING,
         group_id STRING,
+        agent_id STRING,
         created_at TIMESTAMP,
         source STRING,
         source_description STRING,
@@ -67,6 +68,7 @@ SCHEMA_QUERIES = """
         uuid STRING PRIMARY KEY,
         name STRING,
         group_id STRING,
+        agent_ids STRING[],
         labels STRING[],
         created_at TIMESTAMP,
         name_embedding FLOAT[],
@@ -77,6 +79,7 @@ SCHEMA_QUERIES = """
         uuid STRING PRIMARY KEY,
         name STRING,
         group_id STRING,
+        agent_ids STRING[],
         created_at TIMESTAMP,
         name_embedding FLOAT[],
         summary STRING
@@ -84,6 +87,7 @@ SCHEMA_QUERIES = """
     CREATE NODE TABLE IF NOT EXISTS RelatesToNode_ (
         uuid STRING PRIMARY KEY,
         group_id STRING,
+        agent_ids STRING[],
         created_at TIMESTAMP,
         name STRING,
         fact STRING,
@@ -102,6 +106,7 @@ SCHEMA_QUERIES = """
         FROM Episodic TO Entity,
         uuid STRING PRIMARY KEY,
         group_id STRING,
+        agent_id STRING,
         created_at TIMESTAMP
     );
     CREATE REL TABLE IF NOT EXISTS HAS_MEMBER(

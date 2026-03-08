@@ -78,6 +78,7 @@ class KuzuSearchOperations(SearchOperations):
         query: str,
         search_filter: SearchFilters,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
     ) -> list[EntityNode]:
         fuzzy_query = _build_kuzu_fulltext_query(query, group_ids)
@@ -91,6 +92,12 @@ class KuzuSearchOperations(SearchOperations):
         if group_ids is not None:
             filter_queries.append('n.group_id IN $group_ids')
             filter_params['group_ids'] = group_ids
+
+        if agent_ids is not None:
+            filter_queries.append(
+                'any(aid IN n.agent_ids WHERE list_contains($agent_ids, aid))'
+            )
+            filter_params['agent_ids'] = agent_ids
 
         filter_query = ''
         if filter_queries:
@@ -126,6 +133,7 @@ class KuzuSearchOperations(SearchOperations):
         search_vector: list[float],
         search_filter: SearchFilters,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
         min_score: float = 0.6,
     ) -> list[EntityNode]:
@@ -136,6 +144,12 @@ class KuzuSearchOperations(SearchOperations):
         if group_ids is not None:
             filter_queries.append('n.group_id IN $group_ids')
             filter_params['group_ids'] = group_ids
+
+        if agent_ids is not None:
+            filter_queries.append(
+                'any(aid IN n.agent_ids WHERE list_contains($agent_ids, aid))'
+            )
+            filter_params['agent_ids'] = agent_ids
 
         filter_query = ''
         if filter_queries:
@@ -179,6 +193,7 @@ class KuzuSearchOperations(SearchOperations):
         search_filter: SearchFilters,
         max_depth: int,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
     ) -> list[EntityNode]:
         if not origin_uuids or max_depth < 1:
@@ -191,6 +206,12 @@ class KuzuSearchOperations(SearchOperations):
         if group_ids is not None:
             filter_queries.append('n.group_id IN $group_ids')
             filter_params['group_ids'] = group_ids
+
+        if agent_ids is not None:
+            filter_queries.append(
+                'any(aid IN n.agent_ids WHERE list_contains($agent_ids, aid))'
+            )
+            filter_params['agent_ids'] = agent_ids
 
         filter_query = ''
         if filter_queries:
@@ -302,6 +323,7 @@ class KuzuSearchOperations(SearchOperations):
         query: str,
         search_filter: SearchFilters,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
     ) -> list[EntityEdge]:
         fuzzy_query = _build_kuzu_fulltext_query(query, group_ids)
@@ -315,6 +337,12 @@ class KuzuSearchOperations(SearchOperations):
         if group_ids is not None:
             filter_queries.append('e.group_id IN $group_ids')
             filter_params['group_ids'] = group_ids
+
+        if agent_ids is not None:
+            filter_queries.append(
+                'any(aid IN e.agent_ids WHERE list_contains($agent_ids, aid))'
+            )
+            filter_params['agent_ids'] = agent_ids
 
         filter_query = ''
         if filter_queries:
@@ -357,6 +385,7 @@ class KuzuSearchOperations(SearchOperations):
         target_node_uuid: str | None,
         search_filter: SearchFilters,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
         min_score: float = 0.6,
     ) -> list[EntityEdge]:
@@ -367,6 +396,12 @@ class KuzuSearchOperations(SearchOperations):
         if group_ids is not None:
             filter_queries.append('e.group_id IN $group_ids')
             filter_params['group_ids'] = group_ids
+
+        if agent_ids is not None:
+            filter_queries.append(
+                'any(aid IN e.agent_ids WHERE list_contains($agent_ids, aid))'
+            )
+            filter_params['agent_ids'] = agent_ids
 
             if source_node_uuid is not None:
                 filter_params['source_uuid'] = source_node_uuid
@@ -418,6 +453,7 @@ class KuzuSearchOperations(SearchOperations):
         max_depth: int,
         search_filter: SearchFilters,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
     ) -> list[EntityEdge]:
         if not origin_uuids:
@@ -430,6 +466,12 @@ class KuzuSearchOperations(SearchOperations):
         if group_ids is not None:
             filter_queries.append('e.group_id IN $group_ids')
             filter_params['group_ids'] = group_ids
+
+        if agent_ids is not None:
+            filter_queries.append(
+                'any(aid IN e.agent_ids WHERE list_contains($agent_ids, aid))'
+            )
+            filter_params['agent_ids'] = agent_ids
 
         filter_query = ''
         if filter_queries:
@@ -510,6 +552,7 @@ class KuzuSearchOperations(SearchOperations):
         query: str,
         search_filter: SearchFilters,  # noqa: ARG002
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
     ) -> list[EpisodicNode]:
         fuzzy_query = _build_kuzu_fulltext_query(query, group_ids)
@@ -521,6 +564,10 @@ class KuzuSearchOperations(SearchOperations):
         if group_ids is not None:
             group_filter_query += '\nAND e.group_id IN $group_ids'
             filter_params['group_ids'] = group_ids
+
+        if agent_ids is not None:
+            group_filter_query += '\nAND e.agent_id IN $agent_ids'
+            filter_params['agent_ids'] = agent_ids
 
         cypher = (
             get_nodes_query('episode_content', '$query', limit=limit, provider=GraphProvider.KUZU)
@@ -553,6 +600,7 @@ class KuzuSearchOperations(SearchOperations):
         executor: QueryExecutor,
         query: str,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
     ) -> list[CommunityNode]:
         fuzzy_query = _build_kuzu_fulltext_query(query, group_ids)
@@ -560,10 +608,20 @@ class KuzuSearchOperations(SearchOperations):
             return []
 
         filter_params: dict[str, Any] = {}
-        group_filter_query = ''
+        filter_clauses: list[str] = []
         if group_ids is not None:
-            group_filter_query = 'WHERE c.group_id IN $group_ids'
+            filter_clauses.append('c.group_id IN $group_ids')
             filter_params['group_ids'] = group_ids
+
+        if agent_ids is not None:
+            filter_clauses.append(
+                'any(aid IN c.agent_ids WHERE list_contains($agent_ids, aid))'
+            )
+            filter_params['agent_ids'] = agent_ids
+
+        group_filter_query = ''
+        if filter_clauses:
+            group_filter_query = 'WHERE ' + ' AND '.join(filter_clauses)
 
         cypher = (
             get_nodes_query('community_name', '$query', limit=limit, provider=GraphProvider.KUZU)
@@ -593,15 +651,26 @@ class KuzuSearchOperations(SearchOperations):
         executor: QueryExecutor,
         search_vector: list[float],
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
         min_score: float = 0.6,
     ) -> list[CommunityNode]:
         query_params: dict[str, Any] = {}
 
-        group_filter_query = ''
+        filter_clauses: list[str] = []
         if group_ids is not None:
-            group_filter_query += ' WHERE c.group_id IN $group_ids'
+            filter_clauses.append('c.group_id IN $group_ids')
             query_params['group_ids'] = group_ids
+
+        if agent_ids is not None:
+            filter_clauses.append(
+                'any(aid IN c.agent_ids WHERE list_contains($agent_ids, aid))'
+            )
+            query_params['agent_ids'] = agent_ids
+
+        group_filter_query = ''
+        if filter_clauses:
+            group_filter_query = ' WHERE ' + ' AND '.join(filter_clauses)
 
         search_vector_var = f'CAST($search_vector AS FLOAT[{len(search_vector)}])'
 

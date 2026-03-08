@@ -43,6 +43,7 @@ class KuzuCommunityNodeOperations(CommunityNodeOperations):
             'uuid': node.uuid,
             'name': node.name,
             'group_id': node.group_id,
+            'agent_ids': node.agent_ids,
             'summary': node.summary,
             'name_embedding': node.name_embedding,
             'created_at': node.created_at,

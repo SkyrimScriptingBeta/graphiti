@@ -39,6 +39,7 @@ class SearchInterface(BaseModel):
         query: str,
         search_filter: Any,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 100,
     ) -> list[Any]:
         """
@@ -64,6 +65,7 @@ class SearchInterface(BaseModel):
         target_node_uuid: str | None,
         search_filter: Any,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 100,
         min_score: float = 0.7,
     ) -> list[Any]:
@@ -91,6 +93,7 @@ class SearchInterface(BaseModel):
         query: str,
         search_filter: Any,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 100,
     ) -> list[Any]:
         """
@@ -114,6 +117,7 @@ class SearchInterface(BaseModel):
         search_vector: list[float],
         search_filter: Any,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 100,
         min_score: float = 0.7,
     ) -> list[Any]:
@@ -139,6 +143,7 @@ class SearchInterface(BaseModel):
         query: str,
         search_filter: Any,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 100,
     ) -> list[Any]:
         """
@@ -163,6 +168,7 @@ class SearchInterface(BaseModel):
         bfs_max_depth: int,
         search_filter: Any,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 100,
     ) -> list[Any]:
         """
@@ -189,6 +195,7 @@ class SearchInterface(BaseModel):
         search_filter: Any,
         bfs_max_depth: int,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 100,
     ) -> list[Any]:
         """
@@ -213,6 +220,7 @@ class SearchInterface(BaseModel):
         driver: Any,
         query: str,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 100,
     ) -> list[Any]:
         """
@@ -234,6 +242,7 @@ class SearchInterface(BaseModel):
         driver: Any,
         search_vector: list[float],
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 100,
         min_score: float = 0.6,
     ) -> list[Any]:

@@ -43,6 +43,7 @@ from graphiti_core.graphiti_types import GraphitiClients
 from graphiti_core.helpers import (
     get_default_group_id,
     semaphore_gather,
+    validate_agent_id,
     validate_excluded_entity_types,
     validate_group_id,
 )
@@ -457,6 +458,7 @@ class Graphiti:
         nodes: list[EntityNode],
         uuid_map: dict[str, str],
         custom_extraction_instructions: str | None = None,
+        agent_id: str = '',
     ) -> tuple[list[EntityEdge], list[EntityEdge], list[EntityEdge]]:
         """Extract edges from episode and resolve against existing graph.
 
@@ -477,6 +479,7 @@ class Graphiti:
             group_id,
             edge_types,
             custom_extraction_instructions,
+            agent_id=agent_id,
         )
 
         edges = resolve_edge_pointers(extracted_edges, uuid_map)
@@ -501,6 +504,7 @@ class Graphiti:
         group_id: str,
         saga: str | SagaNode | None = None,
         saga_previous_episode_uuid: str | None = None,
+        agent_id: str = '',
     ) -> tuple[list[EpisodicEdge], EpisodicNode]:
         """Process and save episode data to the graph.
 
@@ -525,7 +529,7 @@ class Graphiti:
             the database query to find the most recent episode. Useful for efficiently
             adding multiple episodes to the same saga in sequence.
         """
-        episodic_edges = build_episodic_edges(nodes, episode.uuid, now)
+        episodic_edges = build_episodic_edges(nodes, episode.uuid, now, agent_id=agent_id)
         episode.entity_edges = [edge.uuid for edge in entity_edges]
 
         if not self.store_raw_episode_content:
@@ -793,6 +797,7 @@ class Graphiti:
         reference_time: datetime,
         source: EpisodeType = EpisodeType.message,
         group_id: str | None = None,
+        agent_id: str | None = None,
         uuid: str | None = None,
         update_communities: bool = False,
         entity_types: dict[str, type[BaseModel]] | None = None,
@@ -889,6 +894,9 @@ class Graphiti:
                 self.driver = self.driver.clone(database=group_id)
                 self.clients.driver = self.driver
 
+        validate_agent_id(agent_id)
+        agent_id = agent_id or ''
+
         with self.tracer.start_span('add_episode') as span:
             try:
                 # Retrieve previous episodes for context
@@ -910,6 +918,7 @@ class Graphiti:
                     else EpisodicNode(
                         name=name,
                         group_id=group_id,
+                        agent_id=agent_id,
                         labels=[],
                         source=source,
                         content=episode_body,
@@ -959,6 +968,7 @@ class Graphiti:
                     nodes,
                     uuid_map,
                     custom_extraction_instructions,
+                    agent_id=agent_id,
                 )
 
                 entity_edges = resolved_edges + invalidated_edges
@@ -983,6 +993,7 @@ class Graphiti:
                     group_id,
                     saga,
                     saga_previous_episode_uuid,
+                    agent_id=agent_id,
                 )
 
                 # Update communities if requested
@@ -1337,6 +1348,7 @@ class Graphiti:
         num_results=DEFAULT_SEARCH_LIMIT,
         search_filter: SearchFilters | None = None,
         driver: GraphDriver | None = None,
+        agent_ids: list[str] | None = None,
     ) -> list[EntityEdge]:
         """
         Perform a hybrid search on the knowledge graph.
@@ -1385,6 +1397,7 @@ class Graphiti:
                 search_filter if search_filter is not None else SearchFilters(),
                 driver=driver,
                 center_node_uuid=center_node_uuid,
+                agent_ids=agent_ids,
             )
         ).edges
 
@@ -1414,6 +1427,7 @@ class Graphiti:
         bfs_origin_node_uuids: list[str] | None = None,
         search_filter: SearchFilters | None = None,
         driver: GraphDriver | None = None,
+        agent_ids: list[str] | None = None,
     ) -> SearchResults:
         """search_ (replaces _search) is our advanced search method that returns Graph objects (nodes and edges) rather
         than a list of facts. This endpoint allows the end user to utilize more advanced features such as filters and
@@ -1431,6 +1445,7 @@ class Graphiti:
             center_node_uuid,
             bfs_origin_node_uuids,
             driver=driver,
+            agent_ids=agent_ids,
         )
 
     async def get_nodes_and_edges_by_episode(self, episode_uuids: list[str]) -> SearchResults:

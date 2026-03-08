@@ -34,6 +34,7 @@ def get_episode_node_save_query(provider: GraphProvider) -> str:
                 SET
                     n.name = $name,
                     n.group_id = $group_id,
+                    n.agent_id = $agent_id,
                     n.created_at = $created_at,
                     n.source = $source,
                     n.source_description = $source_description,
@@ -75,6 +76,7 @@ def get_episode_node_save_bulk_query(provider: GraphProvider) -> str:
                 SET
                     n.name = $name,
                     n.group_id = $group_id,
+                    n.agent_id = $agent_id,
                     n.created_at = $created_at,
                     n.source = $source,
                     n.source_description = $source_description,
@@ -105,6 +107,7 @@ EPISODIC_NODE_RETURN = """
     e.uuid AS uuid,
     e.name AS name,
     e.group_id AS group_id,
+    e.agent_id AS agent_id,
     e.created_at AS created_at,
     e.source AS source,
     e.source_description AS source_description,
@@ -142,6 +145,7 @@ def get_entity_node_save_query(provider: GraphProvider, labels: str, has_aoss: b
                 SET
                     n.name = $name,
                     n.group_id = $group_id,
+                    n.agent_ids = $agent_ids,
                     n.labels = $labels,
                     n.created_at = $created_at,
                     n.name_embedding = $name_embedding,
@@ -226,6 +230,7 @@ def get_entity_node_save_bulk_query(
                 SET
                     n.name = $name,
                     n.group_id = $group_id,
+                    n.agent_ids = $agent_ids,
                     n.labels = $labels,
                     n.created_at = $created_at,
                     n.name_embedding = $name_embedding,
@@ -260,6 +265,7 @@ def get_entity_node_return_query(provider: GraphProvider) -> str:
             n.uuid AS uuid,
             n.name AS name,
             n.group_id AS group_id,
+            n.agent_ids AS agent_ids,
             n.labels AS labels,
             n.created_at AS created_at,
             n.summary AS summary,
@@ -298,6 +304,7 @@ def get_community_node_save_query(provider: GraphProvider) -> str:
                 SET
                     n.name = $name,
                     n.group_id = $group_id,
+                    n.agent_ids = $agent_ids,
                     n.created_at = $created_at,
                     n.name_embedding = $name_embedding,
                     n.summary = $summary
@@ -316,6 +323,7 @@ COMMUNITY_NODE_RETURN = """
     c.uuid AS uuid,
     c.name AS name,
     c.group_id AS group_id,
+    c.agent_ids AS agent_ids,
     c.created_at AS created_at,
     c.name_embedding AS name_embedding,
     c.summary AS summary

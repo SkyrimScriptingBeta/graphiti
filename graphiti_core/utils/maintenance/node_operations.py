@@ -196,6 +196,7 @@ def _create_entity_nodes(
         new_node = EntityNode(
             name=extracted_entity.name,
             group_id=episode.group_id,
+            agent_ids=[episode.agent_id] if episode.agent_id else [],
             labels=labels,
             summary='',
             created_at=utc_now(),
@@ -435,6 +436,11 @@ async def resolve_extracted_nodes(
         if state.resolved_nodes[idx] is None:
             state.resolved_nodes[idx] = node
             state.uuid_map[node.uuid] = node.uuid
+
+    # Merge agent_ids from extracted nodes into their resolved (surviving) nodes
+    for extracted_node, resolved_node in state.duplicate_pairs:
+        merged = list(set(resolved_node.agent_ids + extracted_node.agent_ids))
+        resolved_node.agent_ids = merged
 
     logger.debug(
         'Resolved nodes: %s',

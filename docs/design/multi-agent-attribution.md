@@ -296,3 +296,101 @@ If the MCP server or REST API exposes `add_episode` and `search`, their DTOs nee
    - Search with `agent_ids=["A", "B"]` returns contributions from either
    - Search with both `group_ids` and `agent_ids` returns the intersection
 4. **Integration test**: Ingest episodes from 2 agents in 2 projects, verify all 8 query combinations from the goal table
+
+---
+
+## Implementor's Guide to the Existing Test Suite
+
+This section was added after the initial design review to help the implementing agent navigate the Python test suite.
+
+### Test suite structure
+
+```
+tests/
+  helpers_test.py                        # Shared fixtures: graph_driver, mock_embedder, assertion helpers
+  test_graphiti_mock.py                  # ~24 tests — DB-level CRUD + search (real DB, mocked LLM)
+  test_add_triplet.py                    # ~10 tests — add_triplet (real DB, mocked LLM)
+  test_graphiti_int.py                   # 1 integration test (live LLM + live DB)
+  test_entity_exclusion_int.py           # add_episode with exclusion (live LLM + live DB)
+  test_edge_int.py / test_node_int.py    # Node/edge integration (live DB, mocked LLM)
+  utils/
+    maintenance/
+      test_node_operations.py            # Node dedup — fully mocked, no DB, no LLM
+      test_edge_operations.py            # Edge dedup — fully mocked
+      test_entity_extraction.py          # extract_nodes, summarization — fully mocked
+      test_bulk_utils.py                 # Bulk dedup logic — fully mocked
+    search/
+      search_utils_test.py              # hybrid_node_search — mocked driver
+  llm_client/ embedder/ cross_encoder/  # Provider-specific tests
+```
+
+### Two tiers that matter for this work
+
+**Tier 1 — Pure mocks, no infra needed (run anywhere):**
+- `tests/utils/maintenance/test_node_operations.py` — dedup logic. **This is where you add the "dedup merges agent_ids" test.**
+- `tests/utils/maintenance/test_edge_operations.py` — edge dedup. Same.
+- `tests/utils/maintenance/test_entity_extraction.py` — extraction. Good reference for mocking `LLMClient`.
+
+**Tier 2 — Real DB (Kuzu in-memory), mocked LLM:**
+- `test_graphiti_mock.py` — DB round-trip for nodes/edges/search. **This is where you add the "agent_ids persists through save/load" test.**
+- `test_add_triplet.py` — Good pattern reference for mocking LLM at `generate_response` level.
+
+### How to run tests
+
+```bash
+# Establish baseline — run all non-integration tests against Kuzu only
+DISABLE_NEO4J=1 DISABLE_FALKORDB=1 pytest tests/ -k "not _int" -m "not integration" --disable-warnings
+
+# Run just the dedup tests (your most important ones)
+pytest tests/utils/maintenance/test_node_operations.py tests/utils/maintenance/test_edge_operations.py -v
+
+# Run DB-level tests against Kuzu in-memory
+DISABLE_NEO4J=1 DISABLE_FALKORDB=1 pytest tests/test_graphiti_mock.py -v
+```
+
+Kuzu uses `:memory:` — no server, no Docker, no setup. Just `DISABLE_NEO4J=1 DISABLE_FALKORDB=1`.
+
+### Patterns to copy
+
+**For pure-unit dedup tests** (testing that agent_ids merge correctly during node dedup):
+Copy the mock setup from `tests/utils/maintenance/test_node_operations.py`. It uses `AsyncMock(spec=LLMClient)` and `Mock(spec=GraphDriver)` — no real calls. The dedup functions take a `GraphitiClients` object which you construct with `GraphitiClients.model_construct(...)`.
+
+**For DB round-trip tests** (testing that agent_ids persist to Kuzu and come back):
+Copy the fixture signature from `test_add_triplet.py` or `test_graphiti_mock.py`. The `graph_driver` fixture from `helpers_test.py` auto-parametrizes across enabled backends.
+
+```python
+# Example: add to test_graphiti_mock.py
+@pytest.mark.asyncio
+async def test_entity_node_persists_agent_ids(graph_driver):
+    node = EntityNode(
+        name='Alice', group_id='project_x',
+        agent_ids=['agent-a', 'agent-b'],  # NEW FIELD
+    )
+    await node.save(graph_driver)
+    retrieved = await EntityNode.get_by_uuid(graph_driver, node.uuid)
+    assert set(retrieved.agent_ids) == {'agent-a', 'agent-b'}
+```
+
+**For dedup-merges-attribution tests:**
+```python
+# Example: add to test_node_operations.py
+# After dedup resolves two nodes as duplicates, the surviving node
+# should have agent_ids from BOTH the existing and incoming node.
+# Mock the LLM to return "these are duplicates" and verify the merge.
+```
+
+### The gap: no mocked add_episode test
+
+The full `add_episode` pipeline is only tested in `_int` files that require a live `OPENAI_API_KEY`. There is no existing test that mocks the LLM and runs the full pipeline. If you want to test the end-to-end flow of `agent_id` threading through `add_episode` without an API key, you'll need to mock `LLMClient.generate_response` to return canned extraction/dedup responses. `test_add_triplet.py` is the closest existing pattern for this.
+
+Alternatively: if you have an `OPENAI_API_KEY` available, the simplest full-pipeline test is to add a case to `test_graphiti_int.py` that passes `agent_id='test-agent'` to `add_episode` and asserts on the returned `AddEpisodeResults`.
+
+### Recommended test strategy
+
+1. **Before any changes**: Run the baseline (`pytest tests/ -k "not _int" -m "not integration"`) and confirm green.
+2. **Add model tests**: Verify `agent_id`/`agent_ids` fields serialize and deserialize correctly on all affected types.
+3. **Add dedup tests**: Verify `agent_ids` accumulates during node and edge dedup (pure mock tier).
+4. **Add DB round-trip tests**: Verify Kuzu stores and retrieves `STRING[]` columns correctly (Kuzu in-memory tier).
+5. **Add search filter test**: Verify `agent_ids` filtering works in at least one search function (DB tier with mocked LLM).
+6. **After all changes**: Run the full baseline again to catch regressions.
+7. **Optional**: If API key is available, add one integration test that ingests 2 episodes from different agents and searches with agent filtering.

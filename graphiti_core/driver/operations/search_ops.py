@@ -33,6 +33,7 @@ class SearchOperations(ABC):
         query: str,
         search_filter: SearchFilters,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
     ) -> list[EntityNode]: ...
 
@@ -43,6 +44,7 @@ class SearchOperations(ABC):
         search_vector: list[float],
         search_filter: SearchFilters,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
         min_score: float = 0.6,
     ) -> list[EntityNode]: ...
@@ -55,6 +57,7 @@ class SearchOperations(ABC):
         search_filter: SearchFilters,
         max_depth: int,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
     ) -> list[EntityNode]: ...
 
@@ -67,6 +70,7 @@ class SearchOperations(ABC):
         query: str,
         search_filter: SearchFilters,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
     ) -> list[EntityEdge]: ...
 
@@ -79,6 +83,7 @@ class SearchOperations(ABC):
         target_node_uuid: str | None,
         search_filter: SearchFilters,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
         min_score: float = 0.6,
     ) -> list[EntityEdge]: ...
@@ -91,6 +96,7 @@ class SearchOperations(ABC):
         max_depth: int,
         search_filter: SearchFilters,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
     ) -> list[EntityEdge]: ...
 
@@ -103,6 +109,7 @@ class SearchOperations(ABC):
         query: str,
         search_filter: SearchFilters,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
     ) -> list[EpisodicNode]: ...
 
@@ -114,6 +121,7 @@ class SearchOperations(ABC):
         executor: QueryExecutor,
         query: str,
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
     ) -> list[CommunityNode]: ...
 
@@ -123,6 +131,7 @@ class SearchOperations(ABC):
         executor: QueryExecutor,
         search_vector: list[float],
         group_ids: list[str] | None = None,
+        agent_ids: list[str] | None = None,
         limit: int = 10,
         min_score: float = 0.6,
     ) -> list[CommunityNode]: ...

@@ -75,6 +75,7 @@ async def search(
     bfs_origin_node_uuids: list[str] | None = None,
     query_vector: list[float] | None = None,
     driver: GraphDriver | None = None,
+    agent_ids: list[str] | None = None,
 ) -> SearchResults:
     start = time()
 
@@ -128,6 +129,7 @@ async def search(
             bfs_origin_node_uuids,
             config.limit,
             config.reranker_min_score,
+            agent_ids=agent_ids,
         ),
         node_search(
             driver,
@@ -141,6 +143,7 @@ async def search(
             bfs_origin_node_uuids,
             config.limit,
             config.reranker_min_score,
+            agent_ids=agent_ids,
         ),
         episode_search(
             driver,
@@ -152,6 +155,7 @@ async def search(
             search_filter,
             config.limit,
             config.reranker_min_score,
+            agent_ids=agent_ids,
         ),
         community_search(
             driver,
@@ -162,6 +166,7 @@ async def search(
             config.community_config,
             config.limit,
             config.reranker_min_score,
+            agent_ids=agent_ids,
         ),
     )
 
@@ -195,6 +200,7 @@ async def edge_search(
     bfs_origin_node_uuids: list[str] | None = None,
     limit=DEFAULT_SEARCH_LIMIT,
     reranker_min_score: float = 0,
+    agent_ids: list[str] | None = None,
 ) -> tuple[list[EntityEdge], list[float]]:
     if config is None:
         return [], []
@@ -203,7 +209,9 @@ async def edge_search(
     search_tasks = []
     if EdgeSearchMethod.bm25 in config.search_methods:
         search_tasks.append(
-            edge_fulltext_search(driver, query, search_filter, group_ids, 2 * limit)
+            edge_fulltext_search(
+                driver, query, search_filter, group_ids, 2 * limit, agent_ids=agent_ids
+            )
         )
     if EdgeSearchMethod.cosine_similarity in config.search_methods:
         search_tasks.append(
@@ -216,6 +224,7 @@ async def edge_search(
                 group_ids,
                 2 * limit,
                 config.sim_min_score,
+                agent_ids=agent_ids,
             )
         )
     if EdgeSearchMethod.bfs in config.search_methods:
@@ -227,6 +236,7 @@ async def edge_search(
                 search_filter,
                 group_ids,
                 2 * limit,
+                agent_ids=agent_ids,
             )
         )
 
@@ -245,6 +255,7 @@ async def edge_search(
                 search_filter,
                 group_ids,
                 2 * limit,
+                agent_ids=agent_ids,
             )
         )
 
@@ -318,6 +329,7 @@ async def node_search(
     bfs_origin_node_uuids: list[str] | None = None,
     limit=DEFAULT_SEARCH_LIMIT,
     reranker_min_score: float = 0,
+    agent_ids: list[str] | None = None,
 ) -> tuple[list[EntityNode], list[float]]:
     if config is None:
         return [], []
@@ -326,7 +338,9 @@ async def node_search(
     search_tasks = []
     if NodeSearchMethod.bm25 in config.search_methods:
         search_tasks.append(
-            node_fulltext_search(driver, query, search_filter, group_ids, 2 * limit)
+            node_fulltext_search(
+                driver, query, search_filter, group_ids, 2 * limit, agent_ids=agent_ids
+            )
         )
     if NodeSearchMethod.cosine_similarity in config.search_methods:
         search_tasks.append(
@@ -337,6 +351,7 @@ async def node_search(
                 group_ids,
                 2 * limit,
                 config.sim_min_score,
+                agent_ids=agent_ids,
             )
         )
     if NodeSearchMethod.bfs in config.search_methods:
@@ -348,6 +363,7 @@ async def node_search(
                 config.bfs_max_depth,
                 group_ids,
                 2 * limit,
+                agent_ids=agent_ids,
             )
         )
 
@@ -366,6 +382,7 @@ async def node_search(
                 config.bfs_max_depth,
                 group_ids,
                 2 * limit,
+                agent_ids=agent_ids,
             )
         )
 
@@ -426,13 +443,16 @@ async def episode_search(
     search_filter: SearchFilters,
     limit=DEFAULT_SEARCH_LIMIT,
     reranker_min_score: float = 0,
+    agent_ids: list[str] | None = None,
 ) -> tuple[list[EpisodicNode], list[float]]:
     if config is None:
         return [], []
     search_results: list[list[EpisodicNode]] = list(
         await semaphore_gather(
             *[
-                episode_fulltext_search(driver, query, search_filter, group_ids, 2 * limit),
+                episode_fulltext_search(
+                    driver, query, search_filter, group_ids, 2 * limit, agent_ids=agent_ids
+                ),
             ]
         )
     )
@@ -474,6 +494,7 @@ async def community_search(
     config: CommunitySearchConfig | None,
     limit=DEFAULT_SEARCH_LIMIT,
     reranker_min_score: float = 0,
+    agent_ids: list[str] | None = None,
 ) -> tuple[list[CommunityNode], list[float]]:
     if config is None:
         return [], []
@@ -481,9 +502,16 @@ async def community_search(
     search_results: list[list[CommunityNode]] = list(
         await semaphore_gather(
             *[
-                community_fulltext_search(driver, query, group_ids, 2 * limit),
+                community_fulltext_search(
+                    driver, query, group_ids, 2 * limit, agent_ids=agent_ids
+                ),
                 community_similarity_search(
-                    driver, query_vector, group_ids, 2 * limit, config.sim_min_score
+                    driver,
+                    query_vector,
+                    group_ids,
+                    2 * limit,
+                    config.sim_min_score,
+                    agent_ids=agent_ids,
                 ),
             ]
         )

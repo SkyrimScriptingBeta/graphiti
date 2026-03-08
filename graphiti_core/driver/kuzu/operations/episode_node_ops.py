@@ -44,6 +44,7 @@ class KuzuEpisodeNodeOperations(EpisodeNodeOperations):
             'uuid': node.uuid,
             'name': node.name,
             'group_id': node.group_id,
+            'agent_id': node.agent_id,
             'source_description': node.source_description,
             'content': node.content,
             'entity_edges': node.entity_edges,

@@ -185,10 +185,11 @@ async def edge_fulltext_search(
     search_filter: SearchFilters,
     group_ids: list[str] | None = None,
     limit=RELEVANT_SCHEMA_LIMIT,
+    agent_ids: list[str] | None = None,
 ) -> list[EntityEdge]:
     if driver.search_interface:
         return await driver.search_interface.edge_fulltext_search(
-            driver, query, search_filter, group_ids, limit
+            driver, query, search_filter, group_ids, agent_ids, limit
         )
 
     # fulltext search over facts
@@ -303,6 +304,7 @@ async def edge_similarity_search(
     group_ids: list[str] | None = None,
     limit: int = RELEVANT_SCHEMA_LIMIT,
     min_score: float = DEFAULT_MIN_SCORE,
+    agent_ids: list[str] | None = None,
 ) -> list[EntityEdge]:
     if driver.search_interface:
         return await driver.search_interface.edge_similarity_search(
@@ -312,6 +314,7 @@ async def edge_similarity_search(
             target_node_uuid,
             search_filter,
             group_ids,
+            agent_ids,
             limit,
             min_score,
         )
@@ -449,11 +452,18 @@ async def edge_bfs_search(
     search_filter: SearchFilters,
     group_ids: list[str] | None = None,
     limit: int = RELEVANT_SCHEMA_LIMIT,
+    agent_ids: list[str] | None = None,
 ) -> list[EntityEdge]:
     if driver.search_interface:
         try:
             return await driver.search_interface.edge_bfs_search(
-                driver, bfs_origin_node_uuids, bfs_max_depth, search_filter, group_ids, limit
+                driver,
+                bfs_origin_node_uuids,
+                bfs_max_depth,
+                search_filter,
+                group_ids,
+                agent_ids,
+                limit,
             )
         except NotImplementedError:
             pass
@@ -579,10 +589,11 @@ async def node_fulltext_search(
     search_filter: SearchFilters,
     group_ids: list[str] | None = None,
     limit=RELEVANT_SCHEMA_LIMIT,
+    agent_ids: list[str] | None = None,
 ) -> list[EntityNode]:
     if driver.search_interface:
         return await driver.search_interface.node_fulltext_search(
-            driver, query, search_filter, group_ids, limit
+            driver, query, search_filter, group_ids, agent_ids, limit
         )
 
     # BM25 search to get top nodes
@@ -673,10 +684,11 @@ async def node_similarity_search(
     group_ids: list[str] | None = None,
     limit=RELEVANT_SCHEMA_LIMIT,
     min_score: float = DEFAULT_MIN_SCORE,
+    agent_ids: list[str] | None = None,
 ) -> list[EntityNode]:
     if driver.search_interface:
         return await driver.search_interface.node_similarity_search(
-            driver, search_vector, search_filter, group_ids, limit, min_score
+            driver, search_vector, search_filter, group_ids, agent_ids, limit, min_score
         )
 
     filter_queries, filter_params = node_search_filter_query_constructor(
@@ -791,11 +803,18 @@ async def node_bfs_search(
     bfs_max_depth: int,
     group_ids: list[str] | None = None,
     limit: int = RELEVANT_SCHEMA_LIMIT,
+    agent_ids: list[str] | None = None,
 ) -> list[EntityNode]:
     if driver.search_interface:
         try:
             return await driver.search_interface.node_bfs_search(
-                driver, bfs_origin_node_uuids, search_filter, bfs_max_depth, group_ids, limit
+                driver,
+                bfs_origin_node_uuids,
+                search_filter,
+                bfs_max_depth,
+                group_ids,
+                agent_ids,
+                limit,
             )
         except NotImplementedError:
             pass
@@ -886,10 +905,11 @@ async def episode_fulltext_search(
     _search_filter: SearchFilters,
     group_ids: list[str] | None = None,
     limit=RELEVANT_SCHEMA_LIMIT,
+    agent_ids: list[str] | None = None,
 ) -> list[EpisodicNode]:
     if driver.search_interface:
         return await driver.search_interface.episode_fulltext_search(
-            driver, query, _search_filter, group_ids, limit
+            driver, query, _search_filter, group_ids, agent_ids, limit
         )
 
     # BM25 search to get top episodes
@@ -971,11 +991,12 @@ async def community_fulltext_search(
     query: str,
     group_ids: list[str] | None = None,
     limit=RELEVANT_SCHEMA_LIMIT,
+    agent_ids: list[str] | None = None,
 ) -> list[CommunityNode]:
     if driver.search_interface:
         try:
             return await driver.search_interface.community_fulltext_search(
-                driver, query, group_ids, limit
+                driver, query, group_ids, agent_ids, limit
             )
         except NotImplementedError:
             pass
@@ -1061,11 +1082,12 @@ async def community_similarity_search(
     group_ids: list[str] | None = None,
     limit=RELEVANT_SCHEMA_LIMIT,
     min_score=DEFAULT_MIN_SCORE,
+    agent_ids: list[str] | None = None,
 ) -> list[CommunityNode]:
     if driver.search_interface:
         try:
             return await driver.search_interface.community_similarity_search(
-                driver, search_vector, group_ids, limit, min_score
+                driver, search_vector, group_ids, agent_ids, limit, min_score
             )
         except NotImplementedError:
             pass

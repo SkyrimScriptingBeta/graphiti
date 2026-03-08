@@ -28,7 +28,7 @@ from numpy._typing import NDArray
 from pydantic import BaseModel
 
 from graphiti_core.driver.driver import GraphProvider
-from graphiti_core.errors import GroupIdValidationError
+from graphiti_core.errors import AgentIdValidationError, GroupIdValidationError
 
 load_dotenv()
 
@@ -153,6 +153,30 @@ def validate_group_id(group_id: str | None) -> bool:
     # Pattern matches: letters (a-z, A-Z), digits (0-9), hyphens (-), and underscores (_)
     if not re.match(r'^[a-zA-Z0-9_-]+$', group_id):
         raise GroupIdValidationError(group_id)
+
+    return True
+
+
+def validate_agent_id(agent_id: str | None) -> bool:
+    """
+    Validate that an agent_id contains only ASCII alphanumeric characters, dashes, and underscores.
+
+    Args:
+        agent_id: The agent_id to validate
+
+    Returns:
+        True if valid
+
+    Raises:
+        AgentIdValidationError: If agent_id contains invalid characters
+    """
+
+    # Allow empty string or None (default case)
+    if not agent_id:
+        return True
+
+    if not re.match(r'^[a-zA-Z0-9_-]+$', agent_id):
+        raise AgentIdValidationError(agent_id)
 
     return True
 

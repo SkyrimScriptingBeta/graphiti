@@ -47,6 +47,7 @@ class KuzuEntityEdgeOperations(EntityEdgeOperations):
             'fact': edge.fact,
             'fact_embedding': edge.fact_embedding,
             'group_id': edge.group_id,
+            'agent_ids': edge.agent_ids,
             'episodes': edge.episodes,
             'created_at': edge.created_at,
             'expired_at': edge.expired_at,

@@ -54,6 +54,7 @@ class KuzuEpisodicEdgeOperations(EpisodicEdgeOperations):
             'entity_uuid': edge.target_node_uuid,
             'uuid': edge.uuid,
             'group_id': edge.group_id,
+            'agent_id': edge.agent_id,
             'created_at': edge.created_at,
         }
         if tx is not None:
@@ -78,6 +79,7 @@ class KuzuEpisodicEdgeOperations(EpisodicEdgeOperations):
                 'target_node_uuid': edge.target_node_uuid,
                 'uuid': edge.uuid,
                 'group_id': edge.group_id,
+                'agent_id': edge.agent_id,
                 'created_at': edge.created_at,
             }
             if tx is not None:

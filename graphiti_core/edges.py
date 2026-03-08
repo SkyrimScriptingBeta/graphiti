@@ -141,6 +141,8 @@ class Edge(BaseModel, ABC):
 
 
 class EpisodicEdge(Edge):
+    agent_id: str = Field(default='', description='agent that produced the episode')
+
     async def save(self, driver: GraphDriver):
         if driver.graph_operations_interface:
             try:
@@ -154,6 +156,7 @@ class EpisodicEdge(Edge):
             entity_uuid=self.target_node_uuid,
             uuid=self.uuid,
             group_id=self.group_id,
+            agent_id=self.agent_id,
             created_at=self.created_at,
         )
 
@@ -280,6 +283,9 @@ class EntityEdge(Edge):
     attributes: dict[str, Any] = Field(
         default={}, description='Additional attributes of the edge. Dependent on edge name'
     )
+    agent_ids: list[str] = Field(
+        default_factory=list, description='agents that contributed to this edge'
+    )
 
     async def generate_embedding(self, embedder: EmbedderClient):
         start = time()
@@ -340,6 +346,7 @@ class EntityEdge(Edge):
             'uuid': self.uuid,
             'name': self.name,
             'group_id': self.group_id,
+            'agent_ids': self.agent_ids,
             'fact': self.fact,
             'fact_embedding': self.fact_embedding,
             'episodes': self.episodes,
@@ -954,6 +961,7 @@ def get_episodic_edge_from_record(record: Any) -> EpisodicEdge:
         source_node_uuid=record['source_node_uuid'],
         target_node_uuid=record['target_node_uuid'],
         created_at=parse_db_date(record['created_at']),  # type: ignore
+        agent_id=record.get('agent_id') or '',
     )
 
 
@@ -990,6 +998,7 @@ def get_entity_edge_from_record(record: Any, provider: GraphProvider) -> EntityE
         valid_at=parse_db_date(record['valid_at']),
         invalid_at=parse_db_date(record['invalid_at']),
         attributes=attributes,
+        agent_ids=record.get('agent_ids') or [],
     )
 
     return edge

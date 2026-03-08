@@ -81,3 +81,11 @@ class GroupIdValidationError(GraphitiError):
     def __init__(self, group_id: str):
         self.message = f'group_id "{group_id}" must contain only alphanumeric characters, dashes, or underscores'
         super().__init__(self.message)
+
+
+class AgentIdValidationError(GraphitiError):
+    """Raised when an agent_id contains invalid characters."""
+
+    def __init__(self, agent_id: str):
+        self.message = f'agent_id "{agent_id}" must contain only alphanumeric characters, dashes, or underscores'
+        super().__init__(self.message)

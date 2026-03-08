@@ -216,6 +216,12 @@ async def edge_fulltext_search(
         filter_queries.append('e.group_id IN $group_ids')
         filter_params['group_ids'] = group_ids
 
+    if agent_ids is not None and driver.provider == GraphProvider.KUZU:
+        filter_queries.append(
+            'any(aid IN $agent_ids WHERE list_contains(e.agent_ids, aid))'
+        )
+        filter_params['agent_ids'] = agent_ids
+
     filter_query = ''
     if filter_queries:
         filter_query = ' WHERE ' + (' AND '.join(filter_queries))
@@ -335,13 +341,19 @@ async def edge_similarity_search(
         filter_queries.append('e.group_id IN $group_ids')
         filter_params['group_ids'] = group_ids
 
-        if source_node_uuid is not None:
-            filter_params['source_uuid'] = source_node_uuid
-            filter_queries.append('n.uuid = $source_uuid')
+    if source_node_uuid is not None:
+        filter_params['source_uuid'] = source_node_uuid
+        filter_queries.append('n.uuid = $source_uuid')
 
-        if target_node_uuid is not None:
-            filter_params['target_uuid'] = target_node_uuid
-            filter_queries.append('m.uuid = $target_uuid')
+    if target_node_uuid is not None:
+        filter_params['target_uuid'] = target_node_uuid
+        filter_queries.append('m.uuid = $target_uuid')
+
+    if agent_ids is not None and driver.provider == GraphProvider.KUZU:
+        filter_queries.append(
+            'any(aid IN $agent_ids WHERE list_contains(e.agent_ids, aid))'
+        )
+        filter_params['agent_ids'] = agent_ids
 
     filter_query = ''
     if filter_queries:
@@ -480,6 +492,12 @@ async def edge_bfs_search(
         filter_queries.append('e.group_id IN $group_ids')
         filter_params['group_ids'] = group_ids
 
+    if agent_ids is not None and driver.provider == GraphProvider.KUZU:
+        filter_queries.append(
+            'any(aid IN $agent_ids WHERE list_contains(e.agent_ids, aid))'
+        )
+        filter_params['agent_ids'] = agent_ids
+
     filter_query = ''
     if filter_queries:
         filter_query = ' WHERE ' + (' AND '.join(filter_queries))
@@ -609,6 +627,12 @@ async def node_fulltext_search(
         filter_queries.append('n.group_id IN $group_ids')
         filter_params['group_ids'] = group_ids
 
+    if agent_ids is not None and driver.provider == GraphProvider.KUZU:
+        filter_queries.append(
+            'any(aid IN $agent_ids WHERE list_contains(n.agent_ids, aid))'
+        )
+        filter_params['agent_ids'] = agent_ids
+
     filter_query = ''
     if filter_queries:
         filter_query = ' WHERE ' + (' AND '.join(filter_queries))
@@ -698,6 +722,12 @@ async def node_similarity_search(
     if group_ids is not None:
         filter_queries.append('n.group_id IN $group_ids')
         filter_params['group_ids'] = group_ids
+
+    if agent_ids is not None and driver.provider == GraphProvider.KUZU:
+        filter_queries.append(
+            'any(aid IN $agent_ids WHERE list_contains(n.agent_ids, aid))'
+        )
+        filter_params['agent_ids'] = agent_ids
 
     filter_query = ''
     if filter_queries:
@@ -831,6 +861,12 @@ async def node_bfs_search(
         filter_queries.append('origin.group_id IN $group_ids')
         filter_params['group_ids'] = group_ids
 
+    if agent_ids is not None and driver.provider == GraphProvider.KUZU:
+        filter_queries.append(
+            'any(aid IN $agent_ids WHERE list_contains(n.agent_ids, aid))'
+        )
+        filter_params['agent_ids'] = agent_ids
+
     filter_query = ''
     if filter_queries:
         filter_query = ' AND ' + (' AND '.join(filter_queries))
@@ -923,6 +959,10 @@ async def episode_fulltext_search(
         group_filter_query += '\nAND e.group_id IN $group_ids'
         filter_params['group_ids'] = group_ids
 
+    if agent_ids is not None and driver.provider == GraphProvider.KUZU:
+        group_filter_query += '\nAND e.agent_id IN $agent_ids'
+        filter_params['agent_ids'] = agent_ids
+
     if driver.provider == GraphProvider.NEPTUNE:
         res = driver.run_aoss_query('episode_content', query, limit=limit)  # pyright: ignore reportAttributeAccessIssue
         if res['hits']['total']['value'] > 0:
@@ -1007,10 +1047,20 @@ async def community_fulltext_search(
         return []
 
     filter_params: dict[str, Any] = {}
-    group_filter_query: LiteralString = ''
+    filter_clauses: list[str] = []
     if group_ids is not None:
-        group_filter_query = 'WHERE c.group_id IN $group_ids'
+        filter_clauses.append('c.group_id IN $group_ids')
         filter_params['group_ids'] = group_ids
+
+    if agent_ids is not None and driver.provider == GraphProvider.KUZU:
+        filter_clauses.append(
+            'any(aid IN $agent_ids WHERE list_contains(c.agent_ids, aid))'
+        )
+        filter_params['agent_ids'] = agent_ids
+
+    group_filter_query: LiteralString = ''
+    if filter_clauses:
+        group_filter_query = 'WHERE ' + ' AND '.join(filter_clauses)
 
     yield_query = 'YIELD node AS c, score'
     if driver.provider == GraphProvider.KUZU:
@@ -1095,10 +1145,20 @@ async def community_similarity_search(
     # vector similarity search over entity names
     query_params: dict[str, Any] = {}
 
-    group_filter_query: LiteralString = ''
+    filter_clauses: list[str] = []
     if group_ids is not None:
-        group_filter_query += ' WHERE c.group_id IN $group_ids'
+        filter_clauses.append('c.group_id IN $group_ids')
         query_params['group_ids'] = group_ids
+
+    if agent_ids is not None and driver.provider == GraphProvider.KUZU:
+        filter_clauses.append(
+            'any(aid IN $agent_ids WHERE list_contains(c.agent_ids, aid))'
+        )
+        query_params['agent_ids'] = agent_ids
+
+    group_filter_query: LiteralString = ''
+    if filter_clauses:
+        group_filter_query = ' WHERE ' + ' AND '.join(filter_clauses)
 
     if driver.provider == GraphProvider.NEPTUNE:
         query = (

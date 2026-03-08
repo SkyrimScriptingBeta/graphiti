@@ -95,7 +95,7 @@ class KuzuSearchOperations(SearchOperations):
 
         if agent_ids is not None:
             filter_queries.append(
-                'any(aid IN n.agent_ids WHERE list_contains($agent_ids, aid))'
+                'any(aid IN $agent_ids WHERE list_contains(n.agent_ids, aid))'
             )
             filter_params['agent_ids'] = agent_ids
 
@@ -147,7 +147,7 @@ class KuzuSearchOperations(SearchOperations):
 
         if agent_ids is not None:
             filter_queries.append(
-                'any(aid IN n.agent_ids WHERE list_contains($agent_ids, aid))'
+                'any(aid IN $agent_ids WHERE list_contains(n.agent_ids, aid))'
             )
             filter_params['agent_ids'] = agent_ids
 
@@ -209,7 +209,7 @@ class KuzuSearchOperations(SearchOperations):
 
         if agent_ids is not None:
             filter_queries.append(
-                'any(aid IN n.agent_ids WHERE list_contains($agent_ids, aid))'
+                'any(aid IN $agent_ids WHERE list_contains(n.agent_ids, aid))'
             )
             filter_params['agent_ids'] = agent_ids
 
@@ -340,7 +340,7 @@ class KuzuSearchOperations(SearchOperations):
 
         if agent_ids is not None:
             filter_queries.append(
-                'any(aid IN e.agent_ids WHERE list_contains($agent_ids, aid))'
+                'any(aid IN $agent_ids WHERE list_contains(e.agent_ids, aid))'
             )
             filter_params['agent_ids'] = agent_ids
 
@@ -399,7 +399,7 @@ class KuzuSearchOperations(SearchOperations):
 
         if agent_ids is not None:
             filter_queries.append(
-                'any(aid IN e.agent_ids WHERE list_contains($agent_ids, aid))'
+                'any(aid IN $agent_ids WHERE list_contains(e.agent_ids, aid))'
             )
             filter_params['agent_ids'] = agent_ids
 
@@ -469,7 +469,7 @@ class KuzuSearchOperations(SearchOperations):
 
         if agent_ids is not None:
             filter_queries.append(
-                'any(aid IN e.agent_ids WHERE list_contains($agent_ids, aid))'
+                'any(aid IN $agent_ids WHERE list_contains(e.agent_ids, aid))'
             )
             filter_params['agent_ids'] = agent_ids
 
@@ -615,7 +615,7 @@ class KuzuSearchOperations(SearchOperations):
 
         if agent_ids is not None:
             filter_clauses.append(
-                'any(aid IN c.agent_ids WHERE list_contains($agent_ids, aid))'
+                'any(aid IN $agent_ids WHERE list_contains(c.agent_ids, aid))'
             )
             filter_params['agent_ids'] = agent_ids
 
@@ -664,7 +664,7 @@ class KuzuSearchOperations(SearchOperations):
 
         if agent_ids is not None:
             filter_clauses.append(
-                'any(aid IN c.agent_ids WHERE list_contains($agent_ids, aid))'
+                'any(aid IN $agent_ids WHERE list_contains(c.agent_ids, aid))'
             )
             query_params['agent_ids'] = agent_ids
 

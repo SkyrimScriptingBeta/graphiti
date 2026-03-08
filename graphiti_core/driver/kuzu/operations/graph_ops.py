@@ -69,7 +69,15 @@ class KuzuGraphMaintenanceOperations(GraphMaintenanceOperations):
         fulltext_indices = get_fulltext_indices(GraphProvider.KUZU)
         index_queries = range_indices + fulltext_indices
 
-        await semaphore_gather(*[executor.execute_query(q) for q in index_queries])
+        # Kuzu CREATE_FTS_INDEX doesn't support IF NOT EXISTS, so we
+        # catch "already exists" errors to make this call idempotent.
+        for q in index_queries:
+            try:
+                await executor.execute_query(q)
+            except RuntimeError as e:
+                if 'already exists' in str(e):
+                    continue
+                raise
 
     async def delete_all_indexes(
         self,

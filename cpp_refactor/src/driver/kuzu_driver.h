@@ -1,6 +1,7 @@
 #pragma once
 
 #include <graphiti/error.h>
+#include <graphiti/search_filters.h>
 #include <graphiti/types.h>
 
 #include <memory>
@@ -65,19 +66,44 @@ public:
 
     // Search operations
     Result<std::vector<EntityNode>> search_entity_nodes_bm25(
-        std::string_view query, std::string_view group_id, int limit = 10
+        std::string_view query, std::string_view group_id, int limit = 10,
+        const SearchFilters* filters = nullptr
     );
     Result<std::vector<EntityNode>> search_entity_nodes_cosine(
         const std::vector<float>& query_embedding, std::string_view group_id,
-        float min_score = 0.0f, int limit = 10
+        float min_score = 0.0f, int limit = 10,
+        const SearchFilters* filters = nullptr
     );
     Result<std::vector<EntityEdge>> search_entity_edges_bm25(
-        std::string_view query, std::string_view group_id, int limit = 10
+        std::string_view query, std::string_view group_id, int limit = 10,
+        const SearchFilters* filters = nullptr
     );
     Result<std::vector<EntityEdge>> search_entity_edges_cosine(
         const std::vector<float>& query_embedding, std::string_view group_id,
-        float min_score = 0.0f, int limit = 10
+        float min_score = 0.0f, int limit = 10,
+        const SearchFilters* filters = nullptr
     );
+
+    // Episode search operations
+    Result<std::vector<EpisodicNode>> search_episodes_bm25(
+        std::string_view query, std::string_view group_id, int limit = 10
+    );
+
+    // BFS search operations
+    Result<std::vector<EntityEdge>> search_entity_edges_bfs(
+        const std::vector<std::string>& origin_uuids,
+        std::string_view group_id, int max_depth = 3, int limit = 20,
+        const SearchFilters* filters = nullptr
+    );
+    Result<std::vector<EntityNode>> search_entity_nodes_bfs(
+        const std::vector<std::string>& origin_uuids,
+        std::string_view group_id, int max_depth = 3, int limit = 20,
+        const SearchFilters* filters = nullptr
+    );
+
+    // Reranker queries
+    Result<int64_t> count_episode_mentions(std::string_view entity_uuid);
+    Result<bool> check_node_adjacency(std::string_view center_uuid, std::string_view node_uuid);
 
     // Maintenance
     VoidResult clear_data(const std::vector<std::string>& group_ids);

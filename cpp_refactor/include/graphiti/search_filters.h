@@ -4,17 +4,62 @@
 
 #include <optional>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace graphiti {
 
-struct SearchFilters {
-    std::optional<TimePoint> created_after;
-    std::optional<TimePoint> created_before;
-    std::optional<TimePoint> valid_after;
-    std::optional<TimePoint> valid_before;
-    std::vector<std::string> labels;
-    std::vector<std::string> group_ids;
+enum class ComparisonOp {
+    eq,              // =
+    neq,             // <>
+    gt,              // >
+    lt,              // <
+    gte,             // >=
+    lte,             // <=
+    is_null,         // IS NULL
+    is_not_null,     // IS NOT NULL
 };
+
+struct DateFilter {
+    std::optional<TimePoint> date;  // Not needed for IS NULL / IS NOT NULL
+    ComparisonOp op;
+};
+
+using PropertyValue = std::variant<std::string, int64_t, double>;
+
+struct PropertyFilter {
+    std::string property_name;
+    std::optional<PropertyValue> value;  // Not needed for IS NULL / IS NOT NULL
+    ComparisonOp op;
+};
+
+// Date filter clauses use nested AND/OR:
+//   outer vector = OR groups
+//   inner vector = AND within each group
+// Example: ((valid_at >= A AND valid_at < B) OR (valid_at >= C))
+using DateFilterClause = std::vector<std::vector<DateFilter>>;
+
+struct SearchFilters {
+    // Node label filter (applies to entity nodes)
+    std::vector<std::string> node_labels;
+
+    // Edge type filter (filters on edge name/relation type)
+    std::vector<std::string> edge_types;
+
+    // Temporal filters on edges (AND/OR compound expressions)
+    std::optional<DateFilterClause> valid_at;
+    std::optional<DateFilterClause> invalid_at;
+    std::optional<DateFilterClause> created_at;
+    std::optional<DateFilterClause> expired_at;
+
+    // Restrict to specific edge UUIDs (used internally for dedup)
+    std::vector<std::string> edge_uuids;
+
+    // Generic property filters (future use)
+    std::vector<PropertyFilter> property_filters;
+};
+
+// Convert ComparisonOp to Cypher operator string
+std::string_view comparison_op_to_cypher(ComparisonOp op);
 
 } // namespace graphiti

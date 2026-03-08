@@ -53,7 +53,9 @@ public:
         std::string_view query,
         SearchConfig config,
         std::string_view group_id = "",
-        std::optional<SearchFilters> filters = std::nullopt
+        std::optional<SearchFilters> filters = std::nullopt,
+        std::optional<std::string> center_node_uuid = std::nullopt,
+        const std::vector<std::string>* bfs_origin_node_uuids = nullptr
     );
 
     VoidResult delete_group(std::string_view group_id);

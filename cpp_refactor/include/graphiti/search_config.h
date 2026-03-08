@@ -3,12 +3,14 @@
 #include <graphiti/types.h>
 
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace graphiti {
 
 enum class EdgeSearchMethod { cosine_similarity, bm25, bfs };
 enum class NodeSearchMethod { cosine_similarity, bm25, bfs };
+enum class EpisodeSearchMethod { bm25 };
 
 enum class Reranker { rrf, node_distance, episode_mentions, mmr, cross_encoder };
 
@@ -30,9 +32,15 @@ struct NodeSearchConfig {
     int bfs_max_depth = 3;
 };
 
+struct EpisodeSearchConfig {
+    std::vector<EpisodeSearchMethod> search_methods = {EpisodeSearchMethod::bm25};
+    Reranker reranker = Reranker::rrf;
+};
+
 struct SearchConfig {
     std::optional<EdgeSearchConfig> edge_config;
     std::optional<NodeSearchConfig> node_config;
+    std::optional<EpisodeSearchConfig> episode_config;
     int limit = 10;
     float reranker_min_score = 0.0f;
 };
@@ -46,7 +54,24 @@ struct SearchResults {
     std::vector<float> episode_scores;
 };
 
+// Pre-built search config recipes
+
+// Edge-only recipes
 SearchConfig edge_hybrid_search_rrf();
+SearchConfig edge_hybrid_search_mmr();
+SearchConfig edge_hybrid_search_node_distance();
+SearchConfig edge_hybrid_search_episode_mentions();
+SearchConfig edge_hybrid_search_cross_encoder();
+
+// Node-only recipes
+SearchConfig node_hybrid_search_rrf();
+SearchConfig node_hybrid_search_mmr();
+SearchConfig node_hybrid_search_node_distance();
+SearchConfig node_hybrid_search_episode_mentions();
+
+// Combined recipes (edges + nodes + episodes)
 SearchConfig combined_hybrid_search_rrf();
+SearchConfig combined_hybrid_search_mmr();
+SearchConfig combined_hybrid_search_cross_encoder();
 
 } // namespace graphiti

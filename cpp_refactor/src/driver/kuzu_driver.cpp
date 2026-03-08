@@ -1,5 +1,6 @@
 #include "kuzu_driver.h"
 #include "kuzu_schema.h"
+#include "search/search_filters.h"
 #include "utils/datetime.h"
 
 #include <main/kuzu.h>
@@ -771,14 +772,22 @@ RETURN e.fact_embedding AS fact_embedding)";
 // ============================================================================
 
 Result<std::vector<EntityNode>> KuzuDriver::search_entity_nodes_bm25(
-    std::string_view query, std::string_view group_id, int limit) {
+    std::string_view query, std::string_view group_id, int limit,
+    const SearchFilters* filters) {
+    std::string extra_where;
+    if (filters) {
+        auto fc = build_node_filter_clauses(*filters);
+        auto joined = join_filter_clauses(fc.clauses);
+        if (!joined.empty()) extra_where = "\nAND " + joined;
+    }
+
     auto cypher = std::format(
         R"(CALL QUERY_FTS_INDEX('Entity', 'node_name_and_summary', $query, TOP := {})
 WITH node AS n, score
-WHERE n.group_id = $group_id
+WHERE n.group_id = $group_id{}
 RETURN {}
 ORDER BY score DESC
-LIMIT {})", limit, ENTITY_NODE_RETURN, limit);
+LIMIT {})", limit, extra_where, ENTITY_NODE_RETURN, limit);
 
     ParamMap params;
     params["query"] = str_val(query);
@@ -792,16 +801,23 @@ LIMIT {})", limit, ENTITY_NODE_RETURN, limit);
 
 Result<std::vector<EntityNode>> KuzuDriver::search_entity_nodes_cosine(
     const std::vector<float>& query_embedding, std::string_view group_id,
-    float min_score, int limit) {
+    float min_score, int limit, const SearchFilters* filters) {
+    std::string extra_where;
+    if (filters) {
+        auto fc = build_node_filter_clauses(*filters);
+        auto joined = join_filter_clauses(fc.clauses);
+        if (!joined.empty()) extra_where = "\nAND " + joined;
+    }
+
     auto dim = query_embedding.size();
     auto cypher = std::format(
         R"(MATCH (n:Entity)
-WHERE n.group_id = $group_id
+WHERE n.group_id = $group_id{}
 WITH n, array_cosine_similarity(n.name_embedding, CAST($search_vector AS FLOAT[{}])) AS score
 WHERE score > $min_score
 RETURN {}
 ORDER BY score DESC
-LIMIT {})", dim, ENTITY_NODE_RETURN, limit);
+LIMIT {})", extra_where, dim, ENTITY_NODE_RETURN, limit);
 
     ParamMap params;
     params["group_id"] = str_val(group_id);
@@ -815,15 +831,23 @@ LIMIT {})", dim, ENTITY_NODE_RETURN, limit);
 }
 
 Result<std::vector<EntityEdge>> KuzuDriver::search_entity_edges_bm25(
-    std::string_view query, std::string_view group_id, int limit) {
+    std::string_view query, std::string_view group_id, int limit,
+    const SearchFilters* filters) {
+    std::string extra_where;
+    if (filters) {
+        auto fc = build_edge_filter_clauses(*filters);
+        auto joined = join_filter_clauses(fc.clauses);
+        if (!joined.empty()) extra_where = "\nAND " + joined;
+    }
+
     auto cypher = std::format(
         R"(CALL QUERY_FTS_INDEX('RelatesToNode_', 'edge_name_and_fact', $query, TOP := {})
 WITH node AS e, score
 MATCH (n:Entity)-[:RELATES_TO]->(e)-[:RELATES_TO]->(m:Entity)
-WHERE e.group_id = $group_id
+WHERE e.group_id = $group_id{}
 RETURN {}
 ORDER BY score DESC
-LIMIT {})", limit, ENTITY_EDGE_RETURN, limit);
+LIMIT {})", limit, extra_where, ENTITY_EDGE_RETURN, limit);
 
     ParamMap params;
     params["query"] = str_val(query);
@@ -837,16 +861,23 @@ LIMIT {})", limit, ENTITY_EDGE_RETURN, limit);
 
 Result<std::vector<EntityEdge>> KuzuDriver::search_entity_edges_cosine(
     const std::vector<float>& query_embedding, std::string_view group_id,
-    float min_score, int limit) {
+    float min_score, int limit, const SearchFilters* filters) {
+    std::string extra_where;
+    if (filters) {
+        auto fc = build_edge_filter_clauses(*filters);
+        auto joined = join_filter_clauses(fc.clauses);
+        if (!joined.empty()) extra_where = "\nAND " + joined;
+    }
+
     auto dim = query_embedding.size();
     auto cypher = std::format(
         R"(MATCH (n:Entity)-[:RELATES_TO]->(e:RelatesToNode_)-[:RELATES_TO]->(m:Entity)
-WHERE e.group_id = $group_id
+WHERE e.group_id = $group_id{}
 WITH DISTINCT e, n, m, array_cosine_similarity(e.fact_embedding, CAST($search_vector AS FLOAT[{}])) AS score
 WHERE score > $min_score
 RETURN {}
 ORDER BY score DESC
-LIMIT {})", dim, ENTITY_EDGE_RETURN, limit);
+LIMIT {})", extra_where, dim, ENTITY_EDGE_RETURN, limit);
 
     ParamMap params;
     params["group_id"] = str_val(group_id);
@@ -857,6 +888,254 @@ LIMIT {})", dim, ENTITY_EDGE_RETURN, limit);
     if (!result) return std::unexpected(result.error());
 
     return collect_entity_edges(result->get());
+}
+
+// ============================================================================
+// Episode search
+// ============================================================================
+
+Result<std::vector<EpisodicNode>> KuzuDriver::search_episodes_bm25(
+    std::string_view query, std::string_view group_id, int limit) {
+
+    std::string group_filter;
+    if (!group_id.empty()) {
+        group_filter = "\nAND e.group_id = $group_id";
+    }
+
+    auto cypher = std::format(
+        R"(CALL QUERY_FTS_INDEX('Episodic', 'episode_content', $query, TOP := {})
+WITH node AS e, score
+WHERE true{}
+RETURN {}
+ORDER BY score DESC
+LIMIT {})", limit, group_filter, EPISODIC_NODE_RETURN, limit);
+
+    ParamMap params;
+    params["query"] = str_val(query);
+    if (!group_id.empty()) params["group_id"] = str_val(group_id);
+
+    auto result = impl_->query_params(cypher, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    return collect_episodes(result->get());
+}
+
+// ============================================================================
+// BFS search
+// ============================================================================
+
+Result<std::vector<EntityEdge>> KuzuDriver::search_entity_edges_bfs(
+    const std::vector<std::string>& origin_uuids,
+    std::string_view group_id, int max_depth, int limit,
+    const SearchFilters* filters) {
+
+    if (origin_uuids.empty()) return std::vector<EntityEdge>{};
+
+    std::string extra_where;
+    if (filters) {
+        auto fc = build_edge_filter_clauses(*filters);
+        auto joined = join_filter_clauses(fc.clauses);
+        if (!joined.empty()) extra_where = "\nAND " + joined;
+    }
+
+    std::string group_filter;
+    if (!group_id.empty()) {
+        group_filter = "\nAND e.group_id = $group_id";
+    }
+
+    // Collect edges from all origins, deduplicate by UUID
+    std::unordered_map<std::string, EntityEdge> seen;
+    int doubled_depth = max_depth * 2;
+
+    for (auto& origin_uuid : origin_uuids) {
+        if (static_cast<int>(seen.size()) >= limit) break;
+
+        // Query 1: Entity origin -> traverse to RelatesToNode_ edges
+        {
+            auto cypher = std::format(
+                R"(MATCH (origin:Entity {{uuid: $origin_uuid}})-[:RELATES_TO*2..{}]->(e:RelatesToNode_)
+MATCH (n:Entity)-[:RELATES_TO]->(e)-[:RELATES_TO]->(m:Entity)
+WHERE true{}{}
+RETURN DISTINCT {}
+LIMIT {})", doubled_depth, group_filter, extra_where, ENTITY_EDGE_RETURN, limit);
+
+            ParamMap params;
+            params["origin_uuid"] = str_val(origin_uuid);
+            if (!group_id.empty()) params["group_id"] = str_val(group_id);
+
+            auto result = impl_->query_params(cypher, std::move(params));
+            if (result.has_value()) {
+                for (auto& edge : collect_entity_edges(result->get())) {
+                    if (!seen.contains(edge.uuid)) {
+                        seen.emplace(edge.uuid, std::move(edge));
+                    }
+                }
+            }
+        }
+
+        // Query 2: Episodic origin -> MENTIONS -> Entity -> edges
+        {
+            auto cypher = std::format(
+                R"(MATCH (origin:Episodic {{uuid: $origin_uuid}})-[:MENTIONS]->(start:Entity)-[:RELATES_TO]->(e:RelatesToNode_)-[:RELATES_TO]->(m:Entity)
+MATCH (n:Entity)-[:RELATES_TO]->(e)
+WHERE true{}{}
+RETURN DISTINCT {}
+LIMIT {})", group_filter, extra_where, ENTITY_EDGE_RETURN, limit);
+
+            ParamMap params;
+            params["origin_uuid"] = str_val(origin_uuid);
+            if (!group_id.empty()) params["group_id"] = str_val(group_id);
+
+            auto result = impl_->query_params(cypher, std::move(params));
+            if (result.has_value()) {
+                for (auto& edge : collect_entity_edges(result->get())) {
+                    if (!seen.contains(edge.uuid)) {
+                        seen.emplace(edge.uuid, std::move(edge));
+                    }
+                }
+            }
+        }
+    }
+
+    // Collect results up to limit
+    std::vector<EntityEdge> results;
+    results.reserve(std::min(static_cast<int>(seen.size()), limit));
+    for (auto& [uuid, edge] : seen) {
+        results.push_back(std::move(edge));
+        if (static_cast<int>(results.size()) >= limit) break;
+    }
+    return results;
+}
+
+Result<std::vector<EntityNode>> KuzuDriver::search_entity_nodes_bfs(
+    const std::vector<std::string>& origin_uuids,
+    std::string_view group_id, int max_depth, int limit,
+    const SearchFilters* filters) {
+
+    if (origin_uuids.empty()) return std::vector<EntityNode>{};
+
+    std::string extra_where;
+    if (filters) {
+        auto fc = build_node_filter_clauses(*filters);
+        auto joined = join_filter_clauses(fc.clauses);
+        if (!joined.empty()) extra_where = "\nAND " + joined;
+    }
+
+    std::string group_filter = "\nWHERE n.group_id = origin.group_id";
+
+    // Collect nodes from all origins, deduplicate by UUID
+    std::unordered_map<std::string, EntityNode> seen;
+    int doubled_depth = max_depth * 2;
+
+    for (auto& origin_uuid : origin_uuids) {
+        if (static_cast<int>(seen.size()) >= limit) break;
+
+        // Query 1: Episodic -> MENTIONS -> Entity
+        {
+            auto cypher = std::format(
+                R"(MATCH (origin:Episodic {{uuid: $origin_uuid}})-[:MENTIONS]->(n:Entity){}{}
+RETURN {}
+LIMIT {})", group_filter, extra_where, ENTITY_NODE_RETURN, limit);
+
+            ParamMap params;
+            params["origin_uuid"] = str_val(origin_uuid);
+
+            auto result = impl_->query_params(cypher, std::move(params));
+            if (result.has_value()) {
+                for (auto& node : collect_entities(result->get())) {
+                    if (!seen.contains(node.uuid)) {
+                        seen.emplace(node.uuid, std::move(node));
+                    }
+                }
+            }
+        }
+
+        // Query 2: Entity -> RELATES_TO*(2..depth*2) -> Entity
+        {
+            auto cypher = std::format(
+                R"(MATCH (origin:Entity {{uuid: $origin_uuid}})-[:RELATES_TO*2..{}]->(n:Entity){}{}
+RETURN {}
+LIMIT {})", doubled_depth, group_filter, extra_where, ENTITY_NODE_RETURN, limit);
+
+            ParamMap params;
+            params["origin_uuid"] = str_val(origin_uuid);
+
+            auto result = impl_->query_params(cypher, std::move(params));
+            if (result.has_value()) {
+                for (auto& node : collect_entities(result->get())) {
+                    if (!seen.contains(node.uuid)) {
+                        seen.emplace(node.uuid, std::move(node));
+                    }
+                }
+            }
+        }
+
+        // Query 3: Episodic -> MENTIONS -> Entity -> RELATES_TO -> Entity (if depth > 1)
+        if (max_depth > 1) {
+            int combined_depth = (max_depth - 1) * 2;
+            auto cypher = std::format(
+                R"(MATCH (origin:Episodic {{uuid: $origin_uuid}})-[:MENTIONS]->(:Entity)-[:RELATES_TO*2..{}]->(n:Entity){}{}
+RETURN {}
+LIMIT {})", combined_depth, group_filter, extra_where, ENTITY_NODE_RETURN, limit);
+
+            ParamMap params;
+            params["origin_uuid"] = str_val(origin_uuid);
+
+            auto result = impl_->query_params(cypher, std::move(params));
+            if (result.has_value()) {
+                for (auto& node : collect_entities(result->get())) {
+                    if (!seen.contains(node.uuid)) {
+                        seen.emplace(node.uuid, std::move(node));
+                    }
+                }
+            }
+        }
+    }
+
+    // Collect results up to limit
+    std::vector<EntityNode> results;
+    results.reserve(std::min(static_cast<int>(seen.size()), limit));
+    for (auto& [uuid, node] : seen) {
+        results.push_back(std::move(node));
+        if (static_cast<int>(results.size()) >= limit) break;
+    }
+    return results;
+}
+
+// ============================================================================
+// Reranker queries
+// ============================================================================
+
+Result<int64_t> KuzuDriver::count_episode_mentions(std::string_view entity_uuid) {
+    auto cypher = R"(MATCH (episode:Episodic)-[r:MENTIONS]->(n:Entity {uuid: $node_uuid})
+RETURN count(*) AS cnt)";
+
+    ParamMap params;
+    params["node_uuid"] = str_val(entity_uuid);
+
+    auto result = impl_->query_params(cypher, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    auto* qr = result->get();
+    if (qr->hasNext()) {
+        auto row = qr->getNext();
+        return row->getValue(0)->getValue<int64_t>();
+    }
+    return int64_t{0};
+}
+
+Result<bool> KuzuDriver::check_node_adjacency(std::string_view center_uuid, std::string_view node_uuid) {
+    auto cypher = R"(MATCH (center:Entity {uuid: $center_uuid})-[:RELATES_TO]->(:RelatesToNode_)-[:RELATES_TO]-(n:Entity {uuid: $node_uuid})
+RETURN 1 AS score LIMIT 1)";
+
+    ParamMap params;
+    params["center_uuid"] = str_val(center_uuid);
+    params["node_uuid"] = str_val(node_uuid);
+
+    auto result = impl_->query_params(cypher, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    return result->get()->hasNext();
 }
 
 // ============================================================================

@@ -210,12 +210,13 @@ Result<std::vector<EntityEdge>> Graphiti::search(
     std::string_view query,
     std::string_view group_id,
     int num_results,
-    std::optional<SearchFilters> /*filters*/
+    std::optional<SearchFilters> filters
 ) {
     auto gid = impl_->resolve_group_id(group_id);
 
     auto result = hybrid_edge_search(
-        impl_->driver, impl_->embedder, query, gid, num_results
+        impl_->driver, impl_->embedder, query, gid, num_results, 0.0f,
+        filters.has_value() ? &filters.value() : nullptr
     );
 
     if (!result.has_value()) return std::unexpected(result.error());
@@ -224,12 +225,22 @@ Result<std::vector<EntityEdge>> Graphiti::search(
 }
 
 Result<SearchResults> Graphiti::search_advanced(
-    std::string_view /*query*/,
-    SearchConfig /*config*/,
-    std::string_view /*group_id*/,
-    std::optional<SearchFilters> /*filters*/
+    std::string_view query,
+    SearchConfig config,
+    std::string_view group_id,
+    std::optional<SearchFilters> filters,
+    std::optional<std::string> center_node_uuid,
+    const std::vector<std::string>* bfs_origin_node_uuids
 ) {
-    return std::unexpected(GraphitiError{ErrorCode::invalid_config, "search_advanced not yet implemented"});
+    auto gid = impl_->resolve_group_id(group_id);
+
+    return search_orchestrator(
+        impl_->driver, impl_->embedder, impl_->llm,
+        query, gid, config,
+        filters.has_value() ? &filters.value() : nullptr,
+        center_node_uuid.has_value() ? &center_node_uuid.value() : nullptr,
+        bfs_origin_node_uuids
+    );
 }
 
 VoidResult Graphiti::delete_group(std::string_view group_id) {

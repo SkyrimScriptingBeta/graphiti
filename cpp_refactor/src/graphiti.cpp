@@ -24,6 +24,7 @@
 namespace graphiti {
 
 struct Graphiti::Impl {
+    std::mutex mu; // Serializes all public method calls (Kuzu Connection is not thread-safe)
     GraphitiConfig config;
     KuzuDriver driver;
     OpenAIClient llm;
@@ -50,6 +51,7 @@ Graphiti::Graphiti(Graphiti&&) noexcept = default;
 Graphiti& Graphiti::operator=(Graphiti&&) noexcept = default;
 
 VoidResult Graphiti::build_indices() {
+    std::lock_guard lock(impl_->mu);
     auto r = impl_->driver.setup_schema();
     if (!r.has_value()) return r;
     return impl_->driver.build_fts_indices();
@@ -67,6 +69,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     std::optional<std::string> saga,
     std::optional<std::string> saga_previous_episode_uuid
 ) {
+    std::lock_guard lock(impl_->mu);
     auto gid = impl_->resolve_group_id(group_id);
     auto aid = std::string(agent_id);
     auto now = std::chrono::system_clock::now();
@@ -279,6 +282,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
         return AddBulkEpisodeResults{};
     }
 
+    std::lock_guard lock(impl_->mu);
     auto gid = impl_->resolve_group_id(group_id);
     auto aid = std::string(agent_id);
     auto now = std::chrono::system_clock::now();
@@ -625,6 +629,7 @@ Result<std::vector<EntityEdge>> Graphiti::search(
     int num_results,
     std::optional<SearchFilters> filters
 ) {
+    std::lock_guard lock(impl_->mu);
     auto gid = impl_->resolve_group_id(group_id);
 
     auto result = hybrid_edge_search(
@@ -645,6 +650,7 @@ Result<SearchResults> Graphiti::search_advanced(
     std::optional<std::string> center_node_uuid,
     const std::vector<std::string>* bfs_origin_node_uuids
 ) {
+    std::lock_guard lock(impl_->mu);
     auto gid = impl_->resolve_group_id(group_id);
 
     return search_orchestrator(
@@ -657,6 +663,7 @@ Result<SearchResults> Graphiti::search_advanced(
 }
 
 VoidResult Graphiti::delete_group(std::string_view group_id) {
+    std::lock_guard lock(impl_->mu);
     return impl_->driver.clear_data({std::string(group_id)});
 }
 

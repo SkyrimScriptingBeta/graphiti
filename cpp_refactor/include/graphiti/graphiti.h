@@ -36,6 +36,11 @@ struct AddBulkEpisodeResults {
     std::vector<EntityEdge> edges;
 };
 
+// Thread safety: All public methods are serialized internally via a mutex.
+// Concurrent calls from multiple threads are safe but will execute sequentially.
+// For maximum throughput with concurrent reads, create separate Graphiti instances
+// pointing to the same database (Kuzu Database objects are thread-safe to share,
+// but each Connection is not).
 class Graphiti {
 public:
     explicit Graphiti(GraphitiConfig config);

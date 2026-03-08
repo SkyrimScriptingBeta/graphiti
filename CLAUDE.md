@@ -1,3 +1,9 @@
+# Our Philosophy and Culture
+
+Please read this right away: ./OUR_PHILOSOPHY_AND_CULTURE.md
+
+It explains our development philosophy and culture.
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.

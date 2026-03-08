@@ -1,0 +1,21 @@
+title: "Pipeline: node deduplication"
+type: story
+status: not_ready
+parent: b8c62d
+slug: e06811
+description: "Port resolve_extracted_nodes() from node_operations.py. For each extracted node: (1) search existing graph nodes by name via FTS + vector similarity, (2) call LLM with dedupe prompt comparing new vs existing nodes, (3) if duplicate found, map new UUID to existing UUID. Returns deduplicated node list + uuid_map (old->canonical). Uses uuid_map to update all edge source/target references. Critical for preventing duplicate entity accumulation. Integration test: add episode with 'Alice', then add another with 'Alice Smith' referring to same person, verify dedup merges them."
+log:
+  - ts: 2026-03-08T13:20:30Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:20:30Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:22:36Z
+    owner: unknown
+    action: field_changed
+    field: description
+  - ts: 2026-03-08T13:40:18Z
+    owner: unknown
+    action: field_changed
+    field: parent

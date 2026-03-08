@@ -1,0 +1,17 @@
+title: Callback-based embedder (user-provided embedding function)
+type: story
+status: not_ready
+parent: 27b35a
+slug: 5037d6
+description: Implement a callback-based embedder that delegates to a user-provided function. Constructor takes std::function<vector<float>(string)>. Allows users to bring their own embedding logic without implementing the full interface. Useful for wrapping existing embedding infrastructure (ONNX, custom models, etc). Batch implementation just loops over single calls (user can optimize internally).
+log:
+  - ts: 2026-03-08T13:21:11Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:21:11Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:24:26Z
+    owner: unknown
+    action: field_changed
+    field: description

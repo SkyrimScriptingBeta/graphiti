@@ -1,0 +1,17 @@
+title: Node distance reranking
+type: story
+status: not_ready
+parent: 38334c
+slug: bfbe25
+description: "Rerank results by graph distance from a center node. For each candidate node, query shortest path length to center via Kuzu: MATCH (center:Entity {uuid})-[:RELATES_TO]->(:RelatesToNode_)-[:RELATES_TO]-(n:Entity {uuid}) RETURN 1 AS score. Closer nodes score higher. Kuzu-specific: iterates per node (no UNWIND). Port from graphiti_core/driver/kuzu/operations/search_ops.py node_distance_reranker."
+log:
+  - ts: 2026-03-08T13:20:45Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:20:45Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:23:29Z
+    owner: unknown
+    action: field_changed
+    field: description

@@ -1,0 +1,17 @@
+title: BFS graph traversal search (node and edge)
+type: story
+status: not_ready
+parent: 38334c
+slug: 19505e
+description: "Implement breadth-first graph traversal search for both nodes and edges. CRITICAL: Kuzu intermediate node pattern means BFS depth must be doubled (2 hops per logical edge). Node BFS from origin: MATCH (origin:Entity {uuid})-[:RELATES_TO*2..{doubled_depth}]->(n:Entity). Also from Episodic via MENTIONS: MATCH (origin:Episodic {uuid})-[:MENTIONS]->(n:Entity). Edge BFS: traverse through RELATES_TO to find RelatesToNode_ intermediates, then join back to source/target entities. Port from graphiti_core/driver/kuzu/operations/search_ops.py BFS queries. Deduplication of results by UUID."
+log:
+  - ts: 2026-03-08T13:20:43Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:20:43Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:23:19Z
+    owner: unknown
+    action: field_changed
+    field: description

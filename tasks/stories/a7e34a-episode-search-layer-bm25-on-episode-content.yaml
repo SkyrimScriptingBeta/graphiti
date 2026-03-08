@@ -1,0 +1,17 @@
+title: Episode search layer (BM25 on episode content)
+type: story
+status: not_ready
+parent: 38334c
+slug: a7e34a
+description: "Add episode search via BM25 fulltext on episode content. Query: CALL QUERY_FTS_INDEX('Episodic', 'episode_content', query, TOP := limit). Returns EpisodicNode results with relevance scores. Integrate into search orchestration alongside edge/node search. May be useful for retrieving raw conversation context."
+log:
+  - ts: 2026-03-08T13:20:49Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:20:49Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:23:36Z
+    owner: unknown
+    action: field_changed
+    field: description

@@ -1,0 +1,17 @@
+title: Community node CRUD
+type: story
+status: not_ready
+parent: 2e37ab
+slug: 9ca7fb
+description: Implement Community node CRUD. Community nodes represent clusters of related entities with (uuid, name, group_id, created_at, name_embedding[], summary). Save with embedding, get by uuid, delete. Generate name embedding via embedder. Port from graphiti_core/driver/kuzu/operations/community_node_ops.py.
+log:
+  - ts: 2026-03-08T13:20:58Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:20:58Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:23:58Z
+    owner: unknown
+    action: field_changed
+    field: description

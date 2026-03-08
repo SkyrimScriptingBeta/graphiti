@@ -1,0 +1,21 @@
+title: "Pipeline: entity extraction"
+type: story
+status: not_ready
+parent: b8c62d
+slug: 66cd4d
+description: "Port extract_nodes() from graphiti_core/utils/maintenance/node_operations.py. Takes episode content + entity types + previous episodes. Calls LLM with extract prompt, parses ExtractedEntities response. Creates EntityNode objects with generated UUIDs. Generates name embeddings via embedder. Handles EpisodeType dispatch (message/json/text -> different prompts). Integration test: extract entities from 'Alice: I work at Acme Corp as a software engineer', verify 'Alice' and 'Acme Corp' are extracted."
+log:
+  - ts: 2026-03-08T13:20:26Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:20:26Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:22:25Z
+    owner: unknown
+    action: field_changed
+    field: description
+  - ts: 2026-03-08T13:40:17Z
+    owner: unknown
+    action: field_changed
+    field: parent

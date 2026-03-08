@@ -1,0 +1,17 @@
+title: Abstract GraphDriver interface
+type: story
+status: not_ready
+parent: 27b35a
+slug: 96ee37
+description: "Define abstract GraphDriver interface for database backends. Virtual methods for all CRUD operations, search operations, schema setup. KuzuDriver becomes one implementation. This is already partially implicit in Phase 1 design but this story makes it explicit with a virtual base class. Enables future Neo4j or other backends without changing the rest of the library. NOTE: Low priority since we only care about Kuzu, but good software design."
+log:
+  - ts: 2026-03-08T13:21:12Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:21:12Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:24:32Z
+    owner: unknown
+    action: field_changed
+    field: description

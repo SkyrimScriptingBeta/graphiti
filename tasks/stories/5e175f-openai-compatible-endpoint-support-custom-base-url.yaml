@@ -1,0 +1,17 @@
+title: OpenAI-compatible endpoint support (custom base_url)
+type: story
+status: not_ready
+parent: 27b35a
+slug: 5e175f
+description: Support custom base_url in the OpenAI client for OpenAI-compatible endpoints (vLLM, llama.cpp server, Ollama, LM Studio, Azure OpenAI, etc). Already partially designed in config (LLMConfig::base_url), just needs to be wired through to the HTTP client. Test with a local OpenAI-compatible server if available.
+log:
+  - ts: 2026-03-08T13:21:17Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:21:17Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:24:40Z
+    owner: unknown
+    action: field_changed
+    field: description

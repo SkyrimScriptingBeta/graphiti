@@ -1,0 +1,17 @@
+title: Community updates during episode ingestion
+type: story
+status: not_ready
+parent: 2e37ab
+slug: 8ae4ee
+description: "Wire community updates into the add_episode pipeline. When update_communities=true on add_episode, after persisting nodes and edges: for each new/modified entity node, run the community assignment algorithm. Create/update CommunityNodes, create HAS_MEMBER edges. This is optional (off by default) because it adds LLM calls and latency."
+log:
+  - ts: 2026-03-08T13:21:03Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:21:03Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:24:11Z
+    owner: unknown
+    action: field_changed
+    field: description

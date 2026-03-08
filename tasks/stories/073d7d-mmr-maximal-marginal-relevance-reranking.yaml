@@ -1,0 +1,17 @@
+title: MMR (Maximal Marginal Relevance) reranking
+type: story
+status: not_ready
+parent: 38334c
+slug: 073d7d
+description: "Implement Maximal Marginal Relevance reranking. MMR balances relevance to query with diversity among results: score = lambda * sim(doc, query) - (1-lambda) * max(sim(doc, selected_docs)). Uses cosine similarity on embeddings. lambda parameter controls relevance vs diversity tradeoff (default 0.5). Port from graphiti_core/search/search_utils.py mmr_reranker()."
+log:
+  - ts: 2026-03-08T13:20:44Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:20:44Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:23:26Z
+    owner: unknown
+    action: field_changed
+    field: description

@@ -1,0 +1,17 @@
+title: Community search layer (cosine on community embeddings)
+type: story
+status: not_ready
+parent: 38334c
+slug: 782f4f
+description: "Add community search via cosine similarity on community name embeddings. Query: MATCH (n:Community) WITH n, array_cosine_similarity(n.name_embedding, CAST(vector AS FLOAT[1024])) AS score WHERE score > min_score. Also BM25 via QUERY_FTS_INDEX on community name. Depends on Phase 3 community support being implemented first."
+log:
+  - ts: 2026-03-08T13:20:50Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:20:50Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:23:39Z
+    owner: unknown
+    action: field_changed
+    field: description

@@ -1,0 +1,21 @@
+title: Project skeleton and build system
+type: story
+status: not_ready
+parent: ba8007
+slug: 8a167b
+description: "Create the xmake.lua project file, full directory structure (include/graphiti/, src/, tests/), and configure all dependencies. xmake with C++23. Dependencies: kuzu (from SkyrimScriptingBeta registry), nlohmann_json, cpp-httplib, openssl3, catch2. Two targets: 'graphiti' static library and 'graphiti_tests' binary. Verify the project builds clean on Windows with an empty main."
+log:
+  - ts: 2026-03-08T13:20:17Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:20:17Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:21:37Z
+    owner: unknown
+    action: field_changed
+    field: description
+  - ts: 2026-03-08T13:40:04Z
+    owner: unknown
+    action: field_changed
+    field: parent

@@ -1,0 +1,21 @@
+title: "Search: RRF reranking and result merging"
+type: story
+status: not_ready
+parent: b8c62d
+slug: 1d4a08
+description: "Implement Reciprocal Rank Fusion to combine results from multiple search methods. RRF score = sum(1/(k+rank)) across all result lists, where k=60 (standard constant). Takes multiple ranked lists of edges/nodes, produces a single merged ranked list. Also implement min_score filtering. This is the default reranker for Phase 1 (more advanced rerankers in Phase 2). Unit tests with known inputs/outputs: 2 result lists with overlapping items, verify correct merged ranking. Edge case: empty lists, single list, no overlap."
+log:
+  - ts: 2026-03-08T13:20:36Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:20:36Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:22:59Z
+    owner: unknown
+    action: field_changed
+    field: description
+  - ts: 2026-03-08T13:40:25Z
+    owner: unknown
+    action: field_changed
+    field: parent

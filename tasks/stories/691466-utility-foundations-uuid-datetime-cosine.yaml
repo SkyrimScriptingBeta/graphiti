@@ -1,0 +1,21 @@
+title: Utility foundations (UUID, datetime, cosine)
+type: story
+status: not_ready
+parent: ba8007
+slug: 691466
+description: "Implement UUID v4 generation (use bcrypt on Windows, /dev/urandom on Unix). ISO8601 datetime parsing and formatting (2024-01-15T10:30:00Z <-> TimePoint). utc_now() helper. Cosine similarity as header-only (dot product / norms). JSON helpers for prompt construction (to_prompt_json for nodes/edges). Unit tests: UUID format validation and uniqueness across 1000 generations. Datetime round-trip, edge cases (no timezone, milliseconds, null). Cosine: identical=1.0, orthogonal=0.0, known angles, zero vector."
+log:
+  - ts: 2026-03-08T13:20:19Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:20:19Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:21:47Z
+    owner: unknown
+    action: field_changed
+    field: description
+  - ts: 2026-03-08T13:40:04Z
+    owner: unknown
+    action: field_changed
+    field: parent

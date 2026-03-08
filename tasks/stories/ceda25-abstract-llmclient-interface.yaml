@@ -1,0 +1,17 @@
+title: Abstract LLMClient interface
+type: story
+status: not_ready
+parent: 27b35a
+slug: ceda25
+description: "Define abstract LLMClient interface in include/graphiti/llm_client.h. Virtual method: generate_response(vector<Message>, optional<string_view> json_schema, ModelSize) -> expected<json, GraphitiError>. OpenAI client becomes one implementation. This allows users to swap in Anthropic, local models, or custom endpoints. Refactor Graphiti constructor to accept unique_ptr<LLMClient>."
+log:
+  - ts: 2026-03-08T13:21:12Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:21:12Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:24:29Z
+    owner: unknown
+    action: field_changed
+    field: description

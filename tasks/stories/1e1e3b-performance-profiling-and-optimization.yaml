@@ -1,0 +1,17 @@
+title: Performance profiling and optimization
+type: story
+status: not_ready
+parent: c52653
+slug: 1e1e3b
+description: "Profile the library under realistic workloads. Identify bottlenecks (likely: HTTP latency to OpenAI, Kuzu query execution, JSON serialization). Measure: time per add_episode, time per search, breakdown by sub-operation (LLM call, embedding, graph query). Consider optimizations: connection pooling, embedding caching, batch graph writes. Only optimize what profiling proves is slow (per our philosophy: profile before rewriting)."
+log:
+  - ts: 2026-03-08T13:21:24Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:21:24Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:24:59Z
+    owner: unknown
+    action: field_changed
+    field: description

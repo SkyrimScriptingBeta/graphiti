@@ -1,0 +1,21 @@
+title: "Pipeline: edge deduplication and invalidation"
+type: story
+status: not_ready
+parent: b8c62d
+slug: 291698
+description: "Port resolve_extracted_edges() from edge_operations.py. For each extracted edge: (1) find existing edges between same source/target nodes in graph, (2) call LLM with edge resolution prompt, (3) identify duplicates (same fact) and contradictions (conflicting facts). Duplicate edges are dropped. Contradicted existing edges get invalid_at/expired_at set (temporal invalidation). This is how Graphiti handles changing facts: 'Alice works at Acme' gets invalidated when 'Alice works at Google' arrives. Integration test: add 'Alice works at Acme', then 'Alice quit Acme and joined Google', verify old edge invalidated and new edge created."
+log:
+  - ts: 2026-03-08T13:20:30Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:20:30Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:22:40Z
+    owner: unknown
+    action: field_changed
+    field: description
+  - ts: 2026-03-08T13:40:19Z
+    owner: unknown
+    action: field_changed
+    field: parent

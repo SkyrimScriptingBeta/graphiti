@@ -1,0 +1,17 @@
+title: Community edge (HAS_MEMBER) CRUD
+type: story
+status: not_ready
+parent: 2e37ab
+slug: 1143a4
+description: "Implement HAS_MEMBER edge linking communities to their member entities (or sub-communities). Kuzu UNION pattern needed because target can be Entity OR Community: two MATCH/MERGE blocks. Save, delete, get members of community. Port from graphiti_core/driver/kuzu/operations/community_edge_ops.py."
+log:
+  - ts: 2026-03-08T13:20:59Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:20:59Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:24:01Z
+    owner: unknown
+    action: field_changed
+    field: description

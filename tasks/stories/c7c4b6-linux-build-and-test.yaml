@@ -1,0 +1,17 @@
+title: Linux build and test
+type: story
+status: not_ready
+parent: c52653
+slug: c7c4b6
+description: "Verify the library builds and tests pass on Linux (GCC and Clang). Should be straightforward: all dependencies have Linux support. UUID via /dev/urandom. OpenSSL available via system package. Fix any platform-specific issues."
+log:
+  - ts: 2026-03-08T13:21:23Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:21:23Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:24:53Z
+    owner: unknown
+    action: field_changed
+    field: description

@@ -1,0 +1,17 @@
+title: Advanced search API (search_advanced with full SearchConfig)
+type: story
+status: not_ready
+parent: 38334c
+slug: 173398
+description: "Expose the full search_advanced() method on the Graphiti class accepting a complete SearchConfig. Allows caller to configure which search methods (BM25, cosine, BFS), which reranker (RRF, cross-encoder, MMR, node_distance, episode_mentions), min scores, BFS depth, MMR lambda. Returns SearchResults with edges, nodes, episodes, communities, each with their reranker scores. Pre-built recipe functions: edge_hybrid_search_rrf(), combined_hybrid_search_rrf(), combined_hybrid_search_cross_encoder()."
+log:
+  - ts: 2026-03-08T13:20:51Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:20:51Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:23:45Z
+    owner: unknown
+    action: field_changed
+    field: description

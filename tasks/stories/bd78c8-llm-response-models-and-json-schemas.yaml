@@ -1,0 +1,21 @@
+title: LLM response models and JSON schemas
+type: story
+status: not_ready
+parent: ba8007
+slug: bd78c8
+description: "C++ structs matching every Pydantic response model from Python prompts, plus hand-written constexpr JSON Schema strings for each. Structs: ExtractedEntity{name,entity_type_id}, ExtractedEntities{extracted_entities[]}, ExtractedEdge{source_entity_name,target_entity_name,relation_type,fact,valid_at,invalid_at}, ExtractedEdges{edges[]}, NodeDuplicate{id,name,duplicate_name}, NodeResolutions{entity_resolutions[]}, EdgeDuplicate{duplicate_facts[],contradicted_facts[]}, EdgeResolutions{resolutions[]}, EntitySummary{summary}, SummarizedEntity{name,summary}, SummarizedEntities{summaries[]}. Each struct gets nlohmann from_json + a constexpr JSON Schema string. Unit tests: parse sample JSON into each struct, verify all fields. Test malformed JSON handling."
+log:
+  - ts: 2026-03-08T13:20:24Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:20:24Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:22:12Z
+    owner: unknown
+    action: field_changed
+    field: description
+  - ts: 2026-03-08T13:40:07Z
+    owner: unknown
+    action: field_changed
+    field: parent

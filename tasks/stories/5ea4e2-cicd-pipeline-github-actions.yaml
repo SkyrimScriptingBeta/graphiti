@@ -1,0 +1,17 @@
+title: CI/CD pipeline (GitHub Actions)
+type: story
+status: not_ready
+parent: c52653
+slug: 5ea4e2
+description: "Set up GitHub Actions CI pipeline. Build matrix: Windows (primary), macOS, Linux. Run unit tests on all platforms. Run integration tests on one platform (Windows) with OPENAI_API_KEY secret. xmake-based build. Cache xmake packages for faster builds. Consider: separate workflows for unit vs integration tests (integration costs money via API calls)."
+log:
+  - ts: 2026-03-08T13:21:27Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:21:27Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:25:05Z
+    owner: unknown
+    action: field_changed
+    field: description

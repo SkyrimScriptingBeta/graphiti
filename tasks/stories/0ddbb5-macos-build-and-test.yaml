@@ -1,0 +1,17 @@
+title: macOS build and test
+type: story
+status: not_ready
+parent: c52653
+slug: 0ddbb5
+description: Verify the library builds and tests pass on macOS (Apple Clang or Homebrew GCC/Clang). Kuzu supports macOS. cpp-httplib with OpenSSL from Homebrew. May need platform-specific UUID generation (arc4random or /dev/urandom). Fix any platform-specific compilation issues.
+log:
+  - ts: 2026-03-08T13:21:22Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:21:22Z
+    owner: unknown
+    action: created
+  - ts: 2026-03-08T13:24:51Z
+    owner: unknown
+    action: field_changed
+    field: description

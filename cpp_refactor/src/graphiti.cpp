@@ -109,6 +109,10 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     episode.valid_at = reference_time;
     episode.agent_id = aid;
 
+    if (!impl_->config.store_raw_episode_content) {
+        episode.content.clear();
+    }
+
     auto save_ep = impl_->driver.save_episodic_node(episode);
     if (!save_ep.has_value()) return std::unexpected(save_ep.error());
 
@@ -311,6 +315,12 @@ Result<AddEpisodeResult> Graphiti::add_episode(
             (void)pipeline::update_community(
                 impl_->driver, impl_->llm, impl_->embedder, node);
         }
+    }
+
+    // Discard raw episode content from DB if configured
+    if (!impl_->config.store_raw_episode_content) {
+        episode.content.clear();
+        (void)impl_->driver.save_episodic_node(episode);
     }
 
     // Build result
@@ -693,6 +703,15 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
                 uuid::generate(), saga_node.uuid, ep.uuid, gid, now);
 
             prev_ep_uuid = ep.uuid;
+        }
+    }
+
+    // ========================================================================
+    // Discard raw episode content from DB if configured
+    if (!impl_->config.store_raw_episode_content) {
+        for (auto& ep : episodes) {
+            ep.content.clear();
+            (void)impl_->driver.save_episodic_node(ep);
         }
     }
 

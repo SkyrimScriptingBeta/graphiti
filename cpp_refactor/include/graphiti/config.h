@@ -26,6 +26,7 @@ struct GraphitiConfig {
     LLMConfig llm;
     EmbedderConfig embedder;
     std::optional<std::string> default_group_id;
+    bool store_raw_episode_content = true;
 };
 
 } // namespace graphiti

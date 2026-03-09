@@ -4,11 +4,13 @@
 #include <graphiti/error.h>
 #include <graphiti/search_config.h>
 #include <graphiti/search_filters.h>
+#include <graphiti/type_definitions.h>
 #include <graphiti/types.h>
 
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace graphiti {
@@ -63,7 +65,9 @@ public:
         std::string_view agent_id = "",
         std::optional<std::string> custom_instructions = std::nullopt,
         std::optional<std::string> saga = std::nullopt,
-        std::optional<std::string> saga_previous_episode_uuid = std::nullopt
+        std::optional<std::string> saga_previous_episode_uuid = std::nullopt,
+        bool update_communities = false,
+        const TypeDefinitions* type_defs = nullptr
     );
 
     Result<std::vector<EntityEdge>> search(
@@ -90,8 +94,15 @@ public:
         std::string_view group_id = "",
         std::string_view agent_id = "",
         std::optional<std::string> custom_instructions = std::nullopt,
-        std::optional<std::string> saga = std::nullopt
+        std::optional<std::string> saga = std::nullopt,
+        const TypeDefinitions* type_defs = nullptr
     );
+
+    // Build communities: cluster entities via label propagation, then summarize
+    // each cluster via LLM. Clears existing communities before rebuilding.
+    // If group_ids is empty, processes all groups in the graph.
+    Result<std::pair<std::vector<CommunityNode>, std::vector<CommunityEdge>>>
+        build_communities(const std::vector<std::string>& group_ids = {});
 
     VoidResult delete_group(std::string_view group_id);
 

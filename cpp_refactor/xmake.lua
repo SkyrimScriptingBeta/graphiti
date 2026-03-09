@@ -12,6 +12,9 @@ add_requires("catch2")
 add_requires("cpp-httplib")
 add_requires("openssl3")
 
+-- YAML parsing for custom type definitions
+add_requires("yaml-cpp")
+
 target("graphiti")
     set_kind("static")
     add_files("src/**.cpp")
@@ -21,6 +24,7 @@ target("graphiti")
     add_packages("nlohmann_json", {public = true})
     add_packages("cpp-httplib")
     add_packages("openssl3")
+    add_packages("yaml-cpp")
     if is_plat("windows") then
         add_syslinks("bcrypt")
     end
@@ -55,6 +59,27 @@ for _, name in ipairs({
         set_kind("binary")
         set_default(false)
         add_files("examples/agent_attribution/" .. name .. ".cpp")
+        add_includedirs("src")
+        add_deps("graphiti")
+        add_packages("nlohmann_json")
+        add_packages("kuzu")
+end
+
+-- Stress tests / adversarial QA (try to break things)
+for _, name in ipairs({
+    "1_cypher_injection",
+    "2_edge_cases",
+    "3_concurrent_hammer",
+    "4_chaos_pipeline",
+    "5_error_recovery",
+    "6_community_stress",
+    "7_saga_stress",
+    "8_custom_types",
+}) do
+    target("stress_" .. name)
+        set_kind("binary")
+        set_default(false)
+        add_files("examples/stress_test/" .. name .. ".cpp")
         add_includedirs("src")
         add_deps("graphiti")
         add_packages("nlohmann_json")

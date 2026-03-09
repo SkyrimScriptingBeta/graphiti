@@ -487,6 +487,40 @@ RETURN {})", ENTITY_NODE_RETURN);
     return collect_entities(result->get());
 }
 
+Result<std::vector<EntityNode>> KuzuDriver::get_entity_nodes_by_group(
+    std::string_view group_id) {
+    static const std::string query = std::format(
+        R"(MATCH (n:Entity {{group_id: $group_id}})
+RETURN {})", ENTITY_NODE_RETURN);
+
+    ParamMap params;
+    params["group_id"] = str_val(group_id);
+
+    auto result = impl_->query_params(query, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    return collect_entities(result->get());
+}
+
+Result<std::vector<std::string>> KuzuDriver::get_all_group_ids() {
+    static const std::string query =
+        R"(MATCH (n:Entity)
+WHERE n.group_id IS NOT NULL
+RETURN DISTINCT n.group_id AS group_id)";
+
+    ParamMap params;
+    auto result = impl_->query_params(query, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    std::vector<std::string> group_ids;
+    auto* qr = result->get();
+    while (qr->hasNext()) {
+        auto tuple = qr->getNext();
+        group_ids.push_back(get_str(tuple->getValue(0)));
+    }
+    return group_ids;
+}
+
 VoidResult KuzuDriver::delete_entity_node(std::string_view uuid) {
     // First delete related RelatesToNode_ intermediate nodes
     {
@@ -1605,6 +1639,10 @@ RETURN 1 AS score LIMIT 1)";
 // ============================================================================
 // Maintenance
 // ============================================================================
+
+VoidResult KuzuDriver::remove_all_communities() {
+    return impl_->run("MATCH (c:Community) DETACH DELETE c");
+}
 
 VoidResult KuzuDriver::clear_data(const std::vector<std::string>& group_ids) {
     if (group_ids.empty()) {

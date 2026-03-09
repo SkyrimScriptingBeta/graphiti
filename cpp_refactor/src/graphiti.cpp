@@ -4,6 +4,7 @@
 #include "embedder/openai_embedder.h"
 #include "llm/openai_client.h"
 #include "pipeline/bulk_utils.h"
+#include "pipeline/community_ops.h"
 #include "pipeline/dedupe_edges.h"
 #include "pipeline/dedupe_nodes.h"
 #include "pipeline/episodic_edges.h"
@@ -67,7 +68,9 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     std::string_view agent_id,
     std::optional<std::string> custom_instructions,
     std::optional<std::string> saga,
-    std::optional<std::string> saga_previous_episode_uuid
+    std::optional<std::string> saga_previous_episode_uuid,
+    bool update_communities,
+    const TypeDefinitions* type_defs
 ) {
     std::lock_guard lock(impl_->mu);
     auto gid = impl_->resolve_group_id(group_id);
@@ -102,7 +105,12 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     pipeline::ExtractNodesInput extract_input;
     extract_input.episode_content = std::string(episode_body);
     extract_input.episode_type = source;
-    extract_input.entity_types = R"([{"entity_type_id": 0, "entity_type_name": "Entity", "entity_type_description": "A general entity"}])";
+    if (type_defs) {
+        extract_input.entity_types = type_defs->entity_types_prompt_json();
+        extract_input.type_defs = type_defs;
+    } else {
+        extract_input.entity_types = R"([{"entity_type_id": 0, "entity_type_name": "Entity", "entity_type_description": "A general entity"}])";
+    }
     extract_input.previous_episodes = previous_episodes;
     extract_input.group_id = gid;
     if (custom_instructions.has_value()) {
@@ -137,6 +145,9 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     edge_input.nodes = nodes;
     edge_input.reference_time = datetime::to_iso8601(reference_time);
     edge_input.group_id = gid;
+    if (type_defs && !type_defs->edge_types.empty()) {
+        edge_input.edge_types = type_defs->edge_types_prompt_json();
+    }
     if (custom_instructions.has_value()) {
         edge_input.custom_instructions = custom_instructions.value();
     }
@@ -172,6 +183,11 @@ Result<AddEpisodeResult> Graphiti::add_episode(
 
     // 7. Enrich node summaries via LLM
     (void)pipeline::enrich_node_summaries(impl_->llm, nodes, previous_episodes, episode_body);
+
+    // 7b. Extract custom attributes for typed entities
+    if (type_defs) {
+        (void)pipeline::extract_entity_attributes(impl_->llm, nodes, *type_defs, episode_body);
+    }
 
     // 8. Generate embeddings for nodes and edges
     for (auto& node : nodes) {
@@ -262,6 +278,14 @@ Result<AddEpisodeResult> Graphiti::add_episode(
             uuid::generate(), saga_node.uuid, episode.uuid, gid, now);
     }
 
+    // 12. Update communities if requested
+    if (update_communities) {
+        for (auto& node : nodes) {
+            (void)pipeline::update_community(
+                impl_->driver, impl_->llm, impl_->embedder, node);
+        }
+    }
+
     // Build result
     AddEpisodeResult result;
     result.episode = std::move(episode);
@@ -276,7 +300,8 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
     std::string_view group_id,
     std::string_view agent_id,
     std::optional<std::string> custom_instructions,
-    std::optional<std::string> saga
+    std::optional<std::string> saga,
+    const TypeDefinitions* type_defs
 ) {
     if (bulk_episodes.empty()) {
         return AddBulkEpisodeResults{};
@@ -340,7 +365,12 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
         pipeline::ExtractNodesInput input;
         input.episode_content = episodes[i].content;
         input.episode_type = episodes[i].source;
-        input.entity_types = R"([{"entity_type_id": 0, "entity_type_name": "Entity", "entity_type_description": "A general entity"}])";
+        if (type_defs) {
+            input.entity_types = type_defs->entity_types_prompt_json();
+            input.type_defs = type_defs;
+        } else {
+            input.entity_types = R"([{"entity_type_id": 0, "entity_type_name": "Entity", "entity_type_description": "A general entity"}])";
+        }
         input.previous_episodes = episode_contexts[i];
         input.group_id = gid;
         if (custom_instructions.has_value()) {
@@ -465,6 +495,9 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
         input.nodes = ep_nodes;
         input.reference_time = datetime::to_iso8601(episodes[i].valid_at);
         input.group_id = gid;
+        if (type_defs && !type_defs->edge_types.empty()) {
+            input.edge_types = type_defs->edge_types_prompt_json();
+        }
         if (custom_instructions.has_value()) {
             input.custom_instructions = custom_instructions.value();
         }
@@ -504,6 +537,13 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
     (void)pipeline::enrich_node_summaries(
         impl_->llm, deduped_nodes, nlohmann::json::array(), combined_content
     );
+
+    // Step 9b: Extract custom attributes for typed entities
+    if (type_defs) {
+        (void)pipeline::extract_entity_attributes(
+            impl_->llm, deduped_nodes, *type_defs, combined_content
+        );
+    }
 
     // ========================================================================
     // Step 10: Generate embeddings
@@ -660,6 +700,13 @@ Result<SearchResults> Graphiti::search_advanced(
         center_node_uuid.has_value() ? &center_node_uuid.value() : nullptr,
         bfs_origin_node_uuids
     );
+}
+
+Result<std::pair<std::vector<CommunityNode>, std::vector<CommunityEdge>>>
+Graphiti::build_communities(const std::vector<std::string>& group_ids) {
+    std::lock_guard lock(impl_->mu);
+    return pipeline::build_communities(
+        impl_->driver, impl_->llm, impl_->embedder, group_ids);
 }
 
 VoidResult Graphiti::delete_group(std::string_view group_id) {

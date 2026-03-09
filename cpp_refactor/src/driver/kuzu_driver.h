@@ -150,11 +150,16 @@ public:
         TimePoint reference_time, int last_n = 20
     );
 
+    // Entity queries by group
+    Result<std::vector<EntityNode>> get_entity_nodes_by_group(std::string_view group_id);
+    Result<std::vector<std::string>> get_all_group_ids();
+
     // Reranker queries
     Result<int64_t> count_episode_mentions(std::string_view entity_uuid);
     Result<bool> check_node_adjacency(std::string_view center_uuid, std::string_view node_uuid);
 
     // Maintenance
+    VoidResult remove_all_communities();
     VoidResult clear_data(const std::vector<std::string>& group_ids);
 
     // Raw access for tests

@@ -89,12 +89,17 @@ for _, name in ipairs({
         add_packages("kuzu")
 end
 
--- ONNX local embeddings stress test (requires onnxruntime)
-target("stress_9_local_onnx")
-    set_kind("binary")
-    set_default(false)
-    add_files("examples/stress_test/9_local_onnx.cpp")
-    add_deps("graphiti")
-    add_packages("nlohmann_json")
-    add_packages("kuzu")
-    add_packages("onnxruntime-wasm-compatible")
+-- ONNX local embeddings stress tests (requires onnxruntime)
+for _, name in ipairs({
+    "9_local_onnx",
+    "10_full_local",
+}) do
+    target("stress_" .. name)
+        set_kind("binary")
+        set_default(false)
+        add_files("examples/stress_test/" .. name .. ".cpp")
+        add_deps("graphiti")
+        add_packages("nlohmann_json")
+        add_packages("kuzu")
+        add_packages("onnxruntime-wasm-compatible")
+end

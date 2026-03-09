@@ -1,6 +1,7 @@
 #pragma once
 
 #include <graphiti/error.h>
+#include <graphiti/token_tracker.h>
 
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -25,6 +26,8 @@ public:
         std::optional<std::string_view> json_schema = std::nullopt,
         ModelSize model_size = ModelSize::medium
     ) = 0;
+
+    TokenTracker token_tracker;
 };
 
 } // namespace graphiti

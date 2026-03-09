@@ -93,12 +93,24 @@ struct OpenAIClient::Impl {
             });
         }
 
+        // Extract token usage from response
+        int64_t input_tokens = 0;
+        int64_t output_tokens = 0;
+        if (resp_json.contains("usage") && resp_json["usage"].is_object()) {
+            auto& usage = resp_json["usage"];
+            if (usage.contains("prompt_tokens")) input_tokens = usage["prompt_tokens"].get<int64_t>();
+            if (usage.contains("completion_tokens")) output_tokens = usage["completion_tokens"].get<int64_t>();
+        }
+
         // Extract choices[0].message.content
         auto content_str = resp_json.at("choices").at(0).at("message").at("content").get<std::string>();
 
         // Parse the content as JSON
         try {
-            return nlohmann::json::parse(content_str);
+            auto parsed = nlohmann::json::parse(content_str);
+            // Attach usage metadata so generate_response can record it
+            parsed["__token_usage__"] = {{"input", input_tokens}, {"output", output_tokens}};
+            return parsed;
         } catch (const nlohmann::json::exception& e) {
             return std::unexpected(GraphitiError{
                 ErrorCode::llm_parse_error,
@@ -128,10 +140,33 @@ Result<nlohmann::json> OpenAIClient::generate_response(
 ) {
     auto msgs = messages; // mutable copy for retry
 
+    int64_t total_input = 0;
+    int64_t total_output = 0;
+
     for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
         auto result = impl_->call_completions(msgs, json_schema, model_size);
 
-        if (result.has_value()) return result;
+        if (result.has_value()) {
+            // Extract and strip usage metadata
+            auto& val = result.value();
+            if (val.contains("__token_usage__")) {
+                total_input += val["__token_usage__"]["input"].get<int64_t>();
+                total_output += val["__token_usage__"]["output"].get<int64_t>();
+                val.erase("__token_usage__");
+            }
+            // Record accumulated usage (prompt name derived from schema title if available)
+            std::string prompt_name = "unknown";
+            if (json_schema.has_value()) {
+                try {
+                    auto schema_json = nlohmann::json::parse(*json_schema);
+                    if (schema_json.contains("title")) {
+                        prompt_name = schema_json["title"].get<std::string>();
+                    }
+                } catch (...) {}
+            }
+            token_tracker.record(prompt_name, total_input, total_output);
+            return result;
+        }
 
         auto& err = result.error();
 

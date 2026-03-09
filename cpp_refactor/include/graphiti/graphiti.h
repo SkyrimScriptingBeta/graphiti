@@ -4,6 +4,7 @@
 #include <graphiti/error.h>
 #include <graphiti/search_config.h>
 #include <graphiti/search_filters.h>
+#include <graphiti/token_tracker.h>
 #include <graphiti/type_definitions.h>
 #include <graphiti/types.h>
 
@@ -12,6 +13,10 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+namespace kuzu::main {
+class Database;
+} // namespace kuzu::main
 
 namespace graphiti {
 
@@ -46,6 +51,12 @@ struct AddBulkEpisodeResults {
 class Graphiti {
 public:
     explicit Graphiti(GraphitiConfig config);
+
+    // Construct with an externally-owned Kuzu Database.
+    // The Database must outlive this Graphiti instance.
+    // Graphiti creates its own Connection to the shared Database.
+    Graphiti(GraphitiConfig config, kuzu::main::Database& shared_db);
+
     ~Graphiti();
 
     Graphiti(const Graphiti&) = delete;
@@ -105,6 +116,44 @@ public:
         build_communities(const std::vector<std::string>& group_ids = {});
 
     VoidResult delete_group(std::string_view group_id);
+
+    // Retrieve the last N episodes before reference_time.
+    // Optionally filter by source type and/or saga name.
+    Result<std::vector<EpisodicNode>> retrieve_episodes(
+        TimePoint reference_time,
+        int last_n = 20,
+        std::string_view group_id = "",
+        std::optional<EpisodeType> source = std::nullopt,
+        std::optional<std::string> saga = std::nullopt
+    );
+
+    // Get all nodes and edges associated with the given episode UUIDs.
+    Result<SearchResults> get_nodes_and_edges_by_episode(
+        const std::vector<std::string>& episode_uuids
+    );
+
+    // Remove an episode and cascade-delete edges/nodes that only belong to it.
+    VoidResult remove_episode(std::string_view episode_uuid);
+
+    // Manually insert a source_node -> edge -> target_node triplet.
+    // Generates embeddings and resolves against existing graph nodes.
+    struct AddTripletResult {
+        std::vector<EntityNode> nodes;
+        std::vector<EntityEdge> edges;
+    };
+    Result<AddTripletResult> add_triplet(
+        EntityNode source_node,
+        EntityEdge edge,
+        EntityNode target_node
+    );
+
+    // Access the LLM token usage tracker.
+    // Records input/output tokens per prompt across all LLM calls.
+    const TokenTracker& token_tracker() const;
+
+    // Access the underlying Kuzu Database instance.
+    // Use this to create additional Connections for your own queries.
+    kuzu::main::Database& database() const;
 
 private:
     struct Impl;

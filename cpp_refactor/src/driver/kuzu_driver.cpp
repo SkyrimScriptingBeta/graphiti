@@ -322,12 +322,19 @@ auto collect_communities(kuzu::main::QueryResult* result) -> std::vector<Communi
 // ============================================================================
 
 struct KuzuDriver::Impl {
-    std::unique_ptr<kuzu::main::Database> db;
+    std::unique_ptr<kuzu::main::Database> owned_db;  // null if using external db
+    kuzu::main::Database* db_ptr = nullptr;           // always valid
     std::unique_ptr<kuzu::main::Connection> conn;
 
     explicit Impl(std::string_view db_path) {
-        db = std::make_unique<kuzu::main::Database>(db_path);
-        conn = std::make_unique<kuzu::main::Connection>(db.get());
+        owned_db = std::make_unique<kuzu::main::Database>(db_path);
+        db_ptr = owned_db.get();
+        conn = std::make_unique<kuzu::main::Connection>(db_ptr);
+    }
+
+    explicit Impl(kuzu::main::Database& shared_db) {
+        db_ptr = &shared_db;
+        conn = std::make_unique<kuzu::main::Connection>(db_ptr);
     }
 
     // Execute a simple query (no parameters)
@@ -378,6 +385,9 @@ struct KuzuDriver::Impl {
 
 KuzuDriver::KuzuDriver(std::string_view db_path)
     : impl_(std::make_unique<Impl>(db_path)) {}
+
+KuzuDriver::KuzuDriver(kuzu::main::Database& shared_db)
+    : impl_(std::make_unique<Impl>(shared_db)) {}
 
 KuzuDriver::~KuzuDriver() = default;
 
@@ -752,6 +762,21 @@ DETACH DELETE e)",
 }
 
 // ============================================================================
+// Episodic Node Deletion
+// ============================================================================
+
+VoidResult KuzuDriver::delete_episodic_node(std::string_view uuid) {
+    static const std::string query =
+        R"(MATCH (e:Episodic {uuid: $uuid})
+DETACH DELETE e)";
+
+    ParamMap params;
+    params["uuid"] = str_val(uuid);
+
+    return impl_->run_params(query, std::move(params));
+}
+
+// ============================================================================
 // Episodic Edge Operations (MENTIONS)
 // ============================================================================
 
@@ -775,6 +800,47 @@ RETURN e.uuid AS uuid)";
     params["agent_id"] = str_val(edge.agent_id);
 
     return impl_->run_params(query, std::move(params));
+}
+
+Result<std::vector<std::string>> KuzuDriver::get_mentioned_entity_uuids(std::string_view episode_uuid) {
+    static const std::string query =
+        R"(MATCH (ep:Episodic {uuid: $episode_uuid})-[:MENTIONS]->(n:Entity)
+RETURN n.uuid AS uuid)";
+
+    ParamMap params;
+    params["episode_uuid"] = str_val(episode_uuid);
+
+    auto result = impl_->query_params(query, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    std::vector<std::string> uuids;
+    auto& qr = *result;
+    while (qr->hasNext()) {
+        auto row = qr->getNext();
+        uuids.push_back(row->getValue(0)->getValue<std::string>());
+    }
+    return uuids;
+}
+
+Result<std::vector<std::string>> KuzuDriver::get_edge_uuids_by_episode(std::string_view episode_uuid) {
+    static const std::string query =
+        R"(MATCH (n:Entity)-[:RELATES_TO]->(e:RelatesToNode_)-[:RELATES_TO]->(m:Entity)
+WHERE list_contains(e.episodes, $episode_uuid)
+RETURN e.uuid AS uuid)";
+
+    ParamMap params;
+    params["episode_uuid"] = str_val(episode_uuid);
+
+    auto result = impl_->query_params(query, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    std::vector<std::string> uuids;
+    auto& qr = *result;
+    while (qr->hasNext()) {
+        auto row = qr->getNext();
+        uuids.push_back(row->getValue(0)->getValue<std::string>());
+    }
+    return uuids;
 }
 
 // ============================================================================
@@ -1670,7 +1736,7 @@ VoidResult KuzuDriver::clear_data(const std::vector<std::string>& group_ids) {
 // Raw Access (for tests)
 // ============================================================================
 
-kuzu::main::Database* KuzuDriver::database() const { return impl_->db.get(); }
+kuzu::main::Database* KuzuDriver::database() const { return impl_->db_ptr; }
 kuzu::main::Connection* KuzuDriver::connection() const { return impl_->conn.get(); }
 
 } // namespace graphiti

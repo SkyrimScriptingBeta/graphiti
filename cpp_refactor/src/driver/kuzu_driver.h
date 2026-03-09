@@ -20,6 +20,10 @@ namespace graphiti {
 class KuzuDriver {
 public:
     explicit KuzuDriver(std::string_view db_path);
+
+    // Construct with an externally-owned Database (not owned by this driver).
+    explicit KuzuDriver(kuzu::main::Database& shared_db);
+
     ~KuzuDriver();
 
     KuzuDriver(const KuzuDriver&) = delete;
@@ -55,8 +59,17 @@ public:
     Result<std::vector<EntityEdge>> get_edges_by_node(std::string_view node_uuid);
     VoidResult delete_entity_edge(std::string_view uuid);
 
+    // Episodic node deletion
+    VoidResult delete_episodic_node(std::string_view uuid);
+
     // Episodic edge operations (MENTIONS)
     VoidResult save_episodic_edge(const EpisodicEdge& edge);
+
+    // Get entity UUIDs mentioned by an episode
+    Result<std::vector<std::string>> get_mentioned_entity_uuids(std::string_view episode_uuid);
+
+    // Get entity edge UUIDs that reference an episode in their episodes list
+    Result<std::vector<std::string>> get_edge_uuids_by_episode(std::string_view episode_uuid);
 
     // Embedding operations
     VoidResult save_entity_node_embedding(std::string_view uuid, const std::vector<float>& embedding);

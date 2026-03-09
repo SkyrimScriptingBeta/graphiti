@@ -1,5 +1,7 @@
 #include <graphiti/graphiti.h>
 
+#include <main/kuzu.h>
+
 #include "driver/kuzu_driver.h"
 #include "embedder/openai_embedder.h"
 #include "llm/openai_client.h"
@@ -37,6 +39,12 @@ struct Graphiti::Impl {
         , llm(config.llm)
         , embedder(config.embedder) {}
 
+    Impl(GraphitiConfig cfg, kuzu::main::Database& shared_db)
+        : config(std::move(cfg))
+        , driver(shared_db)
+        , llm(config.llm)
+        , embedder(config.embedder) {}
+
     std::string resolve_group_id(std::string_view group_id) {
         if (!group_id.empty()) return std::string(group_id);
         if (config.default_group_id.has_value()) return config.default_group_id.value();
@@ -46,6 +54,9 @@ struct Graphiti::Impl {
 
 Graphiti::Graphiti(GraphitiConfig config)
     : impl_(std::make_unique<Impl>(std::move(config))) {}
+
+Graphiti::Graphiti(GraphitiConfig config, kuzu::main::Database& shared_db)
+    : impl_(std::make_unique<Impl>(std::move(config), shared_db)) {}
 
 Graphiti::~Graphiti() = default;
 Graphiti::Graphiti(Graphiti&&) noexcept = default;
@@ -712,6 +723,199 @@ Graphiti::build_communities(const std::vector<std::string>& group_ids) {
 VoidResult Graphiti::delete_group(std::string_view group_id) {
     std::lock_guard lock(impl_->mu);
     return impl_->driver.clear_data({std::string(group_id)});
+}
+
+// ============================================================================
+// retrieve_episodes
+// ============================================================================
+
+Result<std::vector<EpisodicNode>> Graphiti::retrieve_episodes(
+    TimePoint reference_time,
+    int last_n,
+    std::string_view group_id,
+    std::optional<EpisodeType> source,
+    std::optional<std::string> saga
+) {
+    std::lock_guard lock(impl_->mu);
+    auto gid = impl_->resolve_group_id(group_id);
+
+    if (saga.has_value() && !saga.value().empty()) {
+        return impl_->driver.retrieve_episodes_by_saga(
+            saga.value(), gid, reference_time, last_n
+        );
+    }
+
+    return impl_->driver.retrieve_episodes(gid, reference_time, last_n, source);
+}
+
+// ============================================================================
+// get_nodes_and_edges_by_episode
+// ============================================================================
+
+Result<SearchResults> Graphiti::get_nodes_and_edges_by_episode(
+    const std::vector<std::string>& episode_uuids
+) {
+    std::lock_guard lock(impl_->mu);
+
+    SearchResults results;
+
+    for (auto& ep_uuid : episode_uuids) {
+        // Get the episode itself
+        auto ep = impl_->driver.get_episodic_node(ep_uuid);
+        if (ep.has_value()) {
+            results.episodes.push_back(std::move(ep.value()));
+        }
+
+        // Get entity edges that reference this episode
+        auto edge_uuids = impl_->driver.get_edge_uuids_by_episode(ep_uuid);
+        if (edge_uuids.has_value()) {
+            auto edges = impl_->driver.get_entity_edges(edge_uuids.value());
+            if (edges.has_value()) {
+                for (auto& edge : edges.value()) {
+                    results.edges.push_back(std::move(edge));
+                }
+            }
+        }
+
+        // Get mentioned entity nodes
+        auto node_uuids = impl_->driver.get_mentioned_entity_uuids(ep_uuid);
+        if (node_uuids.has_value()) {
+            auto nodes = impl_->driver.get_entity_nodes(node_uuids.value());
+            if (nodes.has_value()) {
+                for (auto& node : nodes.value()) {
+                    results.nodes.push_back(std::move(node));
+                }
+            }
+        }
+    }
+
+    return results;
+}
+
+// ============================================================================
+// remove_episode
+// ============================================================================
+
+VoidResult Graphiti::remove_episode(std::string_view episode_uuid) {
+    std::lock_guard lock(impl_->mu);
+
+    // Get edges that reference this episode
+    auto edge_uuids = impl_->driver.get_edge_uuids_by_episode(episode_uuid);
+    if (edge_uuids.has_value()) {
+        for (auto& edge_uuid : edge_uuids.value()) {
+            auto edge = impl_->driver.get_entity_edge(edge_uuid);
+            if (edge.has_value()) {
+                // Only delete edges first created by this episode
+                if (!edge.value().episodes.empty() &&
+                    edge.value().episodes[0] == std::string(episode_uuid)) {
+                    (void)impl_->driver.delete_entity_edge(edge_uuid);
+                }
+            }
+        }
+    }
+
+    // Get mentioned entities and delete those only referenced by this episode
+    auto node_uuids = impl_->driver.get_mentioned_entity_uuids(episode_uuid);
+    if (node_uuids.has_value()) {
+        for (auto& node_uuid : node_uuids.value()) {
+            auto count = impl_->driver.count_episode_mentions(node_uuid);
+            if (count.has_value() && count.value() <= 1) {
+                (void)impl_->driver.delete_entity_node(node_uuid);
+            }
+        }
+    }
+
+    // Delete the episode itself (DETACH DELETE removes MENTIONS edges too)
+    return impl_->driver.delete_episodic_node(episode_uuid);
+}
+
+// ============================================================================
+// add_triplet
+// ============================================================================
+
+Result<Graphiti::AddTripletResult> Graphiti::add_triplet(
+    EntityNode source_node,
+    EntityEdge edge,
+    EntityNode target_node
+) {
+    std::lock_guard lock(impl_->mu);
+
+    // Generate UUIDs if not set
+    if (source_node.uuid.empty()) source_node.uuid = uuid::generate();
+    if (target_node.uuid.empty()) target_node.uuid = uuid::generate();
+    if (edge.uuid.empty()) edge.uuid = uuid::generate();
+
+    // Generate embeddings if missing
+    if (!source_node.name_embedding.has_value() && !source_node.name.empty()) {
+        try {
+            source_node.name_embedding = impl_->embedder.create(source_node.name);
+        } catch (...) {}
+    }
+    if (!target_node.name_embedding.has_value() && !target_node.name.empty()) {
+        try {
+            target_node.name_embedding = impl_->embedder.create(target_node.name);
+        } catch (...) {}
+    }
+    if (!edge.fact_embedding.has_value() && !edge.fact.empty()) {
+        try {
+            edge.fact_embedding = impl_->embedder.create(edge.fact);
+        } catch (...) {}
+    }
+
+    // Try to find existing nodes by name (simple name-based dedup)
+    auto resolve_node = [&](EntityNode& node) {
+        if (!node.name_embedding.has_value()) return;
+        auto results = impl_->driver.search_entity_nodes_cosine(
+            node.name_embedding.value(), node.group_id, 0.9f, 1
+        );
+        if (results.has_value() && !results.value().empty()) {
+            auto& existing = results.value()[0];
+            // Merge: keep existing UUID, update labels/attributes/summary
+            node.uuid = existing.uuid;
+            if (node.labels.empty()) node.labels = existing.labels;
+            if (node.summary.empty()) node.summary = existing.summary;
+            if (node.attributes.empty()) node.attributes = existing.attributes;
+        }
+    };
+
+    resolve_node(source_node);
+    resolve_node(target_node);
+
+    // Wire edge to resolved node UUIDs
+    edge.source_node_uuid = source_node.uuid;
+    edge.target_node_uuid = target_node.uuid;
+
+    // Save nodes
+    (void)impl_->driver.save_entity_node(source_node);
+    if (source_node.name_embedding.has_value()) {
+        (void)impl_->driver.save_entity_node_embedding(
+            source_node.uuid, source_node.name_embedding.value());
+    }
+
+    (void)impl_->driver.save_entity_node(target_node);
+    if (target_node.name_embedding.has_value()) {
+        (void)impl_->driver.save_entity_node_embedding(
+            target_node.uuid, target_node.name_embedding.value());
+    }
+
+    // Save edge
+    (void)impl_->driver.save_entity_edge(edge);
+    if (edge.fact_embedding.has_value()) {
+        (void)impl_->driver.save_entity_edge_embedding(edge.uuid, edge.fact_embedding.value());
+    }
+
+    AddTripletResult result;
+    result.nodes = {std::move(source_node), std::move(target_node)};
+    result.edges = {std::move(edge)};
+    return result;
+}
+
+const TokenTracker& Graphiti::token_tracker() const {
+    return impl_->llm.token_tracker;
+}
+
+kuzu::main::Database& Graphiti::database() const {
+    return *impl_->driver.database();
 }
 
 } // namespace graphiti

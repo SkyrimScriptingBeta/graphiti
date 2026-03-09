@@ -1,6 +1,7 @@
 #include "community_ops.h"
 
 #include "driver/kuzu_driver.h"
+#include "llm/response_models.h"
 #include "utils/uuid.h"
 
 #include <graphiti/embedder.h>
@@ -132,7 +133,7 @@ Summaries:
 [{{"summary": "{}"}}, {{"summary": "{}"}}])", left, right)}
     };
 
-    auto resp = llm.generate_response(messages, std::nullopt, ModelSize::small);
+    auto resp = llm.generate_response(messages, response_schemas::SUMMARY, ModelSize::small);
     if (resp.has_value()) {
         auto result = extract_string_from_response(resp.value());
         if (!result.empty()) return result;
@@ -156,7 +157,7 @@ Summary:
 {})", summary)}
     };
 
-    auto resp = llm.generate_response(messages, std::nullopt, ModelSize::small);
+    auto resp = llm.generate_response(messages, response_schemas::SUMMARY_DESCRIPTION, ModelSize::small);
     if (resp.has_value()) {
         auto result = extract_string_from_response(resp.value());
         if (!result.empty()) return result;

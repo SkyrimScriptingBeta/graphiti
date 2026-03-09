@@ -82,7 +82,7 @@ TEST_CASE("retrieve_episodes: with saga filter", "[integration][management]") {
     // Add episode with saga
     auto r1 = g.add_episode(
         "ep1", "Alice started at Acme.", "chat", now,
-        EpisodeType::message, "test_group", "",
+        EpisodeType::message, "test_group", "", "", {},
         std::nullopt, "onboarding"
     );
     REQUIRE(r1.has_value());

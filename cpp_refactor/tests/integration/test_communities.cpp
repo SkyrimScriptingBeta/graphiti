@@ -214,6 +214,8 @@ TEST_CASE("Communities: update_community during add_episode", "[integration][com
         EpisodeType::message,
         "test_group",
         "",          // agent_id
+        "",          // source_id
+        {},          // participant_ids
         std::nullopt, // custom_instructions
         std::nullopt, // saga
         std::nullopt, // saga_previous_episode_uuid

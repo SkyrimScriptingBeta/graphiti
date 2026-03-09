@@ -123,6 +123,8 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     EpisodeType source,
     std::string_view group_id,
     std::string_view agent_id,
+    std::string_view source_id,
+    const std::vector<std::string>& participant_ids,
     std::optional<std::string> custom_instructions,
     std::optional<std::string> saga,
     std::optional<std::string> saga_previous_episode_uuid,
@@ -132,6 +134,8 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     std::lock_guard lock(impl_->mu);
     auto gid = impl_->resolve_group_id(group_id);
     auto aid = std::string(agent_id);
+    auto sid = std::string(source_id);
+    auto pids = participant_ids;
     auto now = std::chrono::system_clock::now();
 
     // 1. Retrieve previous episodes for context
@@ -154,6 +158,8 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     episode.content = std::string(episode_body);
     episode.valid_at = reference_time;
     episode.agent_id = aid;
+    episode.source_id = sid;
+    episode.participant_ids = pids;
 
     if (!impl_->config.store_raw_episode_content) {
         episode.content.clear();
@@ -182,11 +188,11 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     if (!nodes_result.has_value()) return std::unexpected(nodes_result.error());
     auto extracted_nodes = std::move(nodes_result.value());
 
-    // Set agent_ids on extracted nodes
-    if (!aid.empty()) {
-        for (auto& node : extracted_nodes) {
-            node.agent_ids = {aid};
-        }
+    // Set attribution ids on extracted nodes
+    for (auto& node : extracted_nodes) {
+        if (!aid.empty()) node.agent_ids = {aid};
+        if (!sid.empty()) node.source_ids = {sid};
+        if (!pids.empty()) node.participant_ids = pids;
     }
 
     // 4. Deduplicate nodes against existing graph
@@ -217,11 +223,11 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     if (!edges_result.has_value()) return std::unexpected(edges_result.error());
     auto extracted_edges = std::move(edges_result.value());
 
-    // Set agent_ids on extracted edges
-    if (!aid.empty()) {
-        for (auto& edge : extracted_edges) {
-            edge.agent_ids = {aid};
-        }
+    // Set attribution ids on extracted edges
+    for (auto& edge : extracted_edges) {
+        if (!aid.empty()) edge.agent_ids = {aid};
+        if (!sid.empty()) edge.source_ids = {sid};
+        if (!pids.empty()) edge.participant_ids = pids;
     }
 
     // 5b. Remap edge pointers using uuid_map from node dedup
@@ -273,19 +279,28 @@ Result<AddEpisodeResult> Graphiti::add_episode(
             }
         }
         if (is_existing) {
-            // Merge agent_ids into the existing node rather than overwriting
-            if (!aid.empty()) {
-                auto existing = impl_->driver.get_entity_node(node.uuid);
-                if (existing.has_value()) {
-                    auto& existing_ids = existing.value().agent_ids;
-                    bool already_has = false;
-                    for (auto& id : existing_ids) {
-                        if (id == aid) { already_has = true; break; }
-                    }
-                    if (!already_has) {
-                        existing_ids.push_back(aid);
-                        (void)impl_->driver.save_entity_node(existing.value());
-                    }
+            // Merge attribution ids into the existing node
+            auto existing = impl_->driver.get_entity_node(node.uuid);
+            if (existing.has_value()) {
+                auto& ex = existing.value();
+                bool changed = false;
+
+                auto merge_id = [&](std::vector<std::string>& vec, const std::string& id) {
+                    if (id.empty()) return;
+                    for (auto& v : vec) { if (v == id) return; }
+                    vec.push_back(id);
+                    changed = true;
+                };
+                auto merge_ids = [&](std::vector<std::string>& vec, const std::vector<std::string>& ids) {
+                    for (auto& id : ids) merge_id(vec, id);
+                };
+
+                merge_id(ex.agent_ids, aid);
+                merge_id(ex.source_ids, sid);
+                merge_ids(ex.participant_ids, pids);
+
+                if (changed) {
+                    (void)impl_->driver.save_entity_node(ex);
                 }
             }
         } else {
@@ -382,6 +397,8 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
     const std::vector<RawEpisode>& bulk_episodes,
     std::string_view group_id,
     std::string_view agent_id,
+    std::string_view source_id,
+    const std::vector<std::string>& participant_ids,
     std::optional<std::string> custom_instructions,
     std::optional<std::string> saga,
     const TypeDefinitions* type_defs
@@ -393,6 +410,8 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
     std::lock_guard lock(impl_->mu);
     auto gid = impl_->resolve_group_id(group_id);
     auto aid = std::string(agent_id);
+    auto sid = std::string(source_id);
+    auto pids = participant_ids;
     auto now = std::chrono::system_clock::now();
 
     // ========================================================================
@@ -412,6 +431,9 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
         ep.content = raw.content;
         ep.valid_at = raw.reference_time;
         ep.agent_id = aid;
+        // Per-episode source_id/participant_ids override batch-level defaults
+        ep.source_id = raw.source_id.empty() ? sid : raw.source_id;
+        ep.participant_ids = raw.participant_ids.empty() ? pids : raw.participant_ids;
         episodes.push_back(std::move(ep));
     }
 
@@ -463,10 +485,12 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
         auto result = pipeline::extract_nodes(impl_->llm, input);
         if (result.has_value()) {
             auto& nodes = result.value();
-            if (!aid.empty()) {
-                for (auto& node : nodes) {
-                    node.agent_ids = {aid};
-                }
+            auto& ep_sid = episodes[i].source_id;
+            auto& ep_pids = episodes[i].participant_ids;
+            for (auto& node : nodes) {
+                if (!aid.empty()) node.agent_ids = {aid};
+                if (!ep_sid.empty()) node.source_ids = {ep_sid};
+                if (!ep_pids.empty()) node.participant_ids = ep_pids;
             }
             nodes_by_episode.push_back(std::move(nodes));
         } else {
@@ -587,11 +611,13 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
 
         auto result = pipeline::extract_edges(impl_->llm, input);
         if (result.has_value()) {
+            auto& ep_sid = episodes[i].source_id;
+            auto& ep_pids = episodes[i].participant_ids;
             for (auto& edge : result.value()) {
                 edge.episodes.push_back(episodes[i].uuid);
-                if (!aid.empty()) {
-                    edge.agent_ids = {aid};
-                }
+                if (!aid.empty()) edge.agent_ids = {aid};
+                if (!ep_sid.empty()) edge.source_ids = {ep_sid};
+                if (!ep_pids.empty()) edge.participant_ids = ep_pids;
                 all_edges.push_back(std::move(edge));
             }
         }
@@ -654,19 +680,29 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
             }
         }
         if (is_existing) {
-            // Merge agent_ids into the existing node
-            if (!aid.empty()) {
-                auto existing = impl_->driver.get_entity_node(node.uuid);
-                if (existing.has_value()) {
-                    auto& existing_ids = existing.value().agent_ids;
-                    bool already_has = false;
-                    for (auto& id : existing_ids) {
-                        if (id == aid) { already_has = true; break; }
-                    }
-                    if (!already_has) {
-                        existing_ids.push_back(aid);
-                        (void)impl_->driver.save_entity_node(existing.value());
-                    }
+            // Merge attribution ids into the existing node
+            auto existing = impl_->driver.get_entity_node(node.uuid);
+            if (existing.has_value()) {
+                auto& ex = existing.value();
+                bool changed = false;
+
+                auto merge_id = [&](std::vector<std::string>& vec, const std::string& id) {
+                    if (id.empty()) return;
+                    for (auto& v : vec) { if (v == id) return; }
+                    vec.push_back(id);
+                    changed = true;
+                };
+                auto merge_ids = [&](std::vector<std::string>& vec, const std::vector<std::string>& ids) {
+                    for (auto& id : ids) merge_id(vec, id);
+                };
+
+                merge_id(ex.agent_ids, aid);
+                // Merge all source_ids and participant_ids from this node
+                merge_ids(ex.source_ids, node.source_ids);
+                merge_ids(ex.participant_ids, node.participant_ids);
+
+                if (changed) {
+                    (void)impl_->driver.save_entity_node(ex);
                 }
             }
         } else {

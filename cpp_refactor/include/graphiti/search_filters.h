@@ -62,6 +62,14 @@ struct SearchFilters {
     // When set, results are filtered to items attributed to any of these agents.
     // Uses: any(aid IN e.agent_ids WHERE list_contains($agent_ids, aid))
     std::vector<std::string> agent_ids;
+
+    // Source attribution filter (optional, empty = no filter)
+    // Filter to items attributed to any of these sources (who said it).
+    std::vector<std::string> source_ids;
+
+    // Participant filter (optional, empty = no filter)
+    // Filter to items where any of these participants were present.
+    std::vector<std::string> participant_ids;
 };
 
 // Convert ComparisonOp to Cypher operator string

@@ -27,6 +27,8 @@ struct EntityNode {
     std::string summary;
     nlohmann::json attributes = nlohmann::json::object();
     std::vector<std::string> agent_ids;
+    std::vector<std::string> source_ids;
+    std::vector<std::string> participant_ids;
 };
 
 struct EpisodicNode {
@@ -40,6 +42,8 @@ struct EpisodicNode {
     TimePoint valid_at;
     std::vector<std::string> entity_edges;
     std::string agent_id;
+    std::string source_id;
+    std::vector<std::string> participant_ids;
 };
 
 struct CommunityNode {
@@ -50,6 +54,8 @@ struct CommunityNode {
     std::optional<std::vector<float>> name_embedding;
     std::string summary;
     std::vector<std::string> agent_ids;
+    std::vector<std::string> source_ids;
+    std::vector<std::string> participant_ids;
 };
 
 struct SagaNode {
@@ -76,6 +82,8 @@ struct EntityEdge {
     std::optional<TimePoint> invalid_at;
     nlohmann::json attributes = nlohmann::json::object();
     std::vector<std::string> agent_ids;
+    std::vector<std::string> source_ids;
+    std::vector<std::string> participant_ids;
 };
 
 struct EpisodicEdge {
@@ -85,6 +93,8 @@ struct EpisodicEdge {
     std::string target_node_uuid;
     TimePoint created_at;
     std::string agent_id;
+    std::string source_id;
+    std::vector<std::string> participant_ids;
 };
 
 struct CommunityEdge {

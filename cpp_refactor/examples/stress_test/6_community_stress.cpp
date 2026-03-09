@@ -201,6 +201,8 @@ int main() {
             EpisodeType::message,
             "update_test",
             "",           // agent_id
+            "",           // source_id
+            {},           // participant_ids
             std::nullopt, // custom_instructions
             std::nullopt, // saga
             std::nullopt, // saga_previous_episode_uuid

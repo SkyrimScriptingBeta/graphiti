@@ -112,6 +112,28 @@ FilterQueryResult build_edge_filter_clauses(const SearchFilters& filters) {
             "any(aid IN e.agent_ids WHERE list_contains([{}], aid))", agents_list));
     }
 
+    // Source attribution filter
+    if (!filters.source_ids.empty()) {
+        std::string sources_list;
+        for (size_t i = 0; i < filters.source_ids.size(); ++i) {
+            if (i > 0) sources_list += ", ";
+            sources_list += std::format("'{}'", filters.source_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(sid IN e.source_ids WHERE list_contains([{}], sid))", sources_list));
+    }
+
+    // Participant filter
+    if (!filters.participant_ids.empty()) {
+        std::string parts_list;
+        for (size_t i = 0; i < filters.participant_ids.size(); ++i) {
+            if (i > 0) parts_list += ", ";
+            parts_list += std::format("'{}'", filters.participant_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(pid IN e.participant_ids WHERE list_contains([{}], pid))", parts_list));
+    }
+
     // Temporal filters
     if (filters.valid_at.has_value()) {
         auto expr = build_date_filter_expr("e.valid_at", filters.valid_at.value(), param_counter);
@@ -155,6 +177,28 @@ FilterQueryResult build_node_filter_clauses(const SearchFilters& filters) {
         }
         result.clauses.push_back(std::format(
             "any(aid IN n.agent_ids WHERE list_contains([{}], aid))", agents_list));
+    }
+
+    // Source attribution filter
+    if (!filters.source_ids.empty()) {
+        std::string sources_list;
+        for (size_t i = 0; i < filters.source_ids.size(); ++i) {
+            if (i > 0) sources_list += ", ";
+            sources_list += std::format("'{}'", filters.source_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(sid IN n.source_ids WHERE list_contains([{}], sid))", sources_list));
+    }
+
+    // Participant filter
+    if (!filters.participant_ids.empty()) {
+        std::string parts_list;
+        for (size_t i = 0; i < filters.participant_ids.size(); ++i) {
+            if (i > 0) parts_list += ", ";
+            parts_list += std::format("'{}'", filters.participant_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(pid IN n.participant_ids WHERE list_contains([{}], pid))", parts_list));
     }
 
     return result;

@@ -37,6 +37,8 @@ struct RawEpisode {
     TimePoint reference_time;
     EpisodeType source = EpisodeType::message;
     std::optional<std::string> uuid; // If set, reuses existing episode
+    std::string source_id;                     // Who said this (per-episode override)
+    std::vector<std::string> participant_ids;   // Who was present (per-episode override)
 };
 
 struct AddBulkEpisodeResults {
@@ -91,6 +93,8 @@ public:
         EpisodeType source = EpisodeType::message,
         std::string_view group_id = "",
         std::string_view agent_id = "",
+        std::string_view source_id = "",
+        const std::vector<std::string>& participant_ids = {},
         std::optional<std::string> custom_instructions = std::nullopt,
         std::optional<std::string> saga = std::nullopt,
         std::optional<std::string> saga_previous_episode_uuid = std::nullopt,
@@ -121,6 +125,8 @@ public:
         const std::vector<RawEpisode>& bulk_episodes,
         std::string_view group_id = "",
         std::string_view agent_id = "",
+        std::string_view source_id = "",
+        const std::vector<std::string>& participant_ids = {},
         std::optional<std::string> custom_instructions = std::nullopt,
         std::optional<std::string> saga = std::nullopt,
         const TypeDefinitions* type_defs = nullptr

@@ -23,7 +23,9 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         content STRING,
         valid_at TIMESTAMP,
         entity_edges STRING[],
-        agent_id STRING DEFAULT ''
+        agent_id STRING DEFAULT '',
+        source_id STRING DEFAULT '',
+        participant_ids STRING[] DEFAULT []
     ))",
 
     R"(CREATE NODE TABLE IF NOT EXISTS Entity (
@@ -35,7 +37,9 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         name_embedding FLOAT[],
         summary STRING,
         attributes STRING,
-        agent_ids STRING[] DEFAULT []
+        agent_ids STRING[] DEFAULT [],
+        source_ids STRING[] DEFAULT [],
+        participant_ids STRING[] DEFAULT []
     ))",
 
     R"(CREATE NODE TABLE IF NOT EXISTS Community (
@@ -45,7 +49,9 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         created_at TIMESTAMP,
         name_embedding FLOAT[],
         summary STRING,
-        agent_ids STRING[] DEFAULT []
+        agent_ids STRING[] DEFAULT [],
+        source_ids STRING[] DEFAULT [],
+        participant_ids STRING[] DEFAULT []
     ))",
 
     R"(CREATE NODE TABLE IF NOT EXISTS RelatesToNode_ (
@@ -60,7 +66,9 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         valid_at TIMESTAMP,
         invalid_at TIMESTAMP,
         attributes STRING,
-        agent_ids STRING[] DEFAULT []
+        agent_ids STRING[] DEFAULT [],
+        source_ids STRING[] DEFAULT [],
+        participant_ids STRING[] DEFAULT []
     ))",
 
     R"(CREATE NODE TABLE IF NOT EXISTS Saga (
@@ -80,7 +88,9 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         uuid STRING PRIMARY KEY,
         group_id STRING,
         created_at TIMESTAMP,
-        agent_id STRING DEFAULT ''
+        agent_id STRING DEFAULT '',
+        source_id STRING DEFAULT '',
+        participant_ids STRING[] DEFAULT []
     ))",
 
     R"(CREATE REL TABLE IF NOT EXISTS HAS_MEMBER(

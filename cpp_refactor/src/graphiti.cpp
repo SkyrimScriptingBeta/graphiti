@@ -214,15 +214,31 @@ Result<AddEpisodeResult> Graphiti::add_episode(
 
     // 9. Persist everything to Kuzu
     for (auto& node : nodes) {
-        // Only save if it's not an existing node (no entry in uuid_map or self-mapped)
-        bool is_new = true;
+        // Check if this node was dedup-matched to an existing one
+        bool is_existing = false;
         for (auto& [old_uuid, new_uuid] : uuid_map) {
             if (new_uuid == node.uuid && old_uuid != node.uuid) {
-                is_new = false;
+                is_existing = true;
                 break;
             }
         }
-        if (is_new) {
+        if (is_existing) {
+            // Merge agent_ids into the existing node rather than overwriting
+            if (!aid.empty()) {
+                auto existing = impl_->driver.get_entity_node(node.uuid);
+                if (existing.has_value()) {
+                    auto& existing_ids = existing.value().agent_ids;
+                    bool already_has = false;
+                    for (auto& id : existing_ids) {
+                        if (id == aid) { already_has = true; break; }
+                    }
+                    if (!already_has) {
+                        existing_ids.push_back(aid);
+                        (void)impl_->driver.save_entity_node(existing.value());
+                    }
+                }
+            }
+        } else {
             (void)impl_->driver.save_entity_node(node);
         }
         if (node.name_embedding.has_value()) {
@@ -581,7 +597,23 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
                 break;
             }
         }
-        if (!is_existing) {
+        if (is_existing) {
+            // Merge agent_ids into the existing node
+            if (!aid.empty()) {
+                auto existing = impl_->driver.get_entity_node(node.uuid);
+                if (existing.has_value()) {
+                    auto& existing_ids = existing.value().agent_ids;
+                    bool already_has = false;
+                    for (auto& id : existing_ids) {
+                        if (id == aid) { already_has = true; break; }
+                    }
+                    if (!already_has) {
+                        existing_ids.push_back(aid);
+                        (void)impl_->driver.save_entity_node(existing.value());
+                    }
+                }
+            }
+        } else {
             (void)impl_->driver.save_entity_node(node);
         }
         if (node.name_embedding.has_value()) {

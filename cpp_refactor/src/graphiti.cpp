@@ -30,20 +30,55 @@ struct Graphiti::Impl {
     std::mutex mu; // Serializes all public method calls (Kuzu Connection is not thread-safe)
     GraphitiConfig config;
     KuzuDriver driver;
-    OpenAIClient llm;
-    OpenAIEmbedder embedder;
+    std::unique_ptr<LLMClient> llm_owned;
+    std::unique_ptr<EmbedderClient> embedder_owned;
+    LLMClient& llm;
+    EmbedderClient& embedder;
 
+    // Default: create OpenAI clients from config
     Impl(GraphitiConfig cfg)
         : config(std::move(cfg))
         , driver(config.db_path)
-        , llm(config.llm)
-        , embedder(config.embedder) {}
+        , llm_owned(std::make_unique<OpenAIClient>(config.llm))
+        , embedder_owned(std::make_unique<OpenAIEmbedder>(config.embedder))
+        , llm(*llm_owned)
+        , embedder(*embedder_owned) {}
 
+    // Shared DB + default OpenAI clients
     Impl(GraphitiConfig cfg, kuzu::main::Database& shared_db)
         : config(std::move(cfg))
         , driver(shared_db)
-        , llm(config.llm)
-        , embedder(config.embedder) {}
+        , llm_owned(std::make_unique<OpenAIClient>(config.llm))
+        , embedder_owned(std::make_unique<OpenAIEmbedder>(config.embedder))
+        , llm(*llm_owned)
+        , embedder(*embedder_owned) {}
+
+    // Custom providers (nullptr = use OpenAI default from config)
+    Impl(GraphitiConfig cfg,
+         std::unique_ptr<LLMClient> custom_llm,
+         std::unique_ptr<EmbedderClient> custom_embedder)
+        : config(std::move(cfg))
+        , driver(config.db_path)
+        , llm_owned(custom_llm ? std::move(custom_llm)
+                                : std::make_unique<OpenAIClient>(config.llm))
+        , embedder_owned(custom_embedder ? std::move(custom_embedder)
+                                          : std::make_unique<OpenAIEmbedder>(config.embedder))
+        , llm(*llm_owned)
+        , embedder(*embedder_owned) {}
+
+    // Shared DB + custom providers (nullptr = use OpenAI default from config)
+    Impl(GraphitiConfig cfg,
+         kuzu::main::Database& shared_db,
+         std::unique_ptr<LLMClient> custom_llm,
+         std::unique_ptr<EmbedderClient> custom_embedder)
+        : config(std::move(cfg))
+        , driver(shared_db)
+        , llm_owned(custom_llm ? std::move(custom_llm)
+                                : std::make_unique<OpenAIClient>(config.llm))
+        , embedder_owned(custom_embedder ? std::move(custom_embedder)
+                                          : std::make_unique<OpenAIEmbedder>(config.embedder))
+        , llm(*llm_owned)
+        , embedder(*embedder_owned) {}
 
     std::string resolve_group_id(std::string_view group_id) {
         if (!group_id.empty()) return std::string(group_id);
@@ -55,8 +90,19 @@ struct Graphiti::Impl {
 Graphiti::Graphiti(GraphitiConfig config)
     : impl_(std::make_unique<Impl>(std::move(config))) {}
 
+Graphiti::Graphiti(GraphitiConfig config,
+                   std::unique_ptr<LLMClient> llm,
+                   std::unique_ptr<EmbedderClient> embedder)
+    : impl_(std::make_unique<Impl>(std::move(config), std::move(llm), std::move(embedder))) {}
+
 Graphiti::Graphiti(GraphitiConfig config, kuzu::main::Database& shared_db)
     : impl_(std::make_unique<Impl>(std::move(config), shared_db)) {}
+
+Graphiti::Graphiti(GraphitiConfig config,
+                   kuzu::main::Database& shared_db,
+                   std::unique_ptr<LLMClient> llm,
+                   std::unique_ptr<EmbedderClient> embedder)
+    : impl_(std::make_unique<Impl>(std::move(config), shared_db, std::move(llm), std::move(embedder))) {}
 
 Graphiti::~Graphiti() = default;
 Graphiti::Graphiti(Graphiti&&) noexcept = default;

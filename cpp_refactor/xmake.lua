@@ -15,6 +15,9 @@ add_requires("openssl3")
 -- YAML parsing for custom type definitions
 add_requires("yaml-cpp")
 
+-- ONNX runtime for local embeddings (optional, used by stress_9_local_onnx)
+add_requires("onnxruntime-wasm-compatible", {optional = true})
+
 target("graphiti")
     set_kind("static")
     add_files("src/**.cpp")
@@ -85,3 +88,13 @@ for _, name in ipairs({
         add_packages("nlohmann_json")
         add_packages("kuzu")
 end
+
+-- ONNX local embeddings stress test (requires onnxruntime)
+target("stress_9_local_onnx")
+    set_kind("binary")
+    set_default(false)
+    add_files("examples/stress_test/9_local_onnx.cpp")
+    add_deps("graphiti")
+    add_packages("nlohmann_json")
+    add_packages("kuzu")
+    add_packages("onnxruntime-wasm-compatible")

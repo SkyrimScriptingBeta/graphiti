@@ -1,7 +1,9 @@
 #pragma once
 
 #include <graphiti/config.h>
+#include <graphiti/embedder.h>
 #include <graphiti/error.h>
+#include <graphiti/llm_client.h>
 #include <graphiti/search_config.h>
 #include <graphiti/search_filters.h>
 #include <graphiti/token_tracker.h>
@@ -52,10 +54,25 @@ class Graphiti {
 public:
     explicit Graphiti(GraphitiConfig config);
 
+    // Construct with custom LLM and/or embedder providers.
+    // Pass your own implementations (e.g. CallbackLLMClient, CallbackEmbedder)
+    // for fully local operation without OpenAI.
+    // Pass nullptr for either to use the default OpenAI client from config.
+    Graphiti(GraphitiConfig config,
+             std::unique_ptr<LLMClient> llm,
+             std::unique_ptr<EmbedderClient> embedder);
+
     // Construct with an externally-owned Kuzu Database.
     // The Database must outlive this Graphiti instance.
     // Graphiti creates its own Connection to the shared Database.
     Graphiti(GraphitiConfig config, kuzu::main::Database& shared_db);
+
+    // Construct with shared Database AND custom providers.
+    // Pass nullptr for either to use the default OpenAI client from config.
+    Graphiti(GraphitiConfig config,
+             kuzu::main::Database& shared_db,
+             std::unique_ptr<LLMClient> llm,
+             std::unique_ptr<EmbedderClient> embedder);
 
     ~Graphiti();
 

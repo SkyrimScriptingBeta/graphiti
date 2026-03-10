@@ -144,7 +144,8 @@ auto get_json_attr(kuzu::common::Value* v) -> nlohmann::json {
 // Row -> struct converters
 // ============================================================================
 
-// Columns: uuid(0), name(1), group_id(2), labels(3), created_at(4), summary(5), attributes(6), agent_ids(7)
+// Columns: uuid(0), name(1), group_id(2), labels(3), created_at(4), summary(5), attributes(6),
+//          agent_ids(7), source_ids(8), source_contexts(9), participant_ids(10)
 auto entity_from_row(kuzu::main::QueryResult* result) -> EntityNode {
     auto tuple = result->getNext();
     return EntityNode{
@@ -157,6 +158,9 @@ auto entity_from_row(kuzu::main::QueryResult* result) -> EntityNode {
         .summary = get_str(tuple->getValue(5)),
         .attributes = get_json_attr(tuple->getValue(6)),
         .agent_ids = get_string_list(tuple->getValue(7)),
+        .source_ids = get_string_list(tuple->getValue(8)),
+        .source_contexts = get_string_list(tuple->getValue(9)),
+        .participant_ids = get_string_list(tuple->getValue(10)),
     };
 }
 
@@ -175,7 +179,8 @@ auto collect_entities(kuzu::main::QueryResult* result) -> std::vector<EntityNode
             .attributes = get_json_attr(tuple->getValue(6)),
             .agent_ids = get_string_list(tuple->getValue(7)),
             .source_ids = get_string_list(tuple->getValue(8)),
-            .participant_ids = get_string_list(tuple->getValue(9)),
+            .source_contexts = get_string_list(tuple->getValue(9)),
+            .participant_ids = get_string_list(tuple->getValue(10)),
         });
     }
     return nodes;
@@ -183,7 +188,7 @@ auto collect_entities(kuzu::main::QueryResult* result) -> std::vector<EntityNode
 
 // Columns: uuid(0), name(1), group_id(2), created_at(3), source(4),
 //          source_description(5), content(6), valid_at(7), entity_edges(8),
-//          agent_id(9), source_id(10), participant_ids(11)
+//          agent_id(9), source_id(10), source_context(11), participant_ids(12)
 auto episodic_from_row(kuzu::main::QueryResult* result) -> EpisodicNode {
     auto tuple = result->getNext();
     return EpisodicNode{
@@ -198,7 +203,8 @@ auto episodic_from_row(kuzu::main::QueryResult* result) -> EpisodicNode {
         .entity_edges = get_string_list(tuple->getValue(8)),
         .agent_id = get_str(tuple->getValue(9)),
         .source_id = get_str(tuple->getValue(10)),
-        .participant_ids = get_string_list(tuple->getValue(11)),
+        .source_context = get_str(tuple->getValue(11)),
+        .participant_ids = get_string_list(tuple->getValue(12)),
     };
 }
 
@@ -218,7 +224,8 @@ auto collect_episodes(kuzu::main::QueryResult* result) -> std::vector<EpisodicNo
             .entity_edges = get_string_list(tuple->getValue(8)),
             .agent_id = get_str(tuple->getValue(9)),
             .source_id = get_str(tuple->getValue(10)),
-            .participant_ids = get_string_list(tuple->getValue(11)),
+            .source_context = get_str(tuple->getValue(11)),
+            .participant_ids = get_string_list(tuple->getValue(12)),
         });
     }
     return nodes;
@@ -227,7 +234,7 @@ auto collect_episodes(kuzu::main::QueryResult* result) -> std::vector<EpisodicNo
 // Columns: uuid(0), source_node_uuid(1), target_node_uuid(2), group_id(3),
 //          created_at(4), name(5), fact(6), episodes(7),
 //          expired_at(8), valid_at(9), invalid_at(10), attributes(11),
-//          agent_ids(12), source_ids(13), participant_ids(14)
+//          agent_ids(12), source_ids(13), source_contexts(14), participant_ids(15)
 auto collect_entity_edges(kuzu::main::QueryResult* result) -> std::vector<EntityEdge> {
     std::vector<EntityEdge> edges;
     while (result->hasNext()) {
@@ -248,7 +255,8 @@ auto collect_entity_edges(kuzu::main::QueryResult* result) -> std::vector<Entity
             .attributes = get_json_attr(tuple->getValue(11)),
             .agent_ids = get_string_list(tuple->getValue(12)),
             .source_ids = get_string_list(tuple->getValue(13)),
-            .participant_ids = get_string_list(tuple->getValue(14)),
+            .source_contexts = get_string_list(tuple->getValue(14)),
+            .participant_ids = get_string_list(tuple->getValue(15)),
         });
     }
     return edges;
@@ -270,6 +278,7 @@ constexpr std::string_view ENTITY_EDGE_RETURN = R"(
     e.attributes AS attributes,
     e.agent_ids AS agent_ids,
     e.source_ids AS source_ids,
+    e.source_contexts AS source_contexts,
     e.participant_ids AS participant_ids
 )";
 
@@ -284,6 +293,7 @@ constexpr std::string_view ENTITY_NODE_RETURN = R"(
     n.attributes AS attributes,
     n.agent_ids AS agent_ids,
     n.source_ids AS source_ids,
+    n.source_contexts AS source_contexts,
     n.participant_ids AS participant_ids
 )";
 
@@ -300,6 +310,7 @@ constexpr std::string_view EPISODIC_NODE_RETURN = R"(
     e.entity_edges AS entity_edges,
     e.agent_id AS agent_id,
     e.source_id AS source_id,
+    e.source_context AS source_context,
     e.participant_ids AS participant_ids
 )";
 
@@ -313,6 +324,7 @@ constexpr std::string_view COMMUNITY_NODE_RETURN = R"(
     c.summary AS summary,
     c.agent_ids AS agent_ids,
     c.source_ids AS source_ids,
+    c.source_contexts AS source_contexts,
     c.participant_ids AS participant_ids
 )";
 
@@ -329,7 +341,8 @@ auto collect_communities(kuzu::main::QueryResult* result) -> std::vector<Communi
             .summary = get_str(tuple->getValue(5)),
             .agent_ids = get_string_list(tuple->getValue(6)),
             .source_ids = get_string_list(tuple->getValue(7)),
-            .participant_ids = get_string_list(tuple->getValue(8)),
+            .source_contexts = get_string_list(tuple->getValue(8)),
+            .participant_ids = get_string_list(tuple->getValue(9)),
         });
     }
     return nodes;
@@ -466,6 +479,7 @@ SET
     n.attributes = $attributes,
     n.agent_ids = $agent_ids,
     n.source_ids = $source_ids,
+    n.source_contexts = $source_contexts,
     n.participant_ids = $participant_ids
 RETURN n.uuid AS uuid)");
 
@@ -480,6 +494,7 @@ RETURN n.uuid AS uuid)");
     params["attributes"] = str_val(node.attributes.dump());
     params["agent_ids"] = string_list_val(node.agent_ids);
     params["source_ids"] = string_list_val(node.source_ids);
+    params["source_contexts"] = string_list_val(node.source_contexts);
     params["participant_ids"] = string_list_val(node.participant_ids);
 
     return impl_->run_params(query, std::move(params));
@@ -596,6 +611,7 @@ SET
     n.entity_edges = $entity_edges,
     n.agent_id = $agent_id,
     n.source_id = $source_id,
+    n.source_context = $source_context,
     n.participant_ids = $participant_ids
 RETURN n.uuid AS uuid)";
 
@@ -611,6 +627,7 @@ RETURN n.uuid AS uuid)";
     params["entity_edges"] = string_list_val(node.entity_edges);
     params["agent_id"] = str_val(node.agent_id);
     params["source_id"] = str_val(node.source_id);
+    params["source_context"] = str_val(node.source_context);
     params["participant_ids"] = string_list_val(node.participant_ids);
 
     return impl_->run_params(query, std::move(params));
@@ -686,6 +703,7 @@ SET
     e.attributes = $attributes,
     e.agent_ids = $agent_ids,
     e.source_ids = $source_ids,
+    e.source_contexts = $source_contexts,
     e.participant_ids = $participant_ids
 RETURN e.uuid AS uuid)";
 
@@ -705,6 +723,7 @@ RETURN e.uuid AS uuid)";
     params["attributes"] = str_val(edge.attributes.dump());
     params["agent_ids"] = string_list_val(edge.agent_ids);
     params["source_ids"] = string_list_val(edge.source_ids);
+    params["source_contexts"] = string_list_val(edge.source_contexts);
     params["participant_ids"] = string_list_val(edge.participant_ids);
 
     return impl_->run_params(query, std::move(params));
@@ -822,6 +841,7 @@ SET
     e.created_at = $created_at,
     e.agent_id = $agent_id,
     e.source_id = $source_id,
+    e.source_context = $source_context,
     e.participant_ids = $participant_ids
 RETURN e.uuid AS uuid)";
 
@@ -833,6 +853,7 @@ RETURN e.uuid AS uuid)";
     params["created_at"] = ts_val(edge.created_at);
     params["agent_id"] = str_val(edge.agent_id);
     params["source_id"] = str_val(edge.source_id);
+    params["source_context"] = str_val(edge.source_context);
     params["participant_ids"] = string_list_val(edge.participant_ids);
 
     return impl_->run_params(query, std::move(params));
@@ -1295,7 +1316,10 @@ SET
     n.created_at = $created_at,
     n.name_embedding = $name_embedding,
     n.summary = $summary,
-    n.agent_ids = $agent_ids
+    n.agent_ids = $agent_ids,
+    n.source_ids = $source_ids,
+    n.source_contexts = $source_contexts,
+    n.participant_ids = $participant_ids
 RETURN n.uuid AS uuid)";
 
     ParamMap params;
@@ -1306,6 +1330,9 @@ RETURN n.uuid AS uuid)";
     params["name_embedding"] = opt_float_list_val(node.name_embedding);
     params["summary"] = str_val(node.summary);
     params["agent_ids"] = string_list_val(node.agent_ids);
+    params["source_ids"] = string_list_val(node.source_ids);
+    params["source_contexts"] = string_list_val(node.source_contexts);
+    params["participant_ids"] = string_list_val(node.participant_ids);
 
     return impl_->run_params(query, std::move(params));
 }

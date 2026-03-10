@@ -191,7 +191,7 @@ edge_types:
                 "ep1",
                 "Alice Johnson works as a software engineer at TechCorp, a technology company.",
                 "chat", now, EpisodeType::message,
-                "typed_group", "", "", {},
+                "typed_group", "", "", "", {},
                 std::nullopt, std::nullopt, std::nullopt,
                 false, &defs
             );
@@ -254,7 +254,7 @@ exclude_entity_types:
                 "ep1",
                 "Alice talked about the Grand Canyon with Bob.",
                 "chat", now, EpisodeType::message,
-                "excl_group", "", "", {},
+                "excl_group", "", "", "", {},
                 std::nullopt, std::nullopt, std::nullopt,
                 false, &defs
             );
@@ -302,7 +302,7 @@ edge_types:
             };
 
             auto result = g.add_episode_bulk(
-                episodes, "bulk_typed", "", "", {},
+                episodes, "bulk_typed", "", "", "", {},
                 std::nullopt, std::nullopt, &defs
             );
             stress::test("bulk typed ingestion succeeds", result.has_value());

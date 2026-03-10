@@ -36,6 +36,7 @@ TEST_CASE("source_id and participant_ids: set on episode", "[integration][source
         "test_group",
         "recorder-agent",  // agent_id
         "alice",           // source_id (Alice said it)
+        "",                // source_context
         {"alice", "bob"}   // participant_ids (Alice and Bob were present)
     );
     REQUIRE(result.has_value());
@@ -64,6 +65,7 @@ TEST_CASE("source_id and participant_ids: propagated to entities", "[integration
         "test_group",
         "agent-1",        // agent_id
         "alice",          // source_id
+        "",               // source_context
         {"alice", "bob"}  // participant_ids
     );
     REQUIRE(result.has_value());
@@ -117,6 +119,7 @@ TEST_CASE("source_id and participant_ids: propagated to edges", "[integration][s
         "test_group",
         "agent-1",
         "alice",
+        "",
         {"alice", "bob"}
     );
     REQUIRE(result.has_value());
@@ -142,7 +145,7 @@ TEST_CASE("source_id and participant_ids: search filter by source_ids", "[integr
     auto r1 = g.add_episode(
         "ep1", "Alice mentioned that Kuzu is fast.",
         "chat", now, EpisodeType::message,
-        "test_group", "agent-1", "alice", {"alice", "bob"}
+        "test_group", "agent-1", "alice", "", {"alice", "bob"}
     );
     REQUIRE(r1.has_value());
 
@@ -150,7 +153,7 @@ TEST_CASE("source_id and participant_ids: search filter by source_ids", "[integr
     auto r2 = g.add_episode(
         "ep2", "Carol said that Neo4j has a large community.",
         "chat", now + std::chrono::seconds(60), EpisodeType::message,
-        "test_group", "agent-1", "carol", {"carol", "dave"}
+        "test_group", "agent-1", "carol", "", {"carol", "dave"}
     );
     REQUIRE(r2.has_value());
 
@@ -183,7 +186,7 @@ TEST_CASE("source_id and participant_ids: search filter by participant_ids", "[i
     auto r1 = g.add_episode(
         "ep1", "Discussed project plans for Kuzu integration.",
         "chat", now, EpisodeType::message,
-        "test_group", "agent-1", "alice", {"alice", "bob"}
+        "test_group", "agent-1", "alice", "", {"alice", "bob"}
     );
     REQUIRE(r1.has_value());
 
@@ -216,7 +219,7 @@ TEST_CASE("source_id and participant_ids: dedup merge", "[integration][source_pa
     auto r1 = g.add_episode(
         "ep1", "Kuzu is an embedded graph database written in C++.",
         "chat", now, EpisodeType::message,
-        "test_group", "agent-1", "alice", {"alice", "bob"}
+        "test_group", "agent-1", "alice", "", {"alice", "bob"}
     );
     REQUIRE(r1.has_value());
 
@@ -224,7 +227,7 @@ TEST_CASE("source_id and participant_ids: dedup merge", "[integration][source_pa
     auto r2 = g.add_episode(
         "ep2", "Kuzu supports Cypher queries and has excellent performance.",
         "chat", now + std::chrono::seconds(60), EpisodeType::message,
-        "test_group", "agent-1", "carol", {"carol", "dave"}
+        "test_group", "agent-1", "carol", "", {"carol", "dave"}
     );
     REQUIRE(r2.has_value());
 

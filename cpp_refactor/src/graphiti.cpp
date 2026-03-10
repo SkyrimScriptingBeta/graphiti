@@ -124,6 +124,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     std::string_view group_id,
     std::string_view agent_id,
     std::string_view source_id,
+    std::string_view source_context,
     const std::vector<std::string>& participant_ids,
     std::optional<std::string> custom_instructions,
     std::optional<std::string> saga,
@@ -135,6 +136,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     auto gid = impl_->resolve_group_id(group_id);
     auto aid = std::string(agent_id);
     auto sid = std::string(source_id);
+    auto sctx = std::string(source_context);
     auto pids = participant_ids;
     auto now = std::chrono::system_clock::now();
 
@@ -159,6 +161,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     episode.valid_at = reference_time;
     episode.agent_id = aid;
     episode.source_id = sid;
+    episode.source_context = sctx;
     episode.participant_ids = pids;
 
     if (!impl_->config.store_raw_episode_content) {
@@ -193,6 +196,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     for (auto& node : extracted_nodes) {
         if (!aid.empty()) node.agent_ids = {aid};
         if (!sid.empty()) node.source_ids = {sid};
+        if (!sctx.empty()) node.source_contexts = {sctx};
         if (!pids.empty()) node.participant_ids = pids;
     }
 
@@ -228,6 +232,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     for (auto& edge : extracted_edges) {
         if (!aid.empty()) edge.agent_ids = {aid};
         if (!sid.empty()) edge.source_ids = {sid};
+        if (!sctx.empty()) edge.source_contexts = {sctx};
         if (!pids.empty()) edge.participant_ids = pids;
     }
 
@@ -298,6 +303,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(
 
                 merge_id(ex.agent_ids, aid);
                 merge_id(ex.source_ids, sid);
+                merge_id(ex.source_contexts, sctx);
                 merge_ids(ex.participant_ids, pids);
 
                 if (changed) {
@@ -399,6 +405,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
     std::string_view group_id,
     std::string_view agent_id,
     std::string_view source_id,
+    std::string_view source_context,
     const std::vector<std::string>& participant_ids,
     std::optional<std::string> custom_instructions,
     std::optional<std::string> saga,
@@ -412,6 +419,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
     auto gid = impl_->resolve_group_id(group_id);
     auto aid = std::string(agent_id);
     auto sid = std::string(source_id);
+    auto sctx = std::string(source_context);
     auto pids = participant_ids;
     auto now = std::chrono::system_clock::now();
 
@@ -432,8 +440,9 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
         ep.content = raw.content;
         ep.valid_at = raw.reference_time;
         ep.agent_id = aid;
-        // Per-episode source_id/participant_ids override batch-level defaults
+        // Per-episode source_id/source_context/participant_ids override batch-level defaults
         ep.source_id = raw.source_id.empty() ? sid : raw.source_id;
+        ep.source_context = raw.source_context.empty() ? sctx : raw.source_context;
         ep.participant_ids = raw.participant_ids.empty() ? pids : raw.participant_ids;
         episodes.push_back(std::move(ep));
     }
@@ -488,10 +497,12 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
         if (result.has_value()) {
             auto& nodes = result.value();
             auto& ep_sid = episodes[i].source_id;
+            auto& ep_sctx = episodes[i].source_context;
             auto& ep_pids = episodes[i].participant_ids;
             for (auto& node : nodes) {
                 if (!aid.empty()) node.agent_ids = {aid};
                 if (!ep_sid.empty()) node.source_ids = {ep_sid};
+                if (!ep_sctx.empty()) node.source_contexts = {ep_sctx};
                 if (!ep_pids.empty()) node.participant_ids = ep_pids;
             }
             nodes_by_episode.push_back(std::move(nodes));
@@ -614,11 +625,13 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
         auto result = pipeline::extract_edges(impl_->llm, input);
         if (result.has_value()) {
             auto& ep_sid = episodes[i].source_id;
+            auto& ep_sctx = episodes[i].source_context;
             auto& ep_pids = episodes[i].participant_ids;
             for (auto& edge : result.value()) {
                 edge.episodes.push_back(episodes[i].uuid);
                 if (!aid.empty()) edge.agent_ids = {aid};
                 if (!ep_sid.empty()) edge.source_ids = {ep_sid};
+                if (!ep_sctx.empty()) edge.source_contexts = {ep_sctx};
                 if (!ep_pids.empty()) edge.participant_ids = ep_pids;
                 all_edges.push_back(std::move(edge));
             }
@@ -699,8 +712,9 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
                 };
 
                 merge_id(ex.agent_ids, aid);
-                // Merge all source_ids and participant_ids from this node
+                // Merge all source_ids, source_contexts, and participant_ids from this node
                 merge_ids(ex.source_ids, node.source_ids);
+                merge_ids(ex.source_contexts, node.source_contexts);
                 merge_ids(ex.participant_ids, node.participant_ids);
 
                 if (changed) {

@@ -38,6 +38,7 @@ struct RawEpisode {
     EpisodeType source = EpisodeType::message;
     std::optional<std::string> uuid; // If set, reuses existing episode
     std::string source_id;                     // Who said this (per-episode override)
+    std::string source_context;                // Where it happened (per-episode override)
     std::vector<std::string> participant_ids;   // Who was present (per-episode override)
 };
 
@@ -94,6 +95,7 @@ public:
         std::string_view group_id = "",
         std::string_view agent_id = "",
         std::string_view source_id = "",
+        std::string_view source_context = "",
         const std::vector<std::string>& participant_ids = {},
         std::optional<std::string> custom_instructions = std::nullopt,
         std::optional<std::string> saga = std::nullopt,
@@ -126,6 +128,7 @@ public:
         std::string_view group_id = "",
         std::string_view agent_id = "",
         std::string_view source_id = "",
+        std::string_view source_context = "",
         const std::vector<std::string>& participant_ids = {},
         std::optional<std::string> custom_instructions = std::nullopt,
         std::optional<std::string> saga = std::nullopt,

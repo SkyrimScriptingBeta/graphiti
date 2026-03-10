@@ -1,24 +1,26 @@
-# source_id and participant_ids — Who Said It, Who Was There
+# Attribution Fields — Who, What, Where, and With Whom
 
-## The Three Attribution Dimensions
+## The Four Attribution Dimensions
 
-Every episode (and the entities/edges extracted from it) now carries three attribution dimensions:
+Every episode (and the entities/edges extracted from it) carries four attribution dimensions:
 
 | Field | Type | Meaning | Example |
 |-------|------|---------|---------|
 | `agent_id` | `string` | **Who recorded this** — the AI agent ingesting the memory | `"my-assistant"` |
 | `source_id` | `string` | **Who said it** — the person/entity who produced the content | `"alice"` |
+| `source_context` | `string` | **Where it happened** — the venue or context where the knowledge was exchanged | `"#backend-team"` |
 | `participant_ids` | `string[]` | **Who was there** — everyone present in the conversation | `["alice", "bob"]` |
 
-### Why Three?
+### Why Four?
 
-Consider a Slack channel where your assistant is watching:
+Consider a Slack workspace where your assistant is watching:
 
 - **agent_id = "my-assistant"** — the assistant is recording everything
 - **source_id = "alice"** — Alice sent this particular message
+- **source_context = "#backend-team"** — it was said in the #backend-team channel
 - **participant_ids = ["alice", "bob", "carol"]** — Alice, Bob, and Carol are in the channel
 
-This lets you later ask: "What did Alice say?" (filter by source_id), "What was discussed when Bob was present?" (filter by participant_ids), or "What did my assistant record?" (filter by agent_id).
+This lets you later ask: "What did Alice say?" (filter by source_ids), "What was discussed in #backend-team?" (filter by source_contexts), "What was discussed when Bob was present?" (filter by participant_ids), or "What did my assistant record?" (filter by agent_ids).
 
 ## How to Submit Data
 
@@ -34,13 +36,14 @@ auto result = g.add_episode(
     "my-project",                   // group_id
     "my-assistant",                 // agent_id
     "alice",                        // source_id
+    "#backend-team",                // source_context
     {"alice", "bob"}                // participant_ids
 );
 ```
 
 ### Bulk Episodes
 
-Each `RawEpisode` can specify its own `source_id` and `participant_ids`:
+Each `RawEpisode` can specify its own `source_id`, `source_context`, and `participant_ids`:
 
 ```cpp
 std::vector<RawEpisode> episodes = {
@@ -50,6 +53,7 @@ std::vector<RawEpisode> episodes = {
         .source_description = "slack",
         .reference_time = now,
         .source_id = "alice",
+        .source_context = "#backend-team",
         .participant_ids = {"alice", "bob"},
     },
     {
@@ -58,6 +62,7 @@ std::vector<RawEpisode> episodes = {
         .source_description = "slack",
         .reference_time = now + std::chrono::seconds(30),
         .source_id = "bob",
+        .source_context = "#backend-team",
         .participant_ids = {"alice", "bob"},
     },
 };
@@ -78,6 +83,7 @@ auto result = g.add_episode_bulk(
     "my-project",       // group_id
     "my-assistant",     // agent_id
     "default-source",   // source_id (fallback if RawEpisode.source_id is empty)
+    "#general",         // source_context (fallback if RawEpisode.source_context is empty)
     {"everyone"},       // participant_ids (fallback if RawEpisode.participant_ids is empty)
 );
 ```
@@ -90,6 +96,7 @@ auto result = g.add_episode_bulk(
 Episodic table:
   agent_id STRING DEFAULT ''         -- singular: who recorded
   source_id STRING DEFAULT ''        -- singular: who said it
+  source_context STRING DEFAULT ''   -- singular: where it happened
   participant_ids STRING[] DEFAULT [] -- plural: who was present
 ```
 
@@ -97,9 +104,10 @@ Episodic table:
 
 ```
 Entity table:
-  agent_ids STRING[] DEFAULT []       -- accumulated from all episodes mentioning this entity
-  source_ids STRING[] DEFAULT []      -- accumulated from all episodes mentioning this entity
-  participant_ids STRING[] DEFAULT [] -- accumulated from all episodes mentioning this entity
+  agent_ids STRING[] DEFAULT []        -- accumulated from all episodes mentioning this entity
+  source_ids STRING[] DEFAULT []       -- accumulated from all episodes mentioning this entity
+  source_contexts STRING[] DEFAULT []  -- accumulated from all episodes mentioning this entity
+  participant_ids STRING[] DEFAULT []  -- accumulated from all episodes mentioning this entity
 ```
 
 ### RelatesToNode_ (edge facts like "Alice works at Acme")
@@ -108,6 +116,7 @@ Entity table:
 RelatesToNode_ table:
   agent_ids STRING[] DEFAULT []
   source_ids STRING[] DEFAULT []
+  source_contexts STRING[] DEFAULT []
   participant_ids STRING[] DEFAULT []
 ```
 
@@ -117,6 +126,7 @@ RelatesToNode_ table:
 MENTIONS rel table:
   agent_id STRING DEFAULT ''
   source_id STRING DEFAULT ''
+  source_context STRING DEFAULT ''
   participant_ids STRING[] DEFAULT []
 ```
 
@@ -126,15 +136,16 @@ MENTIONS rel table:
 Community table:
   agent_ids STRING[] DEFAULT []
   source_ids STRING[] DEFAULT []
+  source_contexts STRING[] DEFAULT []
   participant_ids STRING[] DEFAULT []
 ```
 
 ### Key Design: Singular vs Plural
 
-- **Episodes** store singular `source_id` and `agent_id` — each episode has exactly one source and one recorder
-- **Entities and edges** accumulate plural `source_ids`, `agent_ids`, `participant_ids` — because the same entity can be mentioned by different sources across different conversations
+- **Episodes** store singular `source_id`, `source_context`, and `agent_id` — each episode has exactly one source, one context, and one recorder
+- **Entities and edges** accumulate plural `source_ids`, `source_contexts`, `agent_ids`, `participant_ids` — because the same entity can be mentioned by different sources across different conversations and contexts
 
-When entity deduplication merges a new mention with an existing entity, the new source_id and participant_ids are appended to the existing arrays (no duplicates).
+When entity deduplication merges a new mention with an existing entity, the new source_id, source_context, and participant_ids are appended to the existing arrays (no duplicates).
 
 ## Searching with Filters
 
@@ -143,6 +154,9 @@ SearchFilters filters;
 
 // Only facts mentioned by Alice
 filters.source_ids = {"alice"};
+
+// Only facts from #backend-team
+filters.source_contexts = {"#backend-team"};
 
 // Only facts from conversations Bob was in
 filters.participant_ids = {"bob"};
@@ -156,6 +170,7 @@ auto results = g.search("project Alpha", "my-project", 10, filters);
 Each filter generates a Kuzu Cypher overlap query:
 ```cypher
 any(sid IN e.source_ids WHERE list_contains(['alice'], sid))
+AND any(sc IN e.source_contexts WHERE list_contains(['#backend-team'], sc))
 AND any(pid IN e.participant_ids WHERE list_contains(['bob'], pid))
 ```
 

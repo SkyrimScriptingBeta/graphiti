@@ -199,7 +199,7 @@ std::vector<Message> extract_edges(
 </ENTITIES>
 
 <REFERENCE_TIME>
-{3}
+{3}  # ISO 8601 (UTC); used to resolve relative time mentions
 </REFERENCE_TIME>
 )",
         to_prompt_json(previous_episodes),

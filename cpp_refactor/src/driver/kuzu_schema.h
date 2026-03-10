@@ -25,6 +25,7 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         entity_edges STRING[],
         agent_id STRING DEFAULT '',
         source_id STRING DEFAULT '',
+        source_context STRING DEFAULT '',
         participant_ids STRING[] DEFAULT []
     ))",
 
@@ -39,6 +40,7 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         attributes STRING,
         agent_ids STRING[] DEFAULT [],
         source_ids STRING[] DEFAULT [],
+        source_contexts STRING[] DEFAULT [],
         participant_ids STRING[] DEFAULT []
     ))",
 
@@ -51,6 +53,7 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         summary STRING,
         agent_ids STRING[] DEFAULT [],
         source_ids STRING[] DEFAULT [],
+        source_contexts STRING[] DEFAULT [],
         participant_ids STRING[] DEFAULT []
     ))",
 
@@ -68,6 +71,7 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         attributes STRING,
         agent_ids STRING[] DEFAULT [],
         source_ids STRING[] DEFAULT [],
+        source_contexts STRING[] DEFAULT [],
         participant_ids STRING[] DEFAULT []
     ))",
 
@@ -90,6 +94,7 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         created_at TIMESTAMP,
         agent_id STRING DEFAULT '',
         source_id STRING DEFAULT '',
+        source_context STRING DEFAULT '',
         participant_ids STRING[] DEFAULT []
     ))",
 

@@ -62,7 +62,7 @@ TEST_CASE("Custom types: entities get labels from type_defs", "[integration][cus
         "ep1",
         "Alice Smith works as an engineer at Acme Corp.",
         "chat", now, EpisodeType::message,
-        "test_group", "", "", {},
+        "test_group", "", "", "", {},
         std::nullopt, std::nullopt, std::nullopt,
         false, &type_defs
     );
@@ -98,7 +98,7 @@ TEST_CASE("Custom types: attributes populated for typed entities", "[integration
         "ep1",
         "Alice Smith works as a software engineer at Acme Corp in the technology industry.",
         "chat", now, EpisodeType::message,
-        "test_group", "", "", {},
+        "test_group", "", "", "", {},
         std::nullopt, std::nullopt, std::nullopt,
         false, &type_defs
     );
@@ -128,7 +128,7 @@ TEST_CASE("Custom types: edge types guide extraction", "[integration][custom_typ
         "ep1",
         "Alice works at Acme Corp. Bob also works at Acme Corp. Alice knows Bob.",
         "chat", now, EpisodeType::message,
-        "test_group", "", "", {},
+        "test_group", "", "", "", {},
         std::nullopt, std::nullopt, std::nullopt,
         false, &type_defs
     );
@@ -167,7 +167,7 @@ exclude_entity_types:
         "ep1",
         "Alice mentioned the Grand Canyon during her conversation with Bob.",
         "chat", now, EpisodeType::message,
-        "test_group", "", "", {},
+        "test_group", "", "", "", {},
         std::nullopt, std::nullopt, std::nullopt,
         false, &type_defs
     );
@@ -194,7 +194,7 @@ TEST_CASE("Custom types: search by label works with custom types", "[integration
         "ep1",
         "Alice Smith is a software engineer at Acme Corp.",
         "chat", now, EpisodeType::message,
-        "test_group", "", "", {},
+        "test_group", "", "", "", {},
         std::nullopt, std::nullopt, std::nullopt,
         false, &type_defs
     );

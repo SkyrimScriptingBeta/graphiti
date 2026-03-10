@@ -55,6 +55,7 @@ void to_json(nlohmann::json& j, const EntityNode& n) {
         {"attributes", n.attributes},
         {"agent_ids", n.agent_ids},
         {"source_ids", n.source_ids},
+        {"source_contexts", n.source_contexts},
         {"participant_ids", n.participant_ids},
     };
     if (n.name_embedding)
@@ -79,6 +80,8 @@ void from_json(const nlohmann::json& j, EntityNode& n) {
         j.at("agent_ids").get_to(n.agent_ids);
     if (j.contains("source_ids"))
         j.at("source_ids").get_to(n.source_ids);
+    if (j.contains("source_contexts"))
+        j.at("source_contexts").get_to(n.source_contexts);
     if (j.contains("participant_ids"))
         j.at("participant_ids").get_to(n.participant_ids);
 }
@@ -98,6 +101,7 @@ void to_json(nlohmann::json& j, const EpisodicNode& n) {
         {"entity_edges", n.entity_edges},
         {"agent_id", n.agent_id},
         {"source_id", n.source_id},
+        {"source_context", n.source_context},
         {"participant_ids", n.participant_ids},
     };
 }
@@ -116,6 +120,8 @@ void from_json(const nlohmann::json& j, EpisodicNode& n) {
         j.at("agent_id").get_to(n.agent_id);
     if (j.contains("source_id"))
         j.at("source_id").get_to(n.source_id);
+    if (j.contains("source_context"))
+        j.at("source_context").get_to(n.source_context);
     if (j.contains("participant_ids"))
         j.at("participant_ids").get_to(n.participant_ids);
 }
@@ -131,6 +137,7 @@ void to_json(nlohmann::json& j, const CommunityNode& n) {
         {"summary", n.summary},
         {"agent_ids", n.agent_ids},
         {"source_ids", n.source_ids},
+        {"source_contexts", n.source_contexts},
         {"participant_ids", n.participant_ids},
     };
     if (n.name_embedding)
@@ -153,6 +160,8 @@ void from_json(const nlohmann::json& j, CommunityNode& n) {
         j.at("agent_ids").get_to(n.agent_ids);
     if (j.contains("source_ids"))
         j.at("source_ids").get_to(n.source_ids);
+    if (j.contains("source_contexts"))
+        j.at("source_contexts").get_to(n.source_contexts);
     if (j.contains("participant_ids"))
         j.at("participant_ids").get_to(n.participant_ids);
 }
@@ -193,6 +202,7 @@ void to_json(nlohmann::json& j, const EntityEdge& e) {
         {"attributes", e.attributes},
         {"agent_ids", e.agent_ids},
         {"source_ids", e.source_ids},
+        {"source_contexts", e.source_contexts},
         {"participant_ids", e.participant_ids},
     };
     if (e.fact_embedding)
@@ -222,6 +232,8 @@ void from_json(const nlohmann::json& j, EntityEdge& e) {
         j.at("agent_ids").get_to(e.agent_ids);
     if (j.contains("source_ids"))
         j.at("source_ids").get_to(e.source_ids);
+    if (j.contains("source_contexts"))
+        j.at("source_contexts").get_to(e.source_contexts);
     if (j.contains("participant_ids"))
         j.at("participant_ids").get_to(e.participant_ids);
 }
@@ -255,6 +267,7 @@ void to_json(nlohmann::json& j, const EpisodicEdge& e) {
                         e.created_at);
     j["agent_id"] = e.agent_id;
     j["source_id"] = e.source_id;
+    j["source_context"] = e.source_context;
     j["participant_ids"] = e.participant_ids;
 }
 void from_json(const nlohmann::json& j, EpisodicEdge& e) {
@@ -264,6 +277,8 @@ void from_json(const nlohmann::json& j, EpisodicEdge& e) {
         j.at("agent_id").get_to(e.agent_id);
     if (j.contains("source_id"))
         j.at("source_id").get_to(e.source_id);
+    if (j.contains("source_context"))
+        j.at("source_context").get_to(e.source_context);
     if (j.contains("participant_ids"))
         j.at("participant_ids").get_to(e.participant_ids);
 }

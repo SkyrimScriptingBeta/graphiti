@@ -123,6 +123,17 @@ FilterQueryResult build_edge_filter_clauses(const SearchFilters& filters) {
             "any(sid IN e.source_ids WHERE list_contains([{}], sid))", sources_list));
     }
 
+    // Source context filter
+    if (!filters.source_contexts.empty()) {
+        std::string contexts_list;
+        for (size_t i = 0; i < filters.source_contexts.size(); ++i) {
+            if (i > 0) contexts_list += ", ";
+            contexts_list += std::format("'{}'", filters.source_contexts[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(sc IN e.source_contexts WHERE list_contains([{}], sc))", contexts_list));
+    }
+
     // Participant filter
     if (!filters.participant_ids.empty()) {
         std::string parts_list;
@@ -188,6 +199,17 @@ FilterQueryResult build_node_filter_clauses(const SearchFilters& filters) {
         }
         result.clauses.push_back(std::format(
             "any(sid IN n.source_ids WHERE list_contains([{}], sid))", sources_list));
+    }
+
+    // Source context filter
+    if (!filters.source_contexts.empty()) {
+        std::string contexts_list;
+        for (size_t i = 0; i < filters.source_contexts.size(); ++i) {
+            if (i > 0) contexts_list += ", ";
+            contexts_list += std::format("'{}'", filters.source_contexts[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(sc IN n.source_contexts WHERE list_contains([{}], sc))", contexts_list));
     }
 
     // Participant filter

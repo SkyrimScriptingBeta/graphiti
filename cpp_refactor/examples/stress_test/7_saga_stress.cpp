@@ -62,7 +62,7 @@ int main() {
         auto r1 = g.add_episode(
             "ep1", "Day 1: Alice started at Acme Corp.",
             "chat", now, EpisodeType::message,
-            "saga_chain", "", "", {},
+            "saga_chain", "", "", "", {},
             std::nullopt, "alice_journey"
         );
         stress::test("saga chain ep1", r1.has_value());
@@ -71,7 +71,7 @@ int main() {
         auto r2 = g.add_episode(
             "ep2", "Day 2: Alice met her team. Bob is the tech lead.",
             "chat", now + std::chrono::seconds(60), EpisodeType::message,
-            "saga_chain", "", "", {},
+            "saga_chain", "", "", "", {},
             std::nullopt, "alice_journey"
         );
         stress::test("saga chain ep2", r2.has_value());
@@ -80,7 +80,7 @@ int main() {
         auto r3 = g.add_episode(
             "ep3", "Day 3: Alice completed her first code review with Bob.",
             "chat", now + std::chrono::seconds(120), EpisodeType::message,
-            "saga_chain", "", "", {},
+            "saga_chain", "", "", "", {},
             std::nullopt, "alice_journey"
         );
         stress::test("saga chain ep3", r3.has_value());
@@ -89,7 +89,7 @@ int main() {
         auto r4 = g.add_episode(
             "ep4", "Day 7: Alice shipped her first feature at Acme Corp.",
             "chat", now + std::chrono::seconds(180), EpisodeType::message,
-            "saga_chain", "", "", {},
+            "saga_chain", "", "", "", {},
             std::nullopt, "alice_journey"
         );
         stress::test("saga chain ep4", r4.has_value());
@@ -113,7 +113,7 @@ int main() {
         auto r1 = g.add_episode(
             "ep1", "The project started with requirement gathering.",
             "chat", now, EpisodeType::message,
-            "explicit_chain", "", "", {},
+            "explicit_chain", "", "", "", {},
             std::nullopt, "project_timeline"
         );
         stress::test("explicit chain ep1", r1.has_value());
@@ -124,7 +124,7 @@ int main() {
         auto r2 = g.add_episode(
             "ep2", "The team moved to design phase after requirements.",
             "chat", now + std::chrono::seconds(60), EpisodeType::message,
-            "explicit_chain", "", "", {},
+            "explicit_chain", "", "", "", {},
             std::nullopt,
             "project_timeline",  // saga
             ep1_uuid             // saga_previous_episode_uuid
@@ -143,14 +143,14 @@ int main() {
         auto r1 = g.add_episode(
             "alice1", "Alice joined the engineering team.",
             "chat", now, EpisodeType::message,
-            "multi_saga", "", "", {},
+            "multi_saga", "", "", "", {},
             std::nullopt, "alice_story");
         stress::test("multi-saga: alice ep1", r1.has_value());
 
         auto r2 = g.add_episode(
             "alice2", "Alice got promoted to senior engineer.",
             "chat", now + std::chrono::seconds(60), EpisodeType::message,
-            "multi_saga", "", "", {},
+            "multi_saga", "", "", "", {},
             std::nullopt, "alice_story");
         stress::test("multi-saga: alice ep2", r2.has_value());
 
@@ -158,14 +158,14 @@ int main() {
         auto r3 = g.add_episode(
             "bob1", "Bob joined the marketing team.",
             "chat", now + std::chrono::seconds(120), EpisodeType::message,
-            "multi_saga", "", "", {},
+            "multi_saga", "", "", "", {},
             std::nullopt, "bob_story");
         stress::test("multi-saga: bob ep1", r3.has_value());
 
         auto r4 = g.add_episode(
             "bob2", "Bob transferred to product management.",
             "chat", now + std::chrono::seconds(180), EpisodeType::message,
-            "multi_saga", "", "", {},
+            "multi_saga", "", "", "", {},
             std::nullopt, "bob_story");
         stress::test("multi-saga: bob ep2", r4.has_value());
 
@@ -196,7 +196,7 @@ int main() {
         }
 
         auto result = g.add_episode_bulk(
-            episodes, "bulk_saga_group", "", "", {},
+            episodes, "bulk_saga_group", "", "", "", {},
             std::nullopt, "sprint_log"
         );
         stress::test("bulk ingest with saga succeeds", result.has_value());
@@ -220,7 +220,7 @@ int main() {
         auto r1 = g.add_episode(
             "special1", "Alice's first meeting went well.",
             "chat", now, EpisodeType::message,
-            "special_saga_group", "", "", {},
+            "special_saga_group", "", "", "", {},
             std::nullopt,
             "Alice's \"Journey\" (Part 1)"  // saga with special chars
         );
@@ -229,7 +229,7 @@ int main() {
         auto r2 = g.add_episode(
             "special2", "Alice's second meeting was about Q&A.",
             "chat", now + std::chrono::seconds(60), EpisodeType::message,
-            "special_saga_group", "", "", {},
+            "special_saga_group", "", "", "", {},
             std::nullopt,
             "Alice's \"Journey\" (Part 1)"  // same saga
         );
@@ -315,7 +315,7 @@ int main() {
         auto result = g.add_episode(
             "long_saga_ep", "Testing with an extremely long saga name.",
             "chat", now, EpisodeType::message,
-            "long_saga_group", "", "", {},
+            "long_saga_group", "", "", "", {},
             std::nullopt, long_saga_name);
         stress::test("very long saga name (500+ chars)", result.has_value());
     }
@@ -330,14 +330,14 @@ int main() {
         auto r1 = g.add_episode(
             "cross1", "Alice works in Group X.",
             "chat", now, EpisodeType::message,
-            "group_x", "", "", {},
+            "group_x", "", "", "", {},
             std::nullopt, "shared_saga");
         stress::test("same saga name group_x", r1.has_value());
 
         auto r2 = g.add_episode(
             "cross2", "Bob works in Group Y.",
             "chat", now, EpisodeType::message,
-            "group_y", "", "", {},
+            "group_y", "", "", "", {},
             std::nullopt, "shared_saga");
         stress::test("same saga name group_y", r2.has_value());
 

@@ -202,6 +202,7 @@ int main() {
             "update_test",
             "",           // agent_id
             "",           // source_id
+            "",           // source_context
             {},           // participant_ids
             std::nullopt, // custom_instructions
             std::nullopt, // saga

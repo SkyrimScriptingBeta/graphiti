@@ -4,6 +4,8 @@ Every LLM call Graphiti makes, what the model sees, and where each variable come
 
 All prompts return structured JSON via OpenAI's structured output. The response schemas are defined in `cpp_refactor/src/llm/response_models.h`.
 
+> **Note on `Do not escape unicode characters.`** — The C++ port appends this instruction to every system message in the main prompt functions. Python doesn't include it because its structured output pipeline handles unicode natively. This is the only intentional divergence between the two implementations.
+
 ---
 
 # Extract Message (Entity Extraction — Conversational)
@@ -22,7 +24,6 @@ Used when `EpisodeType::message`. The richest extraction path — gives the LLM 
 You are an AI assistant that extracts entity nodes from conversational messages.
 Your primary task is to extract and classify the speaker and other significant entities
 mentioned in the conversation.
-Do not escape unicode characters.
 ```
 
 **User message:**
@@ -64,7 +65,7 @@ MESSAGE. Don't extract pronouns like you, me, he/she/they, we/us as entities.
 
 4. **Exclusions**:
    - Do NOT extract entities representing relationships or actions.
-   - Do NOT extract dates, times, or other temporal information--these will be
+   - Do NOT extract dates, times, or other temporal information—these will be
      handled separately.
 
 5. **Formatting**:
@@ -93,7 +94,6 @@ Used when `EpisodeType::text`. Simpler than message — no conversation history,
 You are an AI assistant that extracts entity nodes from text.
 Your primary task is to extract and classify the speaker and other significant entities
 mentioned in the provided text.
-Do not escape unicode characters.
 ```
 
 **User message:**
@@ -141,7 +141,6 @@ Used when `EpisodeType::json`. The only extraction path that sends `source_descr
 ```
 You are an AI assistant that extracts entity nodes from JSON.
 Your primary task is to extract and classify relevant entities from JSON files
-Do not escape unicode characters.
 ```
 
 **User message:**
@@ -194,7 +193,6 @@ You are an expert fact extractor that extracts fact triples from text.
 1. Extracted fact triples should also be extracted with relevant date information.
 2. Treat the CURRENT TIME as the time the CURRENT MESSAGE was sent.
 All temporal information should be extracted relative to this time.
-Do not escape unicode characters.
 ```
 
 **User message:**
@@ -212,7 +210,7 @@ ${JSON array of entity names extracted in the previous step}
 </ENTITIES>
 
 <REFERENCE_TIME>
-${ISO 8601 timestamp for resolving relative dates like "last week"}
+${ISO 8601 timestamp}  # ISO 8601 (UTC); used to resolve relative time mentions
 </REFERENCE_TIME>
 
 ${If custom edge types are defined:}
@@ -280,14 +278,13 @@ After extracting entities, each one is checked against existing graph entities t
 | `previous_episodes` | JSON array of prior episode contents | `driver.retrieve_episodes()` |
 | `episode_content` | The raw episode body text | `episode_body` parameter from `add_episode()` |
 | `extracted_node` | JSON `{id: N, name: "..."}` for the new entity | Built from the `extract_nodes()` output |
-| `entity_type_description` | Description of the entity type (currently empty string) | Passed as `""` in current implementation |
+| `entity_type_description` | Description of the entity type | Resolved from `TypeDefinitions` or empty string |
 | `existing_nodes` | JSON array of `{name, summary}` for candidate matches | `driver.search_entity_nodes_bm25(node.name, group_id, 10)` |
 
 **System message:**
 ```
 You are a helpful assistant that determines whether or not a NEW ENTITY
 is a duplicate of any EXISTING ENTITIES.
-Do not escape unicode characters.
 ```
 
 **User message:**
@@ -302,7 +299,7 @@ ${The episode body text}
 ${JSON object: {id: 0, name: "Alice"}}
 </NEW ENTITY>
 <ENTITY TYPE DESCRIPTION>
-${Description of the entity type, currently empty}
+${Description of the entity type}
 </ENTITY TYPE DESCRIPTION>
 
 <EXISTING ENTITIES>
@@ -327,6 +324,18 @@ TASK:
 2. If it refers to the same real-world object or concept, identify the matching
    entity by name.
 
+Respond with a JSON object containing an "entity_resolutions" array with a single entry:
+{
+    "entity_resolutions": [
+        {
+            "id": integer id from NEW ENTITY,
+            "name": the best full name for the entity,
+            "duplicate_name": the name of the matching entity from EXISTING ENTITIES,
+                              or empty string if none
+        }
+    ]
+}
+
 Only use names that appear in EXISTING ENTITIES, and return empty string when unsure.
 ```
 
@@ -345,14 +354,13 @@ After extracting edges, each new edge is compared against existing edges between
 | Variable | What it contains | Where it comes from |
 |---|---|---|
 | `existing_edges` | Numbered list of existing facts, e.g. `"idx 0: Alice works at Acme\n"` | `driver.get_edges_between_nodes(source_uuid, target_uuid)` |
-| `edge_invalidation_candidates` | Additional facts that might be invalidated (currently empty) | Currently `""` in implementation |
+| `edge_invalidation_candidates` | Additional facts that might be invalidated | Built from edges that share nodes with the new edge |
 | `new_edge` | The new fact, e.g. `"fact: Alice left Acme Corp"` | Built from the `extract_edges()` output |
 
 **System message:**
 ```
 You are a helpful assistant that de-duplicates facts from fact lists and determines
 which existing facts are contradicted by the new fact.
-Do not escape unicode characters.
 ```
 
 **User message:**
@@ -392,7 +400,7 @@ ${Numbered list: "idx 0: Alice works at Acme Corp\nidx 1: Alice is a software en
 </EXISTING FACTS>
 
 <FACT INVALIDATION CANDIDATES>
-${Additional facts to check for contradictions, currently empty}
+${Additional facts to check for contradictions}
 </FACT INVALIDATION CANDIDATES>
 
 <NEW FACT>
@@ -417,7 +425,6 @@ After extraction and dedup, generates or updates a summary for each entity based
 **System message:**
 ```
 You are a helpful assistant that generates concise entity summaries from provided context.
-Do not escape unicode characters.
 ```
 
 **User message:**
@@ -487,8 +494,6 @@ Synthesize the information from the following two summaries into a single succin
 
 IMPORTANT: Keep the summary concise and to the point. SUMMARIES MUST BE LESS THAN 250 CHARACTERS.
 
-Respond with a JSON object with a single key "summary" containing your summary.
-
 Summaries:
 [{"summary": "${first entity/community summary}"}, {"summary": "${second entity/community summary}"}]
 ```
@@ -506,15 +511,13 @@ Generates a one-sentence label for a community based on its summary.
 **System message:**
 ```
 You are a helpful assistant that describes provided contents in a single sentence.
-Do not escape unicode characters.
 ```
 
 **User message:**
 ```
 Create a short one sentence description of the summary that explains what kind of
-information is summarized. The description must be under 250 characters.
-
-Respond with a JSON object with a single key "description" containing your description.
+information is summarized.
+Summaries must be under 250 characters.
 
 Summary:
 ${The community summary text}

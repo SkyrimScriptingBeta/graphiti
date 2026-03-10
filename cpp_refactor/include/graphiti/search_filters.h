@@ -67,6 +67,10 @@ struct SearchFilters {
     // Filter to items attributed to any of these sources (who said it).
     std::vector<std::string> source_ids;
 
+    // Source context filter (optional, empty = no filter)
+    // Filter to items associated with any of these contexts (where it happened).
+    std::vector<std::string> source_contexts;
+
     // Participant filter (optional, empty = no filter)
     // Filter to items where any of these participants were present.
     std::vector<std::string> participant_ids;

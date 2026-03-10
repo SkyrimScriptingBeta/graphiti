@@ -85,7 +85,7 @@ TEST_CASE("extract_json prompt structure", "[prompts][extract]") {
     check_unicode_instruction(msgs);
 
     CHECK(msgs[0].content.find("extracts entity nodes from JSON") != std::string::npos);
-    CHECK(msgs[1].content.find("<SOURCE DESCRIPTION>") != std::string::npos);
+    CHECK(msgs[1].content.find("<SOURCE DESCRIPTION>:") != std::string::npos);
     CHECK(msgs[1].content.find("Spotify play history") != std::string::npos);
     CHECK(msgs[1].content.find("<JSON>") != std::string::npos);
     CHECK(msgs[1].content.find("Blue Monday") != std::string::npos);
@@ -97,7 +97,7 @@ TEST_CASE("extract_json with custom instructions", "[prompts][extract]") {
         "[]", "API response", "{}", "Focus on user entities only."
     );
     CHECK(msgs[1].content.find("Focus on user entities only.") != std::string::npos);
-    CHECK(msgs[1].content.find("<SOURCE DESCRIPTION>") != std::string::npos);
+    CHECK(msgs[1].content.find("<SOURCE DESCRIPTION>:") != std::string::npos);
     CHECK(msgs[1].content.find("API response") != std::string::npos);
 }
 

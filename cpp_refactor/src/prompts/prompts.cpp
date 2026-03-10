@@ -67,7 +67,7 @@ Pronoun references such as he/she/they or this/that/those should be disambiguate
 
 4. **Exclusions**:
    - Do NOT extract entities representing relationships or actions.
-   - Do NOT extract dates, times, or other temporal information--these will be handled separately.
+   - Do NOT extract dates, times, or other temporal information—these will be handled separately.
 
 5. **Formatting**:
    - Be **explicit and unambiguous** in naming entities (e.g., use full names when available).
@@ -139,7 +139,7 @@ std::vector<Message> extract_json(
 {0}
 </ENTITY TYPES>
 
-<SOURCE DESCRIPTION>
+<SOURCE DESCRIPTION>:
 {1}
 </SOURCE DESCRIPTION>
 <JSON>

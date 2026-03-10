@@ -127,8 +127,6 @@ std::string summarize_pair(LLMClient& llm, std::string_view left, std::string_vi
 
 IMPORTANT: Keep the summary concise and to the point. SUMMARIES MUST BE LESS THAN 250 CHARACTERS.
 
-Respond with a JSON object with a single key "summary" containing your summary.
-
 Summaries:
 [{{"summary": "{}"}}, {{"summary": "{}"}}])", left, right)}
     };
@@ -149,9 +147,7 @@ std::string generate_summary_description(LLMClient& llm, std::string_view summar
         {"system", "You are a helpful assistant that describes provided contents in a single sentence."},
         {"user", std::format(
             R"(Create a short one sentence description of the summary that explains what kind of information is summarized.
-The description must be under 250 characters.
-
-Respond with a JSON object with a single key "description" containing your description.
+Summaries must be under 250 characters.
 
 Summary:
 {})", summary)}

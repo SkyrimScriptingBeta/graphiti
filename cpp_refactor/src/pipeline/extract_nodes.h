@@ -19,6 +19,7 @@ struct ExtractNodesInput {
     nlohmann::json previous_episodes = nlohmann::json::array();
     std::string group_id;
     std::string custom_instructions;
+    std::string source_description; // Used by EpisodeType::json to tell the LLM what the JSON represents
     const TypeDefinitions* type_defs = nullptr;
 };
 

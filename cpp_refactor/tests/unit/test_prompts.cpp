@@ -71,6 +71,37 @@ TEST_CASE("extract_text prompt structure", "[prompts][extract]") {
 }
 
 // ============================================================================
+// extract_json
+// ============================================================================
+
+TEST_CASE("extract_json prompt structure", "[prompts][extract]") {
+    auto msgs = extract_json(
+        R"([{"id": 0, "name": "Event"}])",
+        "Spotify play history",
+        R"({"user": "alice", "track": "Blue Monday", "artist": "New Order"})"
+    );
+
+    check_roles(msgs);
+    check_unicode_instruction(msgs);
+
+    CHECK(msgs[0].content.find("extracts entity nodes from JSON") != std::string::npos);
+    CHECK(msgs[1].content.find("<SOURCE DESCRIPTION>") != std::string::npos);
+    CHECK(msgs[1].content.find("Spotify play history") != std::string::npos);
+    CHECK(msgs[1].content.find("<JSON>") != std::string::npos);
+    CHECK(msgs[1].content.find("Blue Monday") != std::string::npos);
+    CHECK(msgs[1].content.find("Do NOT extract any properties that contain dates") != std::string::npos);
+}
+
+TEST_CASE("extract_json with custom instructions", "[prompts][extract]") {
+    auto msgs = extract_json(
+        "[]", "API response", "{}", "Focus on user entities only."
+    );
+    CHECK(msgs[1].content.find("Focus on user entities only.") != std::string::npos);
+    CHECK(msgs[1].content.find("<SOURCE DESCRIPTION>") != std::string::npos);
+    CHECK(msgs[1].content.find("API response") != std::string::npos);
+}
+
+// ============================================================================
 // extract_edges
 // ============================================================================
 

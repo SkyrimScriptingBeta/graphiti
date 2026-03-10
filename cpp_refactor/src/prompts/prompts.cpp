@@ -122,6 +122,49 @@ Guidelines:
     return {{"system", std::move(sys)}, {"user", std::move(user)}};
 }
 
+std::vector<Message> extract_json(
+    std::string_view entity_types,
+    std::string_view source_description,
+    std::string_view episode_content,
+    std::string_view custom_instructions
+) {
+    std::string sys = std::format(
+        "You are an AI assistant that extracts entity nodes from JSON. "
+        "Your primary task is to extract and classify relevant entities from JSON files{}",
+        DO_NOT_ESCAPE_UNICODE
+    );
+
+    std::string user = std::format(
+        R"(<ENTITY TYPES>
+{0}
+</ENTITY TYPES>
+
+<SOURCE DESCRIPTION>
+{1}
+</SOURCE DESCRIPTION>
+<JSON>
+{2}
+</JSON>
+
+{3}
+
+Given the above source description and JSON, extract relevant entities from the provided JSON.
+For each entity extracted, also determine its entity type based on the provided ENTITY TYPES and their descriptions.
+Indicate the classified entity type by providing its entity_type_id.
+
+Guidelines:
+1. Extract all entities that the JSON represents. This will often be something like a "name" or "user" field
+2. Extract all entities mentioned in all other properties throughout the JSON structure
+3. Do NOT extract any properties that contain dates)",
+        entity_types,
+        source_description,
+        episode_content,
+        custom_instructions
+    );
+
+    return {{"system", std::move(sys)}, {"user", std::move(user)}};
+}
+
 // ============================================================================
 // Edge Extraction
 // ============================================================================

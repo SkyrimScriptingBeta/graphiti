@@ -36,6 +36,14 @@ std::vector<Message> extract_text(
     std::string_view custom_instructions = ""
 );
 
+// Extract entities from JSON data (uses source_description for context)
+std::vector<Message> extract_json(
+    std::string_view entity_types,
+    std::string_view source_description,
+    std::string_view episode_content,
+    std::string_view custom_instructions = ""
+);
+
 // ============================================================================
 // Edge Extraction
 // ============================================================================

@@ -19,6 +19,11 @@ Result<std::vector<EntityNode>> extract_nodes(
             input.entity_types, input.previous_episodes,
             input.episode_content, input.custom_instructions
         );
+    } else if (input.episode_type == EpisodeType::json) {
+        messages = prompts::extract_json(
+            input.entity_types, input.source_description,
+            input.episode_content, input.custom_instructions
+        );
     } else {
         messages = prompts::extract_text(
             input.entity_types, input.episode_content, input.custom_instructions

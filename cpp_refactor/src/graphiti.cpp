@@ -180,6 +180,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(
     }
     extract_input.previous_episodes = previous_episodes;
     extract_input.group_id = gid;
+    extract_input.source_description = std::string(source_description);
     if (custom_instructions.has_value()) {
         extract_input.custom_instructions = custom_instructions.value();
     }
@@ -478,6 +479,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(
         }
         input.previous_episodes = episode_contexts[i];
         input.group_id = gid;
+        input.source_description = episodes[i].source_description;
         if (custom_instructions.has_value()) {
             input.custom_instructions = custom_instructions.value();
         }

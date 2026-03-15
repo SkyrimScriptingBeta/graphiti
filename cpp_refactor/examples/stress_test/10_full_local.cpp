@@ -201,12 +201,12 @@ int main() {
     // ========================================================================
     stress::separator("1. Ingest episode (local LLM + local ONNX)");
 
-    auto r1 = g.add_episode(
-        "ep1",
-        "Alice is a software engineer who works at Acme Corp. "
+    auto r1 = g.add_episode({
+        .name = "ep1",
+        .body = "Alice is a software engineer who works at Acme Corp. "
         "She specializes in graph databases and uses Kuzu for her projects.",
-        "test", now, graphiti::EpisodeType::message, "local_test"
-    );
+        .source_description = "test", .reference_time = now, .group_id = "local_test",
+    });
     stress::test("add_episode succeeded", r1.has_value());
     if (r1.has_value()) {
         stress::test("extracted nodes", !r1.value().nodes.empty());
@@ -221,13 +221,13 @@ int main() {
     // ========================================================================
     stress::separator("2. Ingest second episode (dedup test)");
 
-    auto r2 = g.add_episode(
-        "ep2",
-        "Bob is Alice's colleague at Acme Corp. "
+    auto r2 = g.add_episode({
+        .name = "ep2",
+        .body = "Bob is Alice's colleague at Acme Corp. "
         "Bob is working on a new search feature using embeddings.",
-        "test", now + std::chrono::seconds(60),
-        graphiti::EpisodeType::message, "local_test"
-    );
+        .source_description = "test", .reference_time = now + std::chrono::seconds(60),
+        .group_id = "local_test",
+    });
     stress::test("second episode succeeded", r2.has_value());
     if (r2.has_value()) {
         std::cout << "  Nodes: ";
@@ -240,7 +240,7 @@ int main() {
     // ========================================================================
     stress::separator("3. Search (local ONNX cosine + local LLM rerank)");
 
-    auto search = g.search("graph database engineer", "local_test");
+    auto search = g.search({.query = "graph database engineer", .group_id = "local_test"});
     stress::test("search succeeded", search.has_value());
     if (search.has_value()) {
         stress::test("search returned results", !search.value().empty());
@@ -252,7 +252,7 @@ int main() {
     // ========================================================================
     stress::separator("4. Search for Bob");
 
-    auto search2 = g.search("Bob embeddings", "local_test");
+    auto search2 = g.search({.query = "Bob embeddings", .group_id = "local_test"});
     stress::test("bob search succeeded", search2.has_value());
     if (search2.has_value()) {
         for (auto& e : search2.value()) {

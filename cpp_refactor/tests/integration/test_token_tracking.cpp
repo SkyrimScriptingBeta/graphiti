@@ -31,10 +31,13 @@ TEST_CASE("token_tracker: tracks usage after add_episode", "[integration][token_
     CHECK(g.token_tracker().get_total_calls() == 0);
 
     auto now = std::chrono::system_clock::now();
-    auto r = g.add_episode(
-        "ep1", "Alice works at Acme Corp as an engineer.", "chat", now,
-        EpisodeType::message, "test_group"
-    );
+    auto r = g.add_episode({
+        .name = "ep1",
+        .body = "Alice works at Acme Corp as an engineer.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+    });
     REQUIRE(r.has_value());
 
     // After ingestion: tokens should be recorded
@@ -68,20 +71,25 @@ TEST_CASE("token_tracker: accumulates across multiple episodes", "[integration][
 
     auto now = std::chrono::system_clock::now();
 
-    auto r1 = g.add_episode(
-        "ep1", "Bob is a teacher in Portland.", "chat", now,
-        EpisodeType::message, "test_group"
-    );
+    auto r1 = g.add_episode({
+        .name = "ep1",
+        .body = "Bob is a teacher in Portland.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+    });
     REQUIRE(r1.has_value());
 
     auto after_first = g.token_tracker().get_total_usage();
     auto calls_first = g.token_tracker().get_total_calls();
 
-    auto r2 = g.add_episode(
-        "ep2", "Carol is a doctor in Seattle.", "chat",
-        now + std::chrono::seconds(60),
-        EpisodeType::message, "test_group"
-    );
+    auto r2 = g.add_episode({
+        .name = "ep2",
+        .body = "Carol is a doctor in Seattle.",
+        .source_description = "chat",
+        .reference_time = now + std::chrono::seconds(60),
+        .group_id = "test_group",
+    });
     REQUIRE(r2.has_value());
 
     auto after_second = g.token_tracker().get_total_usage();

@@ -66,19 +66,19 @@ int main() {
         g.build_indices();
 
         // Ingest 3 related episodes to create a connected entity graph
-        auto r1 = g.add_episode(
-            "ep1", "Alice works at Acme Corp as a software engineer in Denver.",
-            "chat", now, EpisodeType::message, "community_test");
+        auto r1 = g.add_episode({
+            .name = "ep1", .body = "Alice works at Acme Corp as a software engineer in Denver.",
+            .source_description = "chat", .reference_time = now, .group_id = "community_test"});
         stress::test("episode 1 ingest", r1.has_value());
 
-        auto r2 = g.add_episode(
-            "ep2", "Bob also works at Acme Corp. Alice and Bob are on the same team.",
-            "chat", now + std::chrono::seconds(60), EpisodeType::message, "community_test");
+        auto r2 = g.add_episode({
+            .name = "ep2", .body = "Bob also works at Acme Corp. Alice and Bob are on the same team.",
+            .source_description = "chat", .reference_time = now + std::chrono::seconds(60), .group_id = "community_test"});
         stress::test("episode 2 ingest", r2.has_value());
 
-        auto r3 = g.add_episode(
-            "ep3", "Charlie is the CEO of Acme Corp. He hired Alice and Bob.",
-            "chat", now + std::chrono::seconds(120), EpisodeType::message, "community_test");
+        auto r3 = g.add_episode({
+            .name = "ep3", .body = "Charlie is the CEO of Acme Corp. He hired Alice and Bob.",
+            .source_description = "chat", .reference_time = now + std::chrono::seconds(120), .group_id = "community_test"});
         stress::test("episode 3 ingest", r3.has_value());
 
         // Rebuild indices (FTS)
@@ -113,10 +113,10 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        g.add_episode("ep1", "Alice works at Acme Corp.",
-            "chat", now, EpisodeType::message, "search_test");
-        g.add_episode("ep2", "Bob works at Acme Corp with Alice.",
-            "chat", now + std::chrono::seconds(60), EpisodeType::message, "search_test");
+        g.add_episode({.name = "ep1", .body = "Alice works at Acme Corp.",
+            .source_description = "chat", .reference_time = now, .group_id = "search_test"});
+        g.add_episode({.name = "ep2", .body = "Bob works at Acme Corp with Alice.",
+            .source_description = "chat", .reference_time = now + std::chrono::seconds(60), .group_id = "search_test"});
 
         g.build_indices();
         auto communities = g.build_communities({"search_test"});
@@ -125,10 +125,10 @@ int main() {
         // Rebuild FTS after community creation
         g.build_indices();
 
-        auto search = g.search_advanced(
-            "Who works at Acme?",
-            community_hybrid_search_rrf(),
-            "search_test");
+        auto search = g.search_advanced({
+            .query = "Who works at Acme?",
+            .config = community_hybrid_search_rrf(),
+            .group_id = "search_test"});
         stress::test("community search succeeds", search.has_value());
 
         if (search.has_value()) {
@@ -139,10 +139,10 @@ int main() {
         }
 
         // Also try community MMR search
-        auto search_mmr = g.search_advanced(
-            "Acme Corp employees",
-            community_hybrid_search_mmr(),
-            "search_test");
+        auto search_mmr = g.search_advanced({
+            .query = "Acme Corp employees",
+            .config = community_hybrid_search_mmr(),
+            .group_id = "search_test"});
         stress::test("community MMR search succeeds", search_mmr.has_value());
     }
 
@@ -153,8 +153,8 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        g.add_episode("ep1", "Alice and Bob work at Acme Corp.",
-            "chat", now, EpisodeType::message, "rebuild_test");
+        g.add_episode({.name = "ep1", .body = "Alice and Bob work at Acme Corp.",
+            .source_description = "chat", .reference_time = now, .group_id = "rebuild_test"});
         g.build_indices();
 
         // First build
@@ -163,9 +163,9 @@ int main() {
         size_t first_count = first.has_value() ? first.value().first.size() : 0;
 
         // Add more data
-        g.add_episode("ep2",
-            "Charlie and Diana also joined Acme Corp. They work with Alice.",
-            "chat", now + std::chrono::seconds(60), EpisodeType::message, "rebuild_test");
+        g.add_episode({.name = "ep2",
+            .body = "Charlie and Diana also joined Acme Corp. They work with Alice.",
+            .source_description = "chat", .reference_time = now + std::chrono::seconds(60), .group_id = "rebuild_test"});
         g.build_indices();
 
         // Rebuild — should clear old communities first
@@ -186,29 +186,21 @@ int main() {
         g.build_indices();
 
         // Build initial graph + communities
-        g.add_episode("ep1", "Alice and Bob work at Acme Corp together.",
-            "chat", now, EpisodeType::message, "update_test");
+        g.add_episode({.name = "ep1", .body = "Alice and Bob work at Acme Corp together.",
+            .source_description = "chat", .reference_time = now, .group_id = "update_test"});
         g.build_indices();
         auto communities = g.build_communities({"update_test"});
         stress::test("initial communities built", communities.has_value());
 
         // Now add episode with update_communities=true
-        auto result = g.add_episode(
-            "ep2",
-            "Charlie just joined Acme Corp. He will work with Alice and Bob.",
-            "chat",
-            now + std::chrono::seconds(60),
-            EpisodeType::message,
-            "update_test",
-            "",           // agent_id
-            "",           // source_id
-            "",           // source_context
-            {},           // participant_ids
-            std::nullopt, // custom_instructions
-            std::nullopt, // saga
-            std::nullopt, // saga_previous_episode_uuid
-            true          // update_communities
-        );
+        auto result = g.add_episode({
+            .name = "ep2",
+            .body = "Charlie just joined Acme Corp. He will work with Alice and Bob.",
+            .source_description = "chat",
+            .reference_time = now + std::chrono::seconds(60),
+            .group_id = "update_test",
+            .update_communities = true,
+        });
         stress::test("add_episode with update_communities=true succeeds",
             result.has_value());
 
@@ -227,21 +219,21 @@ int main() {
 
         // Create a dense graph: 5 episodes mentioning 10+ distinct entities
         // all connected through a shared hub
-        g.add_episode("large1",
-            "Alice, Bob, Charlie, and Diana all work at MegaCorp headquarters.",
-            "chat", now, EpisodeType::message, "large_cluster");
-        g.add_episode("large2",
-            "Eve, Frank, and Grace also work at MegaCorp. Eve reports to Alice.",
-            "chat", now + std::chrono::seconds(30), EpisodeType::message, "large_cluster");
-        g.add_episode("large3",
-            "Hank and Iris joined MegaCorp last week. They work with Bob and Charlie.",
-            "chat", now + std::chrono::seconds(60), EpisodeType::message, "large_cluster");
-        g.add_episode("large4",
-            "Jack is the CEO of MegaCorp. Diana, Eve, and Frank report to Jack.",
-            "chat", now + std::chrono::seconds(90), EpisodeType::message, "large_cluster");
-        g.add_episode("large5",
-            "MegaCorp is headquartered in San Francisco. All employees work there.",
-            "chat", now + std::chrono::seconds(120), EpisodeType::message, "large_cluster");
+        g.add_episode({.name = "large1",
+            .body = "Alice, Bob, Charlie, and Diana all work at MegaCorp headquarters.",
+            .source_description = "chat", .reference_time = now, .group_id = "large_cluster"});
+        g.add_episode({.name = "large2",
+            .body = "Eve, Frank, and Grace also work at MegaCorp. Eve reports to Alice.",
+            .source_description = "chat", .reference_time = now + std::chrono::seconds(30), .group_id = "large_cluster"});
+        g.add_episode({.name = "large3",
+            .body = "Hank and Iris joined MegaCorp last week. They work with Bob and Charlie.",
+            .source_description = "chat", .reference_time = now + std::chrono::seconds(60), .group_id = "large_cluster"});
+        g.add_episode({.name = "large4",
+            .body = "Jack is the CEO of MegaCorp. Diana, Eve, and Frank report to Jack.",
+            .source_description = "chat", .reference_time = now + std::chrono::seconds(90), .group_id = "large_cluster"});
+        g.add_episode({.name = "large5",
+            .body = "MegaCorp is headquartered in San Francisco. All employees work there.",
+            .source_description = "chat", .reference_time = now + std::chrono::seconds(120), .group_id = "large_cluster"});
 
         g.build_indices();
 
@@ -269,13 +261,13 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        g.add_episode("special1",
-            "O'Brien works at Acme & Associates LLC. "
+        g.add_episode({.name = "special1",
+            .body = "O'Brien works at Acme & Associates LLC. "
             "His colleague \"Bob\" (also known as B.J.) is there too.",
-            "chat", now, EpisodeType::message, "special_chars");
-        g.add_episode("special2",
-            "O'Brien and \"Bob\" collaborate on the Q&A system at Acme & Associates.",
-            "chat", now + std::chrono::seconds(60), EpisodeType::message, "special_chars");
+            .source_description = "chat", .reference_time = now, .group_id = "special_chars"});
+        g.add_episode({.name = "special2",
+            .body = "O'Brien and \"Bob\" collaborate on the Q&A system at Acme & Associates.",
+            .source_description = "chat", .reference_time = now + std::chrono::seconds(60), .group_id = "special_chars"});
 
         g.build_indices();
 
@@ -295,10 +287,10 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        g.add_episode("mg1", "Alice works at Acme Corp.",
-            "chat", now, EpisodeType::message, "group_a");
-        g.add_episode("mg2", "Bob works at TechCo.",
-            "chat", now, EpisodeType::message, "group_b");
+        g.add_episode({.name = "mg1", .body = "Alice works at Acme Corp.",
+            .source_description = "chat", .reference_time = now, .group_id = "group_a"});
+        g.add_episode({.name = "mg2", .body = "Bob works at TechCo.",
+            .source_description = "chat", .reference_time = now, .group_id = "group_b"});
 
         g.build_indices();
 
@@ -330,8 +322,8 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        g.add_episode("auto1", "Alice works at Acme Corp.",
-            "chat", now, EpisodeType::message, "auto_group");
+        g.add_episode({.name = "auto1", .body = "Alice works at Acme Corp.",
+            .source_description = "chat", .reference_time = now, .group_id = "auto_group"});
         g.build_indices();
 
         // Empty group_ids = auto-detect all groups
@@ -352,14 +344,13 @@ int main() {
         g.build_indices();
 
         for (int cycle = 0; cycle < 3; ++cycle) {
-            g.add_episode(
-                std::format("cycle-{}", cycle),
-                std::format("Person_{} works at Company_{} doing Task_{}.",
+            g.add_episode({
+                .name = std::format("cycle-{}", cycle),
+                .body = std::format("Person_{} works at Company_{} doing Task_{}.",
                     cycle, cycle, cycle),
-                "chat",
-                now + std::chrono::seconds(cycle * 60),
-                EpisodeType::message,
-                "rapid_rebuild");
+                .source_description = "chat",
+                .reference_time = now + std::chrono::seconds(cycle * 60),
+                .group_id = "rapid_rebuild"});
 
             g.build_indices();
 
@@ -382,8 +373,8 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        g.add_episode("del1", "Alice works at Acme.",
-            "chat", now, EpisodeType::message, "delete_test");
+        g.add_episode({.name = "del1", .body = "Alice works at Acme.",
+            .source_description = "chat", .reference_time = now, .group_id = "delete_test"});
         g.build_indices();
 
         auto c1 = g.build_communities({"delete_test"});

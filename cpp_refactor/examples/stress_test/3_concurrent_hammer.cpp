@@ -33,8 +33,8 @@ int main() {
         g.build_indices();
 
         // Seed some data first
-        auto r = g.add_episode("seed", "Alice works at Acme Corp. Bob is the CTO.",
-            "test", now, EpisodeType::message, "g");
+        auto r = g.add_episode({.name = "seed", .body = "Alice works at Acme Corp. Bob is the CTO.",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
         stress::test("seed data succeeds", r.has_value());
         g.build_indices();
 
@@ -48,8 +48,8 @@ int main() {
         for (int t = 0; t < NUM_THREADS; ++t) {
             threads.emplace_back([&, t]() {
                 for (int i = 0; i < SEARCHES_PER_THREAD; ++i) {
-                    auto result = g.search(
-                        (i % 2 == 0) ? "Alice" : "Bob", "g");
+                    auto result = g.search({
+                        .query = (i % 2 == 0) ? "Alice" : "Bob", .group_id = "g"});
                     if (result.has_value()) {
                         success_count.fetch_add(1);
                     } else {
@@ -83,14 +83,14 @@ int main() {
         std::vector<std::thread> threads;
         for (int t = 0; t < NUM_THREADS; ++t) {
             threads.emplace_back([&, t]() {
-                auto result = g.add_episode(
-                    std::format("thread-{}", t),
-                    std::format("Person_{} works at Company_{} in City_{}.", t, t, t),
-                    "concurrent test",
-                    now + std::chrono::seconds(t),
-                    EpisodeType::message,
-                    "concurrent_group",
-                    std::format("agent-{}", t));
+                auto result = g.add_episode({
+                    .name = std::format("thread-{}", t),
+                    .body = std::format("Person_{} works at Company_{} in City_{}.", t, t, t),
+                    .source_description = "concurrent test",
+                    .reference_time = now + std::chrono::seconds(t),
+                    .group_id = "concurrent_group",
+                    .agent_id = std::format("agent-{}", t),
+                });
 
                 if (result.has_value()) {
                     success_count.fetch_add(1);
@@ -112,7 +112,7 @@ int main() {
             success_count.load() == NUM_THREADS);
 
         // Verify all data is there
-        auto search = g.search("Person", "concurrent_group", 20);
+        auto search = g.search({.query = "Person", .group_id = "concurrent_group", .num_results = 20});
         if (search.has_value()) {
             std::cout << std::format("    -> search found {} edges after concurrent writes\n",
                 search.value().size());
@@ -129,8 +129,8 @@ int main() {
         g.build_indices();
 
         // Seed data
-        g.add_episode("seed", "Alice is an engineer.", "test", now,
-            EpisodeType::message, "mixed");
+        g.add_episode({.name = "seed", .body = "Alice is an engineer.",
+            .source_description = "test", .reference_time = now, .group_id = "mixed"});
         g.build_indices();
 
         std::atomic<int> read_ok{0};
@@ -143,7 +143,7 @@ int main() {
         for (int t = 0; t < 4; ++t) {
             threads.emplace_back([&]() {
                 for (int i = 0; i < 3; ++i) {
-                    auto r = g.search("Alice", "mixed");
+                    auto r = g.search({.query = "Alice", .group_id = "mixed"});
                     if (r.has_value()) read_ok.fetch_add(1);
                     else errors.fetch_add(1);
                 }
@@ -153,12 +153,12 @@ int main() {
         // 2 writer threads
         for (int t = 0; t < 2; ++t) {
             threads.emplace_back([&, t]() {
-                auto r = g.add_episode(
-                    std::format("mixed-{}", t),
-                    std::format("Bob_{} works at TechCo.", t),
-                    "test",
-                    now + std::chrono::seconds(t + 10),
-                    EpisodeType::message, "mixed");
+                auto r = g.add_episode({
+                    .name = std::format("mixed-{}", t),
+                    .body = std::format("Bob_{} works at TechCo.", t),
+                    .source_description = "test",
+                    .reference_time = now + std::chrono::seconds(t + 10),
+                    .group_id = "mixed"});
                 if (r.has_value()) write_ok.fetch_add(1);
                 else errors.fetch_add(1);
             });

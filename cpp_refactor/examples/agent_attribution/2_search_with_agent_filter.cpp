@@ -41,7 +41,7 @@ int main() {
     std::string query = "Alice";
 
     // 1. No agent filter
-    auto edges_all = g.search(query, "", 10);
+    auto edges_all = g.search({.query = query});
     if (!edges_all.has_value()) {
         std::cerr << "Search error: " << edges_all.error().message << "\n";
         return 1;
@@ -51,7 +51,7 @@ int main() {
     // 2. Scout only
     graphiti::SearchFilters scout_filter;
     scout_filter.agent_ids = {"scout"};
-    auto edges_scout = g.search(query, "", 10, scout_filter);
+    auto edges_scout = g.search({.query = query, .filters = scout_filter});
     if (!edges_scout.has_value()) {
         std::cerr << "Search error: " << edges_scout.error().message << "\n";
         return 1;
@@ -61,7 +61,7 @@ int main() {
     // 3. Analyst only
     graphiti::SearchFilters analyst_filter;
     analyst_filter.agent_ids = {"analyst"};
-    auto edges_analyst = g.search(query, "", 10, analyst_filter);
+    auto edges_analyst = g.search({.query = query, .filters = analyst_filter});
     if (!edges_analyst.has_value()) {
         std::cerr << "Search error: " << edges_analyst.error().message << "\n";
         return 1;

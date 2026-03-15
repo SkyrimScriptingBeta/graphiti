@@ -34,9 +34,9 @@ int main() {
         auto idx = g.build_indices();
         stress::test("build_indices with bad key succeeds (no API needed)", idx.has_value());
 
-        auto result = g.add_episode(
-            "bad-key-ep", "Alice works at Acme.", "test", now,
-            EpisodeType::message, "g");
+        auto result = g.add_episode({
+            .name = "bad-key-ep", .body = "Alice works at Acme.",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
 
         // Should fail gracefully, not crash
         stress::test("add_episode with bad API key returns error", !result.has_value());
@@ -62,9 +62,9 @@ int main() {
         Graphiti g(std::move(config));
         g.build_indices();
 
-        auto result = g.add_episode(
-            "bad-model", "Alice works at Acme.", "test", now,
-            EpisodeType::message, "g");
+        auto result = g.add_episode({
+            .name = "bad-model", .body = "Alice works at Acme.",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
 
         stress::test("add_episode with bad model returns error", !result.has_value());
         if (!result.has_value()) {
@@ -87,9 +87,9 @@ int main() {
         Graphiti g(std::move(config));
         g.build_indices();
 
-        auto result = g.add_episode(
-            "bad-embedder", "Alice works at Acme.", "test", now,
-            EpisodeType::message, "g");
+        auto result = g.add_episode({
+            .name = "bad-embedder", .body = "Alice works at Acme.",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
 
         // LLM extraction might work, but embedding will fail
         // The pipeline should handle this gracefully
@@ -122,24 +122,24 @@ int main() {
         g.build_indices();
 
         // Succeed first
-        auto r1 = g.add_episode("ok-1", "Alice works at Acme.", "test", now,
-            EpisodeType::message, "g");
+        auto r1 = g.add_episode({.name = "ok-1", .body = "Alice works at Acme.",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
         stress::test("first episode succeeds", r1.has_value());
 
         // Force an error by searching with empty group (should work actually)
         // Let's try something that might trigger an error
         SearchFilters nasty_filter;
         nasty_filter.agent_ids = {"agent' OR 1=1 OR '"};
-        auto bad_search = g.search("Alice", "g", 10, nasty_filter);
+        auto bad_search = g.search({.query = "Alice", .group_id = "g", .filters = nasty_filter});
         std::cout << std::format("    -> nasty search: {}\n",
             bad_search.has_value() ? "ok" : "error");
 
         // Now try a normal operation — should still work
-        auto r2 = g.add_episode("ok-2", "Bob is the CTO.", "test",
-            now + std::chrono::seconds(60), EpisodeType::message, "g");
+        auto r2 = g.add_episode({.name = "ok-2", .body = "Bob is the CTO.",
+            .source_description = "test", .reference_time = now + std::chrono::seconds(60), .group_id = "g"});
         stress::test("normal operation after error still works", r2.has_value());
 
-        auto normal_search = g.search("Alice", "g");
+        auto normal_search = g.search({.query = "Alice", .group_id = "g"});
         stress::test("normal search after error works",
             normal_search.has_value() && !normal_search.value().empty());
     }
@@ -180,8 +180,8 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        g.add_episode("ep", "Alice works at Acme.", "test", now,
-            EpisodeType::message, "g");
+        g.add_episode({.name = "ep", .body = "Alice works at Acme.",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
         g.build_indices();
 
         // Filter with epoch time (1970-01-01)
@@ -189,7 +189,7 @@ int main() {
         epoch_filter.created_at = DateFilterClause{
             {{DateFilter{.date = TimePoint{}, .op = ComparisonOp::gte}}}
         };
-        auto r1 = g.search("Alice", "g", 10, epoch_filter);
+        auto r1 = g.search({.query = "Alice", .group_id = "g", .filters = epoch_filter});
         stress::test("epoch time filter doesn't crash",
             true);  // didn't crash = pass
         if (r1.has_value()) {
@@ -203,7 +203,7 @@ int main() {
         future_filter.created_at = DateFilterClause{
             {{DateFilter{.date = far_future, .op = ComparisonOp::lte}}}
         };
-        auto r2 = g.search("Alice", "g", 10, future_filter);
+        auto r2 = g.search({.query = "Alice", .group_id = "g", .filters = future_filter});
         stress::test("far-future filter doesn't crash", true);
         if (r2.has_value()) {
             std::cout << std::format("    -> {} results with future filter\n",
@@ -215,7 +215,7 @@ int main() {
         null_filter.expired_at = DateFilterClause{
             {{DateFilter{.op = ComparisonOp::is_null}}}
         };
-        auto r3 = g.search("Alice", "g", 10, null_filter);
+        auto r3 = g.search({.query = "Alice", .group_id = "g", .filters = null_filter});
         stress::test("IS NULL filter doesn't crash", true);
         if (r3.has_value()) {
             std::cout << std::format("    -> {} results with IS NULL filter\n",
@@ -231,7 +231,7 @@ int main() {
         compound.expired_at = DateFilterClause{
             {{DateFilter{.op = ComparisonOp::is_null}}}
         };
-        auto r4 = g.search("Alice", "g", 10, compound);
+        auto r4 = g.search({.query = "Alice", .group_id = "g", .filters = compound});
         stress::test("compound temporal filter doesn't crash", true);
         if (r4.has_value()) {
             std::cout << std::format("    -> {} results with compound filter\n",
@@ -246,10 +246,10 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        g.add_episode("ep", "Alice works at Acme.", "test", now,
-            EpisodeType::message, "g");
+        g.add_episode({.name = "ep", .body = "Alice works at Acme.",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
 
-        auto result = g.search("Alice", "g", 0);
+        auto result = g.search({.query = "Alice", .group_id = "g", .num_results = 0});
         stress::test("search with num_results=0 doesn't crash", true);
         if (result.has_value()) {
             std::cout << std::format("    -> {} results\n", result.value().size());
@@ -265,10 +265,10 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        g.add_episode("ep", "Alice works at Acme.", "test", now,
-            EpisodeType::message, "g");
+        g.add_episode({.name = "ep", .body = "Alice works at Acme.",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
 
-        auto result = g.search("Alice", "g", -1);
+        auto result = g.search({.query = "Alice", .group_id = "g", .num_results = -1});
         stress::test("search with num_results=-1 doesn't crash", true);
         if (result.has_value()) {
             std::cout << std::format("    -> {} results\n", result.value().size());
@@ -292,10 +292,10 @@ int main() {
         Graphiti g2(std::move(c2));
         g2.build_indices();
 
-        auto r1 = g1.add_episode("inst1", "Alice from instance 1.", "test", now,
-            EpisodeType::message, "g1");
-        auto r2 = g2.add_episode("inst2", "Bob from instance 2.", "test", now,
-            EpisodeType::message, "g2");
+        auto r1 = g1.add_episode({.name = "inst1", .body = "Alice from instance 1.",
+            .source_description = "test", .reference_time = now, .group_id = "g1"});
+        auto r2 = g2.add_episode({.name = "inst2", .body = "Bob from instance 2.",
+            .source_description = "test", .reference_time = now, .group_id = "g2"});
 
         stress::test("two instances don't interfere", r1.has_value() && r2.has_value());
     }

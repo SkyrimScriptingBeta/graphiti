@@ -35,7 +35,7 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        auto result = g.search("hello", "test_group");
+        auto result = g.search({.query = "hello", .group_id = "test_group"});
         stress::test("search on empty graph returns ok",
             result.has_value());
         stress::test("search on empty graph returns 0 results",
@@ -65,9 +65,9 @@ int main() {
         g.build_indices();
 
         // Ingest something
-        auto add = g.add_episode(
-            "ep1", "Alice works at Acme Corp.",
-            "test", now, EpisodeType::message, "doomed_group");
+        auto add = g.add_episode({
+            .name = "ep1", .body = "Alice works at Acme Corp.",
+            .source_description = "test", .reference_time = now, .group_id = "doomed_group"});
         stress::test("add_episode to doomed_group succeeds", add.has_value());
 
         // Delete the group
@@ -75,7 +75,7 @@ int main() {
         stress::test("delete_group succeeds", del.has_value());
 
         // Search the deleted group — should return empty, not error
-        auto search = g.search("Alice", "doomed_group");
+        auto search = g.search({.query = "Alice", .group_id = "doomed_group"});
         stress::test("search deleted group returns ok", search.has_value());
         stress::test("search deleted group returns 0 results",
             search.has_value() && search.value().empty());
@@ -88,9 +88,9 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        auto result = g.add_episode(
-            "empty-ep", "",
-            "test", now, EpisodeType::message, "g");
+        auto result = g.add_episode({
+            .name = "empty-ep", .body = "",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
 
         // Should either succeed with 0 entities or return an error — not crash
         bool didnt_crash = true;
@@ -110,9 +110,9 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        auto result = g.add_episode(
-            "", "Alice works at Acme.",
-            "test", now, EpisodeType::message, "g");
+        auto result = g.add_episode({
+            .name = "", .body = "Alice works at Acme.",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
 
         bool didnt_crash = true;
         stress::test("empty name doesn't crash", didnt_crash);
@@ -137,9 +137,9 @@ int main() {
             long_body += std::format("Person_{} works at Company_{} in City_{}. ", i, i, i);
         }
 
-        auto result = g.add_episode(
-            "long-ep", long_body,
-            "test", now, EpisodeType::message, "g");
+        auto result = g.add_episode({
+            .name = "long-ep", .body = long_body,
+            .source_description = "test", .reference_time = now, .group_id = "g"});
 
         stress::test("long body doesn't crash", true);
         if (result.has_value()) {
@@ -158,7 +158,7 @@ int main() {
         g.build_indices();
 
         std::vector<RawEpisode> empty_episodes;
-        auto result = g.add_episode_bulk(empty_episodes);
+        auto result = g.add_episode_bulk({.episodes = empty_episodes});
         stress::test("empty bulk doesn't crash", true);
         stress::test("empty bulk returns ok", result.has_value());
         if (result.has_value()) {
@@ -181,7 +181,7 @@ int main() {
             .reference_time = now,
         }};
 
-        auto result = g.add_episode_bulk(single, "g");
+        auto result = g.add_episode_bulk({.episodes = single, .group_id = "g"});
         stress::test("single-item bulk doesn't crash", true);
         if (result.has_value()) {
             std::cout << std::format("    -> {} episodes, {} nodes, {} edges\n",
@@ -204,10 +204,10 @@ int main() {
         g.build_indices();
 
         // Add some data first
-        g.add_episode("ep", "Alice works at Acme.", "test", now,
-            EpisodeType::message, "g");
+        g.add_episode({.name = "ep", .body = "Alice works at Acme.",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
 
-        auto result = g.search("", "g");
+        auto result = g.search({.query = "", .group_id = "g"});
         stress::test("empty query doesn't crash", true);
         if (result.has_value()) {
             std::cout << std::format("    -> {} results\n", result.value().size());
@@ -223,8 +223,8 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        g.add_episode("ep", "Alice works at Acme Corp.", "test", now,
-            EpisodeType::message, "g");
+        g.add_episode({.name = "ep", .body = "Alice works at Acme Corp.",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
 
         std::vector<std::pair<std::string, std::string>> queries = {
             {"single-quote", "Alice's job"},
@@ -242,7 +242,7 @@ int main() {
         };
 
         for (auto& [label, query] : queries) {
-            auto result = g.search(query, "g");
+            auto result = g.search({.query = query, .group_id = "g"});
             stress::test(
                 std::format("search '{}' doesn't crash", label),
                 true);  // If we got here, it didn't crash
@@ -261,14 +261,14 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        g.add_episode("ep", "Alice works at Acme Corp as an engineer.",
-            "test", now, EpisodeType::message, "g");
+        g.add_episode({.name = "ep", .body = "Alice works at Acme Corp as an engineer.",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
 
         // Rebuild indices after data — FTS should still work
         auto rebuild = g.build_indices();
         stress::test("rebuild indices after data succeeds", rebuild.has_value());
 
-        auto result = g.search("Alice", "g");
+        auto result = g.search({.query = "Alice", .group_id = "g"});
         stress::test("search after rebuild returns results",
             result.has_value() && !result.value().empty());
     }
@@ -280,8 +280,8 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        g.add_episode("ep", "Alice works at Acme Corp as an engineer.",
-            "test", now, EpisodeType::message, "g");
+        g.add_episode({.name = "ep", .body = "Alice works at Acme Corp as an engineer.",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
         g.build_indices(); // rebuild for FTS
 
         // Try all the recipe configs
@@ -300,7 +300,7 @@ int main() {
         };
 
         for (auto& [name, cfg] : recipes) {
-            auto result = g.search_advanced("Alice", cfg, "g");
+            auto result = g.search_advanced({.query = "Alice", .config = cfg, .group_id = "g"});
             stress::test(
                 std::format("search_advanced {} doesn't crash", name),
                 true);

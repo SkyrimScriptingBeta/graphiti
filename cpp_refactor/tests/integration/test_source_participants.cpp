@@ -27,18 +27,16 @@ TEST_CASE("source_id and participant_ids: set on episode", "[integration][source
 
     auto now = std::chrono::system_clock::now();
 
-    auto result = g.add_episode(
-        "ep1",
-        "Alice told Bob about the new Kuzu database.",
-        "slack message",
-        now,
-        EpisodeType::message,
-        "test_group",
-        "recorder-agent",  // agent_id
-        "alice",           // source_id (Alice said it)
-        "",                // source_context
-        {"alice", "bob"}   // participant_ids (Alice and Bob were present)
-    );
+    auto result = g.add_episode({
+        .name = "ep1",
+        .body = "Alice told Bob about the new Kuzu database.",
+        .source_description = "slack message",
+        .reference_time = now,
+        .group_id = "test_group",
+        .agent_id = "recorder-agent",
+        .source_id = "alice",
+        .participant_ids = {"alice", "bob"},
+    });
     REQUIRE(result.has_value());
 
     auto& ep = result.value().episode;
@@ -56,18 +54,16 @@ TEST_CASE("source_id and participant_ids: propagated to entities", "[integration
 
     auto now = std::chrono::system_clock::now();
 
-    auto result = g.add_episode(
-        "ep1",
-        "Alice works at Acme Corp as a software engineer.",
-        "chat",
-        now,
-        EpisodeType::message,
-        "test_group",
-        "agent-1",        // agent_id
-        "alice",          // source_id
-        "",               // source_context
-        {"alice", "bob"}  // participant_ids
-    );
+    auto result = g.add_episode({
+        .name = "ep1",
+        .body = "Alice works at Acme Corp as a software engineer.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+        .agent_id = "agent-1",
+        .source_id = "alice",
+        .participant_ids = {"alice", "bob"},
+    });
     REQUIRE(result.has_value());
 
     auto& nodes = result.value().nodes;
@@ -110,18 +106,16 @@ TEST_CASE("source_id and participant_ids: propagated to edges", "[integration][s
 
     auto now = std::chrono::system_clock::now();
 
-    auto result = g.add_episode(
-        "ep1",
-        "Alice works at Acme Corp. Bob also works at Acme Corp.",
-        "chat",
-        now,
-        EpisodeType::message,
-        "test_group",
-        "agent-1",
-        "alice",
-        "",
-        {"alice", "bob"}
-    );
+    auto result = g.add_episode({
+        .name = "ep1",
+        .body = "Alice works at Acme Corp. Bob also works at Acme Corp.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+        .agent_id = "agent-1",
+        .source_id = "alice",
+        .participant_ids = {"alice", "bob"},
+    });
     REQUIRE(result.has_value());
 
     auto& edges = result.value().edges;
@@ -142,19 +136,29 @@ TEST_CASE("source_id and participant_ids: search filter by source_ids", "[integr
     auto now = std::chrono::system_clock::now();
 
     // Episode from Alice
-    auto r1 = g.add_episode(
-        "ep1", "Alice mentioned that Kuzu is fast.",
-        "chat", now, EpisodeType::message,
-        "test_group", "agent-1", "alice", "", {"alice", "bob"}
-    );
+    auto r1 = g.add_episode({
+        .name = "ep1",
+        .body = "Alice mentioned that Kuzu is fast.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+        .agent_id = "agent-1",
+        .source_id = "alice",
+        .participant_ids = {"alice", "bob"},
+    });
     REQUIRE(r1.has_value());
 
     // Episode from Carol
-    auto r2 = g.add_episode(
-        "ep2", "Carol said that Neo4j has a large community.",
-        "chat", now + std::chrono::seconds(60), EpisodeType::message,
-        "test_group", "agent-1", "carol", "", {"carol", "dave"}
-    );
+    auto r2 = g.add_episode({
+        .name = "ep2",
+        .body = "Carol said that Neo4j has a large community.",
+        .source_description = "chat",
+        .reference_time = now + std::chrono::seconds(60),
+        .group_id = "test_group",
+        .agent_id = "agent-1",
+        .source_id = "carol",
+        .participant_ids = {"carol", "dave"},
+    });
     REQUIRE(r2.has_value());
 
     REQUIRE(g.build_indices().has_value());
@@ -162,7 +166,7 @@ TEST_CASE("source_id and participant_ids: search filter by source_ids", "[integr
     // Search filtered by source_id "alice"
     SearchFilters filters;
     filters.source_ids = {"alice"};
-    auto search = g.search("database", "test_group", 10, filters);
+    auto search = g.search({.query = "database", .group_id = "test_group", .filters = filters});
     REQUIRE(search.has_value());
 
     // Results should only include edges with source_ids containing "alice"
@@ -183,11 +187,16 @@ TEST_CASE("source_id and participant_ids: search filter by participant_ids", "[i
     auto now = std::chrono::system_clock::now();
 
     // Episode with Alice and Bob present
-    auto r1 = g.add_episode(
-        "ep1", "Discussed project plans for Kuzu integration.",
-        "chat", now, EpisodeType::message,
-        "test_group", "agent-1", "alice", "", {"alice", "bob"}
-    );
+    auto r1 = g.add_episode({
+        .name = "ep1",
+        .body = "Discussed project plans for Kuzu integration.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+        .agent_id = "agent-1",
+        .source_id = "alice",
+        .participant_ids = {"alice", "bob"},
+    });
     REQUIRE(r1.has_value());
 
     REQUIRE(g.build_indices().has_value());
@@ -195,7 +204,7 @@ TEST_CASE("source_id and participant_ids: search filter by participant_ids", "[i
     // Search filtered by participant "bob"
     SearchFilters filters;
     filters.participant_ids = {"bob"};
-    auto search = g.search("Kuzu", "test_group", 10, filters);
+    auto search = g.search({.query = "Kuzu", .group_id = "test_group", .filters = filters});
     REQUIRE(search.has_value());
 
     // All results should have "bob" in participant_ids
@@ -216,19 +225,29 @@ TEST_CASE("source_id and participant_ids: dedup merge", "[integration][source_pa
     auto now = std::chrono::system_clock::now();
 
     // Alice says something about Kuzu
-    auto r1 = g.add_episode(
-        "ep1", "Kuzu is an embedded graph database written in C++.",
-        "chat", now, EpisodeType::message,
-        "test_group", "agent-1", "alice", "", {"alice", "bob"}
-    );
+    auto r1 = g.add_episode({
+        .name = "ep1",
+        .body = "Kuzu is an embedded graph database written in C++.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+        .agent_id = "agent-1",
+        .source_id = "alice",
+        .participant_ids = {"alice", "bob"},
+    });
     REQUIRE(r1.has_value());
 
     // Carol says something about Kuzu (should dedup-merge entities)
-    auto r2 = g.add_episode(
-        "ep2", "Kuzu supports Cypher queries and has excellent performance.",
-        "chat", now + std::chrono::seconds(60), EpisodeType::message,
-        "test_group", "agent-1", "carol", "", {"carol", "dave"}
-    );
+    auto r2 = g.add_episode({
+        .name = "ep2",
+        .body = "Kuzu supports Cypher queries and has excellent performance.",
+        .source_description = "chat",
+        .reference_time = now + std::chrono::seconds(60),
+        .group_id = "test_group",
+        .agent_id = "agent-1",
+        .source_id = "carol",
+        .participant_ids = {"carol", "dave"},
+    });
     REQUIRE(r2.has_value());
 
     // After dedup, the "Kuzu" entity should have merged source_ids and participant_ids
@@ -238,7 +257,7 @@ TEST_CASE("source_id and participant_ids: dedup merge", "[integration][source_pa
     SearchConfig cfg;
     cfg.node_config = NodeSearchConfig{};
     cfg.limit = 10;
-    auto search = g.search_advanced("Kuzu database", cfg, "test_group");
+    auto search = g.search_advanced({.query = "Kuzu database", .config = cfg, .group_id = "test_group"});
     REQUIRE(search.has_value());
 
     // Check nodes for merged attribution
@@ -282,11 +301,13 @@ TEST_CASE("source_id and participant_ids: bulk episode per-episode override", "[
         },
     };
 
-    auto result = g.add_episode_bulk(
-        episodes, "test_group", "agent-1"
+    auto result = g.add_episode_bulk({
+        .episodes = episodes,
+        .group_id = "test_group",
+        .agent_id = "agent-1",
         // source_id and participant_ids default to "" and {} at batch level
         // per-episode values from RawEpisode take precedence
-    );
+    });
     REQUIRE(result.has_value());
 
     auto& eps = result.value().episodes;

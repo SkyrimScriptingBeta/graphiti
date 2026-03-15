@@ -27,14 +27,13 @@ TEST_CASE("Graphiti: full add_episode + search", "[integration][e2e]") {
     REQUIRE(indices.has_value());
 
     // Ingest a conversation
-    auto result = g.add_episode(
-        "conversation_1",
-        "Alice: I just started working at Acme Corp as a software engineer.",
-        "chat conversation",
-        std::chrono::system_clock::now(),
-        EpisodeType::message,
-        "test_group"
-    );
+    auto result = g.add_episode({
+        .name = "conversation_1",
+        .body = "Alice: I just started working at Acme Corp as a software engineer.",
+        .source_description = "chat conversation",
+        .reference_time = std::chrono::system_clock::now(),
+        .group_id = "test_group",
+    });
 
     REQUIRE(result.has_value());
     auto& ep = result.value();
@@ -56,7 +55,7 @@ TEST_CASE("Graphiti: full add_episode + search", "[integration][e2e]") {
     CHECK(found_acme);
 
     // Search for relevant facts
-    auto search_result = g.search("Where does Alice work?", "test_group");
+    auto search_result = g.search({.query = "Where does Alice work?", .group_id = "test_group"});
     REQUIRE(search_result.has_value());
 
     INFO("Search returned " << search_result.value().size() << " edges");
@@ -82,21 +81,27 @@ TEST_CASE("Graphiti: multi-episode ingestion", "[integration][e2e]") {
     auto now = std::chrono::system_clock::now();
 
     // Episode 1: Alice at Acme
-    auto r1 = g.add_episode(
-        "ep1", "Alice: I work at Acme Corp in Denver.",
-        "chat", now, EpisodeType::message, "test"
-    );
+    auto r1 = g.add_episode({
+        .name = "ep1",
+        .body = "Alice: I work at Acme Corp in Denver.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test",
+    });
     REQUIRE(r1.has_value());
 
     // Episode 2: Bob at Acme
-    auto r2 = g.add_episode(
-        "ep2", "Bob: I also work at Acme Corp. Alice and I are on the same team.",
-        "chat", now + std::chrono::seconds(60), EpisodeType::message, "test"
-    );
+    auto r2 = g.add_episode({
+        .name = "ep2",
+        .body = "Bob: I also work at Acme Corp. Alice and I are on the same team.",
+        .source_description = "chat",
+        .reference_time = now + std::chrono::seconds(60),
+        .group_id = "test",
+    });
     REQUIRE(r2.has_value());
 
     // Search should find facts about Acme
-    auto results = g.search("Who works at Acme Corp?", "test");
+    auto results = g.search({.query = "Who works at Acme Corp?", .group_id = "test"});
     REQUIRE(results.has_value());
     CHECK(!results.value().empty());
 }

@@ -58,14 +58,14 @@ TEST_CASE("Custom types: entities get labels from type_defs", "[integration][cus
     auto type_defs = make_person_org_types();
     auto now = std::chrono::system_clock::now();
 
-    auto result = g.add_episode(
-        "ep1",
-        "Alice Smith works as an engineer at Acme Corp.",
-        "chat", now, EpisodeType::message,
-        "test_group", "", "", "", {},
-        std::nullopt, std::nullopt, std::nullopt,
-        false, &type_defs
-    );
+    auto result = g.add_episode({
+        .name = "ep1",
+        .body = "Alice Smith works as an engineer at Acme Corp.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+        .type_defs = &type_defs,
+    });
     REQUIRE(result.has_value());
 
     auto& nodes = result.value().nodes;
@@ -94,14 +94,14 @@ TEST_CASE("Custom types: attributes populated for typed entities", "[integration
     auto type_defs = make_person_org_types();
     auto now = std::chrono::system_clock::now();
 
-    auto result = g.add_episode(
-        "ep1",
-        "Alice Smith works as a software engineer at Acme Corp in the technology industry.",
-        "chat", now, EpisodeType::message,
-        "test_group", "", "", "", {},
-        std::nullopt, std::nullopt, std::nullopt,
-        false, &type_defs
-    );
+    auto result = g.add_episode({
+        .name = "ep1",
+        .body = "Alice Smith works as a software engineer at Acme Corp in the technology industry.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+        .type_defs = &type_defs,
+    });
     REQUIRE(result.has_value());
 
     // Check that at least one node has attributes
@@ -124,14 +124,14 @@ TEST_CASE("Custom types: edge types guide extraction", "[integration][custom_typ
     auto type_defs = make_person_org_types();
     auto now = std::chrono::system_clock::now();
 
-    auto result = g.add_episode(
-        "ep1",
-        "Alice works at Acme Corp. Bob also works at Acme Corp. Alice knows Bob.",
-        "chat", now, EpisodeType::message,
-        "test_group", "", "", "", {},
-        std::nullopt, std::nullopt, std::nullopt,
-        false, &type_defs
-    );
+    auto result = g.add_episode({
+        .name = "ep1",
+        .body = "Alice works at Acme Corp. Bob also works at Acme Corp. Alice knows Bob.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+        .type_defs = &type_defs,
+    });
     REQUIRE(result.has_value());
 
     auto& edges = result.value().edges;
@@ -163,14 +163,14 @@ exclude_entity_types:
     auto type_defs = std::move(result.value());
 
     auto now = std::chrono::system_clock::now();
-    auto ep = g.add_episode(
-        "ep1",
-        "Alice mentioned the Grand Canyon during her conversation with Bob.",
-        "chat", now, EpisodeType::message,
-        "test_group", "", "", "", {},
-        std::nullopt, std::nullopt, std::nullopt,
-        false, &type_defs
-    );
+    auto ep = g.add_episode({
+        .name = "ep1",
+        .body = "Alice mentioned the Grand Canyon during her conversation with Bob.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+        .type_defs = &type_defs,
+    });
     REQUIRE(ep.has_value());
 
     // With Entity excluded, nodes classified as generic Entity should be filtered
@@ -190,14 +190,14 @@ TEST_CASE("Custom types: search by label works with custom types", "[integration
     auto type_defs = make_person_org_types();
     auto now = std::chrono::system_clock::now();
 
-    auto ep = g.add_episode(
-        "ep1",
-        "Alice Smith is a software engineer at Acme Corp.",
-        "chat", now, EpisodeType::message,
-        "test_group", "", "", "", {},
-        std::nullopt, std::nullopt, std::nullopt,
-        false, &type_defs
-    );
+    auto ep = g.add_episode({
+        .name = "ep1",
+        .body = "Alice Smith is a software engineer at Acme Corp.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+        .type_defs = &type_defs,
+    });
     REQUIRE(ep.has_value());
 
     // Rebuild indices after ingestion
@@ -205,7 +205,7 @@ TEST_CASE("Custom types: search by label works with custom types", "[integration
     REQUIRE(rebuild.has_value());
 
     // Search should work normally
-    auto search_result = g.search("Alice", "test_group");
+    auto search_result = g.search({.query = "Alice", .group_id = "test_group"});
     REQUIRE(search_result.has_value());
     // Just verify search doesn't error out with custom-typed nodes
 }

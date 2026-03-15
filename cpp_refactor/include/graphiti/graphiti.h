@@ -48,6 +48,63 @@ struct AddBulkEpisodeResults {
     std::vector<EntityEdge> edges;
 };
 
+// Options for add_episode(). Use designated initializers:
+//   g.add_episode({.name = "ep1", .body = "...", .source_description = "chat",
+//                  .reference_time = now, .group_id = "my_group"})
+struct AddEpisodeOptions {
+    std::string name;
+    std::string body;
+    std::string source_description;
+    TimePoint reference_time;
+    EpisodeType source = EpisodeType::message;
+    std::string group_id;
+    std::string agent_id;
+    std::string source_id;
+    std::string source_context;
+    std::vector<std::string> participant_ids;
+    std::optional<std::string> custom_instructions;
+    std::optional<std::string> saga;
+    std::optional<std::string> saga_previous_episode_uuid;
+    bool update_communities = false;
+    const TypeDefinitions* type_defs = nullptr;
+};
+
+// Options for search(). Use designated initializers:
+//   g.search({.query = "Where does Alice work?", .group_id = "my_group"})
+struct SearchOptions {
+    std::string query;
+    std::string group_id;
+    int num_results = 10;
+    std::optional<SearchFilters> filters;
+};
+
+// Options for search_advanced(). Use designated initializers:
+//   g.search_advanced({.query = "...", .config = edge_hybrid_search_rrf(), .group_id = "g"})
+struct SearchAdvancedOptions {
+    std::string query;
+    SearchConfig config;
+    std::string group_id;
+    std::optional<SearchFilters> filters;
+    std::optional<std::string> center_node_uuid;
+    std::optional<std::vector<std::string>> bfs_origin_node_uuids;
+};
+
+// Options for add_episode_bulk(). Use designated initializers:
+//   g.add_episode_bulk({.episodes = {...}, .group_id = "my_group"})
+// Cross-deduplicates nodes and edges within the batch before graph dedup.
+// NOTE: Skips edge invalidation and community updates for speed.
+struct AddEpisodeBulkOptions {
+    std::vector<RawEpisode> episodes;
+    std::string group_id;
+    std::string agent_id;
+    std::string source_id;
+    std::string source_context;
+    std::vector<std::string> participant_ids;
+    std::optional<std::string> custom_instructions;
+    std::optional<std::string> saga;
+    const TypeDefinitions* type_defs = nullptr;
+};
+
 // Thread safety: All public methods are serialized internally via a mutex.
 // Concurrent calls from multiple threads are safe but will execute sequentially.
 // For maximum throughput with concurrent reads, create separate Graphiti instances
@@ -86,54 +143,13 @@ public:
 
     VoidResult build_indices();
 
-    Result<AddEpisodeResult> add_episode(
-        std::string_view name,
-        std::string_view episode_body,
-        std::string_view source_description,
-        TimePoint reference_time,
-        EpisodeType source = EpisodeType::message,
-        std::string_view group_id = "",
-        std::string_view agent_id = "",
-        std::string_view source_id = "",
-        std::string_view source_context = "",
-        const std::vector<std::string>& participant_ids = {},
-        std::optional<std::string> custom_instructions = std::nullopt,
-        std::optional<std::string> saga = std::nullopt,
-        std::optional<std::string> saga_previous_episode_uuid = std::nullopt,
-        bool update_communities = false,
-        const TypeDefinitions* type_defs = nullptr
-    );
+    Result<AddEpisodeResult> add_episode(AddEpisodeOptions opts);
 
-    Result<std::vector<EntityEdge>> search(
-        std::string_view query,
-        std::string_view group_id = "",
-        int num_results = 10,
-        std::optional<SearchFilters> filters = std::nullopt
-    );
+    Result<std::vector<EntityEdge>> search(SearchOptions opts);
 
-    Result<SearchResults> search_advanced(
-        std::string_view query,
-        SearchConfig config,
-        std::string_view group_id = "",
-        std::optional<SearchFilters> filters = std::nullopt,
-        std::optional<std::string> center_node_uuid = std::nullopt,
-        const std::vector<std::string>* bfs_origin_node_uuids = nullptr
-    );
+    Result<SearchResults> search_advanced(SearchAdvancedOptions opts);
 
-    // Bulk episode ingestion: processes all episodes together for efficiency.
-    // Cross-deduplicates nodes and edges within the batch before graph dedup.
-    // NOTE: Skips edge invalidation and community updates for speed.
-    Result<AddBulkEpisodeResults> add_episode_bulk(
-        const std::vector<RawEpisode>& bulk_episodes,
-        std::string_view group_id = "",
-        std::string_view agent_id = "",
-        std::string_view source_id = "",
-        std::string_view source_context = "",
-        const std::vector<std::string>& participant_ids = {},
-        std::optional<std::string> custom_instructions = std::nullopt,
-        std::optional<std::string> saga = std::nullopt,
-        const TypeDefinitions* type_defs = nullptr
-    );
+    Result<AddBulkEpisodeResults> add_episode_bulk(AddEpisodeBulkOptions opts);
 
     // Build communities: cluster entities via label propagation, then summarize
     // each cluster via LLM. Clears existing communities before rebuilding.

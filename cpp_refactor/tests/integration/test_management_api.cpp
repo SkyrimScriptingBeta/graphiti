@@ -31,16 +31,22 @@ TEST_CASE("retrieve_episodes: basic retrieval", "[integration][management]") {
 
     auto now = std::chrono::system_clock::now();
 
-    auto r1 = g.add_episode(
-        "ep1", "Alice works at Acme Corp.", "chat", now,
-        EpisodeType::message, "test_group"
-    );
+    auto r1 = g.add_episode({
+        .name = "ep1",
+        .body = "Alice works at Acme Corp.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+    });
     REQUIRE(r1.has_value());
 
-    auto r2 = g.add_episode(
-        "ep2", "Bob lives in Denver.", "chat",
-        now + std::chrono::seconds(60), EpisodeType::message, "test_group"
-    );
+    auto r2 = g.add_episode({
+        .name = "ep2",
+        .body = "Bob lives in Denver.",
+        .source_description = "chat",
+        .reference_time = now + std::chrono::seconds(60),
+        .group_id = "test_group",
+    });
     REQUIRE(r2.has_value());
 
     // Retrieve all episodes
@@ -58,11 +64,13 @@ TEST_CASE("retrieve_episodes: respects last_n limit", "[integration][management]
     auto now = std::chrono::system_clock::now();
 
     for (int i = 0; i < 3; ++i) {
-        auto r = g.add_episode(
-            "ep" + std::to_string(i), "Content " + std::to_string(i),
-            "chat", now + std::chrono::seconds(i * 60),
-            EpisodeType::message, "test_group"
-        );
+        auto r = g.add_episode({
+            .name = "ep" + std::to_string(i),
+            .body = "Content " + std::to_string(i),
+            .source_description = "chat",
+            .reference_time = now + std::chrono::seconds(i * 60),
+            .group_id = "test_group",
+        });
         REQUIRE(r.has_value());
     }
 
@@ -80,18 +88,24 @@ TEST_CASE("retrieve_episodes: with saga filter", "[integration][management]") {
     auto now = std::chrono::system_clock::now();
 
     // Add episode with saga
-    auto r1 = g.add_episode(
-        "ep1", "Alice started at Acme.", "chat", now,
-        EpisodeType::message, "test_group", "", "", "", {},
-        std::nullopt, "onboarding"
-    );
+    auto r1 = g.add_episode({
+        .name = "ep1",
+        .body = "Alice started at Acme.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+        .saga = "onboarding",
+    });
     REQUIRE(r1.has_value());
 
     // Add episode without saga
-    auto r2 = g.add_episode(
-        "ep2", "Bob went to the store.", "chat",
-        now + std::chrono::seconds(60), EpisodeType::message, "test_group"
-    );
+    auto r2 = g.add_episode({
+        .name = "ep2",
+        .body = "Bob went to the store.",
+        .source_description = "chat",
+        .reference_time = now + std::chrono::seconds(60),
+        .group_id = "test_group",
+    });
     REQUIRE(r2.has_value());
 
     auto far_future = now + std::chrono::hours(24);
@@ -119,10 +133,13 @@ TEST_CASE("get_nodes_and_edges_by_episode: returns nodes and edges", "[integrati
 
     auto now = std::chrono::system_clock::now();
 
-    auto r = g.add_episode(
-        "ep1", "Alice works at Acme Corp as an engineer.", "chat", now,
-        EpisodeType::message, "test_group"
-    );
+    auto r = g.add_episode({
+        .name = "ep1",
+        .body = "Alice works at Acme Corp as an engineer.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+    });
     REQUIRE(r.has_value());
 
     auto ep_uuid = r.value().episode.uuid;
@@ -148,10 +165,13 @@ TEST_CASE("remove_episode: deletes episode and orphaned entities", "[integration
 
     auto now = std::chrono::system_clock::now();
 
-    auto r = g.add_episode(
-        "ep1", "Alice works at Acme Corp.", "chat", now,
-        EpisodeType::message, "test_group"
-    );
+    auto r = g.add_episode({
+        .name = "ep1",
+        .body = "Alice works at Acme Corp.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+    });
     REQUIRE(r.has_value());
     auto ep_uuid = r.value().episode.uuid;
 
@@ -178,16 +198,22 @@ TEST_CASE("remove_episode: preserves nodes shared with other episodes", "[integr
     auto now = std::chrono::system_clock::now();
 
     // Two episodes mentioning overlapping entities
-    auto r1 = g.add_episode(
-        "ep1", "Alice works at Acme Corp.", "chat", now,
-        EpisodeType::message, "test_group"
-    );
+    auto r1 = g.add_episode({
+        .name = "ep1",
+        .body = "Alice works at Acme Corp.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+    });
     REQUIRE(r1.has_value());
 
-    auto r2 = g.add_episode(
-        "ep2", "Alice also works on the AI team at Acme Corp.", "chat",
-        now + std::chrono::seconds(60), EpisodeType::message, "test_group"
-    );
+    auto r2 = g.add_episode({
+        .name = "ep2",
+        .body = "Alice also works on the AI team at Acme Corp.",
+        .source_description = "chat",
+        .reference_time = now + std::chrono::seconds(60),
+        .group_id = "test_group",
+    });
     REQUIRE(r2.has_value());
 
     auto ep1_uuid = r1.value().episode.uuid;
@@ -240,7 +266,7 @@ TEST_CASE("add_triplet: inserts manual triplet", "[integration][management]") {
 
     // Verify searchable
     REQUIRE(g.build_indices().has_value());
-    auto search_result = g.search("Alice Acme", "test_group");
+    auto search_result = g.search({.query = "Alice Acme", .group_id = "test_group"});
     REQUIRE(search_result.has_value());
     CHECK(!search_result.value().empty());
 }
@@ -253,10 +279,13 @@ TEST_CASE("add_triplet: deduplicates against existing nodes", "[integration][man
     auto now = std::chrono::system_clock::now();
 
     // First: ingest via normal pipeline to create Alice
-    auto r = g.add_episode(
-        "ep1", "Alice is a software engineer.", "chat", now,
-        EpisodeType::message, "test_group"
-    );
+    auto r = g.add_episode({
+        .name = "ep1",
+        .body = "Alice is a software engineer.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+    });
     REQUIRE(r.has_value());
     REQUIRE(!r.value().nodes.empty());
 

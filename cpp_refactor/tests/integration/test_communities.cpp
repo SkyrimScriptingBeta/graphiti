@@ -31,22 +31,31 @@ TEST_CASE("Communities: build_communities after ingest", "[integration][communit
     auto now = std::chrono::system_clock::now();
 
     // Ingest several related episodes to create a connected graph
-    auto r1 = g.add_episode(
-        "ep1", "Alice works at Acme Corp as a software engineer in Denver.",
-        "chat", now, EpisodeType::message, "test_group"
-    );
+    auto r1 = g.add_episode({
+        .name = "ep1",
+        .body = "Alice works at Acme Corp as a software engineer in Denver.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+    });
     REQUIRE(r1.has_value());
 
-    auto r2 = g.add_episode(
-        "ep2", "Bob also works at Acme Corp. Bob and Alice are on the same team.",
-        "chat", now + std::chrono::seconds(60), EpisodeType::message, "test_group"
-    );
+    auto r2 = g.add_episode({
+        .name = "ep2",
+        .body = "Bob also works at Acme Corp. Bob and Alice are on the same team.",
+        .source_description = "chat",
+        .reference_time = now + std::chrono::seconds(60),
+        .group_id = "test_group",
+    });
     REQUIRE(r2.has_value());
 
-    auto r3 = g.add_episode(
-        "ep3", "Charlie is the CEO of Acme Corp. He hired both Alice and Bob.",
-        "chat", now + std::chrono::seconds(120), EpisodeType::message, "test_group"
-    );
+    auto r3 = g.add_episode({
+        .name = "ep3",
+        .body = "Charlie is the CEO of Acme Corp. He hired both Alice and Bob.",
+        .source_description = "chat",
+        .reference_time = now + std::chrono::seconds(120),
+        .group_id = "test_group",
+    });
     REQUIRE(r3.has_value());
 
     // Rebuild FTS indices after ingestion
@@ -84,16 +93,22 @@ TEST_CASE("Communities: community search via search_advanced", "[integration][co
 
     auto now = std::chrono::system_clock::now();
 
-    auto r1 = g.add_episode(
-        "ep1", "Alice is a software engineer at Acme Corp in Denver.",
-        "chat", now, EpisodeType::message, "test_group"
-    );
+    auto r1 = g.add_episode({
+        .name = "ep1",
+        .body = "Alice is a software engineer at Acme Corp in Denver.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+    });
     REQUIRE(r1.has_value());
 
-    auto r2 = g.add_episode(
-        "ep2", "Bob works at Acme Corp too. Alice and Bob collaborate daily.",
-        "chat", now + std::chrono::seconds(60), EpisodeType::message, "test_group"
-    );
+    auto r2 = g.add_episode({
+        .name = "ep2",
+        .body = "Bob works at Acme Corp too. Alice and Bob collaborate daily.",
+        .source_description = "chat",
+        .reference_time = now + std::chrono::seconds(60),
+        .group_id = "test_group",
+    });
     REQUIRE(r2.has_value());
 
     // Rebuild FTS indices
@@ -109,11 +124,11 @@ TEST_CASE("Communities: community search via search_advanced", "[integration][co
     REQUIRE(rebuild.has_value());
 
     // Search using community config
-    auto search_result = g.search_advanced(
-        "Who works at Acme?",
-        community_hybrid_search_rrf(),
-        "test_group"
-    );
+    auto search_result = g.search_advanced({
+        .query = "Who works at Acme?",
+        .config = community_hybrid_search_rrf(),
+        .group_id = "test_group",
+    });
     REQUIRE(search_result.has_value());
 
     auto& results = search_result.value();
@@ -148,10 +163,13 @@ TEST_CASE("Communities: rebuild communities replaces old ones", "[integration][c
 
     auto now = std::chrono::system_clock::now();
 
-    auto r1 = g.add_episode(
-        "ep1", "Alice works at Acme Corp with Bob.",
-        "chat", now, EpisodeType::message, "test_group"
-    );
+    auto r1 = g.add_episode({
+        .name = "ep1",
+        .body = "Alice works at Acme Corp with Bob.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+    });
     REQUIRE(r1.has_value());
 
     // Rebuild FTS indices
@@ -164,10 +182,13 @@ TEST_CASE("Communities: rebuild communities replaces old ones", "[integration][c
     auto first_count = first.value().first.size();
 
     // Add more data
-    auto r2 = g.add_episode(
-        "ep2", "Charlie joined Acme Corp. Charlie, Alice, and Bob work in engineering.",
-        "chat", now + std::chrono::seconds(60), EpisodeType::message, "test_group"
-    );
+    auto r2 = g.add_episode({
+        .name = "ep2",
+        .body = "Charlie joined Acme Corp. Charlie, Alice, and Bob work in engineering.",
+        .source_description = "chat",
+        .reference_time = now + std::chrono::seconds(60),
+        .group_id = "test_group",
+    });
     REQUIRE(r2.has_value());
 
     // Rebuild FTS indices
@@ -195,10 +216,13 @@ TEST_CASE("Communities: update_community during add_episode", "[integration][com
     auto now = std::chrono::system_clock::now();
 
     // Ingest and build initial communities
-    auto r1 = g.add_episode(
-        "ep1", "Alice and Bob work at Acme Corp together.",
-        "chat", now, EpisodeType::message, "test_group"
-    );
+    auto r1 = g.add_episode({
+        .name = "ep1",
+        .body = "Alice and Bob work at Acme Corp together.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "test_group",
+    });
     REQUIRE(r1.has_value());
 
     auto rebuild = g.build_indices();
@@ -208,20 +232,14 @@ TEST_CASE("Communities: update_community during add_episode", "[integration][com
     REQUIRE(communities.has_value());
 
     // Now add a new episode with update_communities=true
-    auto r2 = g.add_episode(
-        "ep2", "Charlie just joined Acme Corp. He will work with Alice and Bob.",
-        "chat", now + std::chrono::seconds(60),
-        EpisodeType::message,
-        "test_group",
-        "",          // agent_id
-        "",          // source_id
-        "",          // source_context
-        {},          // participant_ids
-        std::nullopt, // custom_instructions
-        std::nullopt, // saga
-        std::nullopt, // saga_previous_episode_uuid
-        true         // update_communities
-    );
+    auto r2 = g.add_episode({
+        .name = "ep2",
+        .body = "Charlie just joined Acme Corp. He will work with Alice and Bob.",
+        .source_description = "chat",
+        .reference_time = now + std::chrono::seconds(60),
+        .group_id = "test_group",
+        .update_communities = true,
+    });
     REQUIRE(r2.has_value());
 
     INFO("add_episode with update_communities=true succeeded, "

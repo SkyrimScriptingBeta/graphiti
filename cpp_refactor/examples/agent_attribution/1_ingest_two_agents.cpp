@@ -64,15 +64,13 @@ int main() {
         std::cout << std::format("  [{}/{}] agent={:12s} name=\"{}\"\n",
             i + 1, episodes.size(), ep.agent_id, ep.name);
 
-        auto result = g.add_episode(
-            ep.name,
-            ep.body,
-            ep.source,
-            now + std::chrono::seconds(i * 60), // stagger times
-            graphiti::EpisodeType::message,
-            "",          // group_id (default)
-            ep.agent_id  // agent_id
-        );
+        auto result = g.add_episode({
+            .name = ep.name,
+            .body = ep.body,
+            .source_description = ep.source,
+            .reference_time = now + std::chrono::seconds(i * 60), // stagger times
+            .agent_id = ep.agent_id,
+        });
 
         if (result.has_value()) {
             auto& r = result.value();

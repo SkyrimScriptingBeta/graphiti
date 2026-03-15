@@ -24,12 +24,12 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        auto result = g.add_episode(
-            "unicode-test",
-            "田中太郎は東京のソフトウェアエンジニアです。"
+        auto result = g.add_episode({
+            .name = "unicode-test",
+            .body = "田中太郎は東京のソフトウェアエンジニアです。"
             "彼はAcme株式会社で働いています。"
             "Tanaka Taro is a software engineer in Tokyo.",
-            "test", now, EpisodeType::message, "g");
+            .source_description = "test", .reference_time = now, .group_id = "g"});
 
         stress::test("unicode/CJK episode doesn't crash", true);
         if (result.has_value()) {
@@ -49,12 +49,12 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        auto result = g.add_episode(
-            "emoji-test",
-            "\xF0\x9F\x91\xA9\xe2\x80\x8d\xF0\x9F\x92\xBB Alice loves coding \xF0\x9F\x92\xBB. "
+        auto result = g.add_episode({
+            .name = "emoji-test",
+            .body = "\xF0\x9F\x91\xA9\xe2\x80\x8d\xF0\x9F\x92\xBB Alice loves coding \xF0\x9F\x92\xBB. "
             "She works at \xF0\x9F\x8F\xA2 Acme Corp \xF0\x9F\x8F\xA2 in Denver \xF0\x9F\x8F\x94. "
             "Her boss Bob \xF0\x9F\x91\xA8\xe2\x80\x8d\xF0\x9F\x92\xBC is great!",
-            "test", now, EpisodeType::message, "g");
+            .source_description = "test", .reference_time = now, .group_id = "g"});
 
         stress::test("emoji episode doesn't crash", true);
         if (result.has_value()) {
@@ -62,7 +62,7 @@ int main() {
                 result.value().nodes.size(), result.value().edges.size());
 
             // Search for emoji content
-            auto search = g.search("Alice", "g");
+            auto search = g.search({.query = "Alice", .group_id = "g"});
             stress::test("search after emoji ingest works",
                 search.has_value() && !search.value().empty());
         } else {
@@ -77,9 +77,9 @@ int main() {
         Graphiti g(stress::make_config());
         g.build_indices();
 
-        auto result = g.add_episode(
-            "code-injection",
-            R"(Alice wrote this code:
+        auto result = g.add_episode({
+            .name = "code-injection",
+            .body = R"(Alice wrote this code:
 ```python
 def hack():
     import os; os.system("rm -rf /")
@@ -88,7 +88,7 @@ def hack():
 Bob reviewed it and said "MATCH (n) DETACH DELETE n" is dangerous.
 Carol added a SQL injection: ' OR 1=1; DROP TABLE users; --
 The team uses JSON: {"name": "Alice", "role": "engineer"})",
-            "code review", now, EpisodeType::message, "g");
+            .source_description = "code review", .reference_time = now, .group_id = "g"});
 
         stress::test("code/injection content doesn't crash", true);
         if (result.has_value()) {
@@ -107,20 +107,20 @@ The team uses JSON: {"name": "Alice", "role": "engineer"})",
         g.build_indices();
 
         // Episode 1: Alice works at Acme
-        auto r1 = g.add_episode(
-            "fact-1", "Alice works at Acme Corp as a software engineer.",
-            "test", now, EpisodeType::message, "g");
+        auto r1 = g.add_episode({
+            .name = "fact-1", .body = "Alice works at Acme Corp as a software engineer.",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
         stress::test("first episode succeeds", r1.has_value());
 
         // Episode 2: Alice left Acme and joined Google
-        auto r2 = g.add_episode(
-            "fact-2", "Alice left Acme Corp and now works at Google as a staff engineer.",
-            "test", now + std::chrono::hours(24), EpisodeType::message, "g");
+        auto r2 = g.add_episode({
+            .name = "fact-2", .body = "Alice left Acme Corp and now works at Google as a staff engineer.",
+            .source_description = "test", .reference_time = now + std::chrono::hours(24), .group_id = "g"});
         stress::test("contradictory episode succeeds", r2.has_value());
 
         // Search should reflect the updated state
         g.build_indices();
-        auto search = g.search("Where does Alice work?", "g");
+        auto search = g.search({.query = "Where does Alice work?", .group_id = "g"});
         stress::test("search after contradiction works", search.has_value());
         if (search.has_value()) {
             bool found_google = false;
@@ -145,13 +145,13 @@ The team uses JSON: {"name": "Alice", "role": "engineer"})",
 
         std::string content = "Alice works at Acme Corp as a software engineer.";
 
-        auto r1 = g.add_episode("dup-1", content, "test", now,
-            EpisodeType::message, "g");
+        auto r1 = g.add_episode({.name = "dup-1", .body = content,
+            .source_description = "test", .reference_time = now, .group_id = "g"});
         stress::test("first ingest succeeds", r1.has_value());
         int nodes_1 = r1.has_value() ? r1.value().nodes.size() : 0;
 
-        auto r2 = g.add_episode("dup-2", content, "test",
-            now + std::chrono::seconds(60), EpisodeType::message, "g");
+        auto r2 = g.add_episode({.name = "dup-2", .body = content,
+            .source_description = "test", .reference_time = now + std::chrono::seconds(60), .group_id = "g"});
         stress::test("duplicate ingest succeeds", r2.has_value());
 
         if (r2.has_value()) {
@@ -174,13 +174,13 @@ The team uses JSON: {"name": "Alice", "role": "engineer"})",
         auto start = std::chrono::steady_clock::now();
 
         for (int i = 0; i < 5; ++i) {
-            auto r = g.add_episode(
-                std::format("rapid-{}", i),
-                std::format("Person_{} is a {} at Company_{}.",
+            auto r = g.add_episode({
+                .name = std::format("rapid-{}", i),
+                .body = std::format("Person_{} is a {} at Company_{}.",
                     i, (i % 2 == 0 ? "engineer" : "designer"), i),
-                "test",
-                now + std::chrono::seconds(i),
-                EpisodeType::message, "rapid");
+                .source_description = "test",
+                .reference_time = now + std::chrono::seconds(i),
+                .group_id = "rapid"});
 
             if (r.has_value()) ++success;
             else ++fail;
@@ -195,7 +195,7 @@ The team uses JSON: {"name": "Alice", "role": "engineer"})",
 
         // Search across all rapid episodes
         g.build_indices();
-        auto search = g.search("Person engineer", "rapid", 20);
+        auto search = g.search({.query = "Person engineer", .group_id = "rapid", .num_results = 20});
         stress::test("search across rapid episodes works",
             search.has_value());
         if (search.has_value()) {
@@ -211,21 +211,22 @@ The team uses JSON: {"name": "Alice", "role": "engineer"})",
         g.build_indices();
 
         // Empty agent_id
-        auto r1 = g.add_episode("no-agent", "Alice works at Acme.", "test", now,
-            EpisodeType::message, "g", "");
+        auto r1 = g.add_episode({.name = "no-agent", .body = "Alice works at Acme.",
+            .source_description = "test", .reference_time = now, .group_id = "g"});
         stress::test("empty agent_id succeeds", r1.has_value());
 
         // Very long agent_id
         std::string long_agent(1000, 'A');
-        auto r2 = g.add_episode("long-agent", "Bob works at Google.", "test",
-            now + std::chrono::seconds(1), EpisodeType::message, "g", long_agent);
+        auto r2 = g.add_episode({.name = "long-agent", .body = "Bob works at Google.",
+            .source_description = "test", .reference_time = now + std::chrono::seconds(1),
+            .group_id = "g", .agent_id = long_agent});
         stress::test("1000-char agent_id succeeds", r2.has_value());
 
         // Agent ID with special characters
-        auto r3 = g.add_episode("special-agent",
-            "Carol works at Meta.", "test",
-            now + std::chrono::seconds(2), EpisodeType::message, "g",
-            "agent/with'special\"chars\\and\nnewlines");
+        auto r3 = g.add_episode({.name = "special-agent",
+            .body = "Carol works at Meta.", .source_description = "test",
+            .reference_time = now + std::chrono::seconds(2), .group_id = "g",
+            .agent_id = "agent/with'special\"chars\\and\nnewlines"});
         stress::test("special-char agent_id succeeds", r3.has_value());
     }
 
@@ -238,14 +239,14 @@ The team uses JSON: {"name": "Alice", "role": "engineer"})",
 
         // Very long group_id
         std::string long_group(500, 'G');
-        auto r1 = g.add_episode("long-group", "Test data.", "test", now,
-            EpisodeType::message, long_group);
+        auto r1 = g.add_episode({.name = "long-group", .body = "Test data.",
+            .source_description = "test", .reference_time = now, .group_id = long_group});
         stress::test("500-char group_id succeeds", r1.has_value());
 
         // Group ID with special characters
-        auto r2 = g.add_episode("special-group", "More test data.", "test",
-            now + std::chrono::seconds(1), EpisodeType::message,
-            "group/with'special\"chars");
+        auto r2 = g.add_episode({.name = "special-group", .body = "More test data.",
+            .source_description = "test", .reference_time = now + std::chrono::seconds(1),
+            .group_id = "group/with'special\"chars"});
         stress::test("special-char group_id succeeds", r2.has_value());
     }
 

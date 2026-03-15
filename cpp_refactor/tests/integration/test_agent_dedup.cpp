@@ -30,10 +30,14 @@ TEST_CASE("Multi-agent dedup merges agent_ids on shared entities",
     auto now = std::chrono::system_clock::now();
 
     // Agent A ingests an episode mentioning "Kuzu"
-    auto r1 = g.add_episode(
-        "ep1", "Kuzu is an embedded graph database written in C++.",
-        "chat", now, EpisodeType::message, "shared_group", "agent-alpha"
-    );
+    auto r1 = g.add_episode({
+        .name = "ep1",
+        .body = "Kuzu is an embedded graph database written in C++.",
+        .source_description = "chat",
+        .reference_time = now,
+        .group_id = "shared_group",
+        .agent_id = "agent-alpha",
+    });
     REQUIRE(r1.has_value());
 
     // Verify agent-alpha's entity has agent_ids = ["agent-alpha"]
@@ -49,16 +53,19 @@ TEST_CASE("Multi-agent dedup merges agent_ids on shared entities",
     CHECK(found_kuzu_alpha);
 
     // Agent B ingests an episode also mentioning "Kuzu"
-    auto r2 = g.add_episode(
-        "ep2", "Kuzu supports Cypher queries and has a C++ API.",
-        "chat", now + std::chrono::seconds(60),
-        EpisodeType::message, "shared_group", "agent-beta"
-    );
+    auto r2 = g.add_episode({
+        .name = "ep2",
+        .body = "Kuzu supports Cypher queries and has a C++ API.",
+        .source_description = "chat",
+        .reference_time = now + std::chrono::seconds(60),
+        .group_id = "shared_group",
+        .agent_id = "agent-beta",
+    });
     REQUIRE(r2.has_value());
 
     // Search for Kuzu — should find a single entity with both agent_ids
     SearchFilters no_filter;
-    auto search = g.search("Kuzu database", "shared_group", 10);
+    auto search = g.search({.query = "Kuzu database", .group_id = "shared_group"});
     REQUIRE(search.has_value());
 
     // Collect all unique entity node UUIDs mentioned in edges

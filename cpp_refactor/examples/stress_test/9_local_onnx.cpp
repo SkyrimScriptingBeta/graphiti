@@ -240,11 +240,11 @@ int main() {
     (void)g.build_indices();
 
     auto now = std::chrono::system_clock::now();
-    auto r = g.add_episode(
-        "ep1",
-        "Alice is a software engineer at Acme Corp. She works on the Bridge project.",
-        "test", now, graphiti::EpisodeType::message, "local_test"
-    );
+    auto r = g.add_episode({
+        .name = "ep1",
+        .body = "Alice is a software engineer at Acme Corp. She works on the Bridge project.",
+        .source_description = "test", .reference_time = now, .group_id = "local_test",
+    });
     stress::test("add_episode succeeded with ONNX embeddings", r.has_value());
     if (r.has_value()) {
         stress::test("extracted nodes", !r.value().nodes.empty());
@@ -254,7 +254,7 @@ int main() {
     // ========================================================================
     stress::separator("3. Search with ONNX embeddings");
 
-    auto search = g.search("software engineer", "local_test");
+    auto search = g.search({.query = "software engineer", .group_id = "local_test"});
     stress::test("search succeeded", search.has_value());
     if (search.has_value()) {
         stress::test("search returned results", !search.value().empty());

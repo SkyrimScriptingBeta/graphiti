@@ -187,14 +187,13 @@ edge_types:
 
         if (defs_result.has_value()) {
             auto& defs = defs_result.value();
-            auto result = g.add_episode(
-                "ep1",
-                "Alice Johnson works as a software engineer at TechCorp, a technology company.",
-                "chat", now, EpisodeType::message,
-                "typed_group", "", "", "", {},
-                std::nullopt, std::nullopt, std::nullopt,
-                false, &defs
-            );
+            auto result = g.add_episode({
+                .name = "ep1",
+                .body = "Alice Johnson works as a software engineer at TechCorp, a technology company.",
+                .source_description = "chat", .reference_time = now,
+                .group_id = "typed_group",
+                .type_defs = &defs,
+            });
             stress::test("typed ingestion succeeds", result.has_value());
 
             if (result.has_value()) {
@@ -250,14 +249,13 @@ exclude_entity_types:
 
         if (defs_result.has_value()) {
             auto& defs = defs_result.value();
-            auto result = g.add_episode(
-                "ep1",
-                "Alice talked about the Grand Canyon with Bob.",
-                "chat", now, EpisodeType::message,
-                "excl_group", "", "", "", {},
-                std::nullopt, std::nullopt, std::nullopt,
-                false, &defs
-            );
+            auto result = g.add_episode({
+                .name = "ep1",
+                .body = "Alice talked about the Grand Canyon with Bob.",
+                .source_description = "chat", .reference_time = now,
+                .group_id = "excl_group",
+                .type_defs = &defs,
+            });
             stress::test("excluded-type ingestion succeeds", result.has_value());
 
             if (result.has_value()) {
@@ -301,10 +299,10 @@ edge_types:
                 {"ep2", "Bob works at TechInc.", "chat", now + std::chrono::seconds(60)},
             };
 
-            auto result = g.add_episode_bulk(
-                episodes, "bulk_typed", "", "", "", {},
-                std::nullopt, std::nullopt, &defs
-            );
+            auto result = g.add_episode_bulk({
+                .episodes = episodes, .group_id = "bulk_typed",
+                .type_defs = &defs,
+            });
             stress::test("bulk typed ingestion succeeds", result.has_value());
 
             if (result.has_value()) {

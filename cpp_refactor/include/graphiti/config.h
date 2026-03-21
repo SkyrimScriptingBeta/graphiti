@@ -29,6 +29,7 @@ struct GraphitiConfig {
     std::optional<std::string> default_group_id;
     bool store_raw_episode_content = true;
     std::string onnx_model_path;  // if set, used to create OnnxEmbedder
+    bool read_only = false;       // if true, opens Kuzu in read-only mode (no write lock)
 
     // Build config from environment variables:
     //   OPENAI_API_KEY        -> llm.api_key, embedder.api_key

@@ -359,8 +359,14 @@ struct KuzuDriver::Impl {
     kuzu::main::Database* db_ptr = nullptr;           // always valid
     std::unique_ptr<kuzu::main::Connection> conn;
 
-    explicit Impl(std::string_view db_path) {
-        owned_db = std::make_unique<kuzu::main::Database>(db_path);
+    explicit Impl(std::string_view db_path, bool read_only = false) {
+        if (read_only) {
+            kuzu::main::SystemConfig cfg;
+            cfg.readOnly = true;
+            owned_db = std::make_unique<kuzu::main::Database>(db_path, cfg);
+        } else {
+            owned_db = std::make_unique<kuzu::main::Database>(db_path);
+        }
         db_ptr = owned_db.get();
         conn = std::make_unique<kuzu::main::Connection>(db_ptr);
     }
@@ -416,8 +422,8 @@ struct KuzuDriver::Impl {
 // Constructor / Destructor / Move
 // ============================================================================
 
-KuzuDriver::KuzuDriver(std::string_view db_path)
-    : impl_(std::make_unique<Impl>(db_path)) {}
+KuzuDriver::KuzuDriver(std::string_view db_path, bool read_only)
+    : impl_(std::make_unique<Impl>(db_path, read_only)) {}
 
 KuzuDriver::KuzuDriver(kuzu::main::Database& shared_db)
     : impl_(std::make_unique<Impl>(shared_db)) {}

@@ -38,7 +38,7 @@ struct Graphiti::Impl {
     // Default: create OpenAI clients from config
     Impl(GraphitiConfig cfg)
         : config(std::move(cfg))
-        , driver(config.db_path)
+        , driver(config.db_path, config.read_only)
         , llm_owned(std::make_unique<OpenAIClient>(config.llm))
         , embedder_owned(std::make_unique<OpenAIEmbedder>(config.embedder))
         , llm(*llm_owned)
@@ -58,7 +58,7 @@ struct Graphiti::Impl {
          std::unique_ptr<LLMClient> custom_llm,
          std::unique_ptr<EmbedderClient> custom_embedder)
         : config(std::move(cfg))
-        , driver(config.db_path)
+        , driver(config.db_path, config.read_only)
         , llm_owned(custom_llm ? std::move(custom_llm)
                                 : std::make_unique<OpenAIClient>(config.llm))
         , embedder_owned(custom_embedder ? std::move(custom_embedder)

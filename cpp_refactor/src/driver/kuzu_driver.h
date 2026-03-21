@@ -19,7 +19,7 @@ namespace graphiti {
 
 class KuzuDriver {
 public:
-    explicit KuzuDriver(std::string_view db_path);
+    explicit KuzuDriver(std::string_view db_path, bool read_only = false);
 
     // Construct with an externally-owned Database (not owned by this driver).
     explicit KuzuDriver(kuzu::main::Database& shared_db);

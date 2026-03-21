@@ -10,6 +10,7 @@
 
 #include <format>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace graphiti {
 
@@ -622,6 +623,37 @@ Result<SearchResults> search_orchestrator(
             if (it != community_map.end()) {
                 results.communities.push_back(std::move(it->second));
                 results.community_scores.push_back(ranked_scores[i]);
+            }
+        }
+    }
+
+    // --- Resolve edge node references ---
+    // Edges reference source/target nodes by UUID. If those nodes weren't
+    // returned by the node search, fetch them so callers always get names.
+    if (!results.edges.empty()) {
+        std::unordered_set<std::string> known_uuids;
+        for (auto& n : results.nodes)
+            known_uuids.insert(n.uuid);
+
+        std::vector<std::string> missing_uuids;
+        for (auto& e : results.edges) {
+            if (!known_uuids.contains(e.source_node_uuid)) {
+                known_uuids.insert(e.source_node_uuid);
+                missing_uuids.push_back(e.source_node_uuid);
+            }
+            if (!known_uuids.contains(e.target_node_uuid)) {
+                known_uuids.insert(e.target_node_uuid);
+                missing_uuids.push_back(e.target_node_uuid);
+            }
+        }
+
+        if (!missing_uuids.empty()) {
+            auto fetched = driver.get_entity_nodes(missing_uuids);
+            if (fetched.has_value()) {
+                for (auto& n : fetched.value()) {
+                    results.nodes.push_back(std::move(n));
+                    results.node_scores.push_back(0.0f);
+                }
             }
         }
     }

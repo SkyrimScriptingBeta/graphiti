@@ -232,35 +232,60 @@ TEST_CASE("SummaryDescription parsing", "[response_models][summary]") {
 // JSON Schema Validation
 // ============================================================================
 
-TEST_CASE("Response schemas are valid JSON", "[response_models][schema]") {
-    // Verify all schema strings are parseable JSON
-    CHECK(json::parse(response_schemas::EXTRACTED_ENTITIES).is_object());
-    CHECK(json::parse(response_schemas::EXTRACTED_EDGES).is_object());
-    CHECK(json::parse(response_schemas::NODE_RESOLUTIONS).is_object());
-    CHECK(json::parse(response_schemas::EDGE_DUPLICATE).is_object());
-    CHECK(json::parse(response_schemas::ENTITY_SUMMARY).is_object());
-    CHECK(json::parse(response_schemas::SUMMARIZED_ENTITIES).is_object());
-    CHECK(json::parse(response_schemas::SUMMARY).is_object());
-    CHECK(json::parse(response_schemas::SUMMARY_DESCRIPTION).is_object());
-}
-
-TEST_CASE("Response schemas have required structure", "[response_models][schema]") {
-    auto check_schema = [](std::string_view schema_str, const std::string& title) {
-        auto schema = json::parse(schema_str);
-        CHECK(schema["type"] == "object");
-        CHECK(schema.contains("properties"));
-        CHECK(schema.contains("required"));
-        CHECK(schema["title"] == title);
+TEST_CASE("Few-shot examples contain valid JSON objects", "[response_models][schema]") {
+    // Extract and verify JSON objects embedded in the few-shot example strings.
+    // Each example block contains "Example N:" lines followed by JSON.
+    auto extract_json_lines = [](std::string_view examples) -> std::vector<nlohmann::json> {
+        std::vector<nlohmann::json> results;
+        std::string line;
+        for (size_t i = 0; i < examples.size(); ++i) {
+            if (examples[i] == '\n' || i == examples.size() - 1) {
+                if (i == examples.size() - 1 && examples[i] != '\n') line += examples[i];
+                if (!line.empty() && line[0] == '{') {
+                    results.push_back(json::parse(line));
+                }
+                line.clear();
+            } else {
+                line += examples[i];
+            }
+        }
+        return results;
     };
 
-    check_schema(response_schemas::EXTRACTED_ENTITIES, "ExtractedEntities");
-    check_schema(response_schemas::EXTRACTED_EDGES, "ExtractedEdges");
-    check_schema(response_schemas::NODE_RESOLUTIONS, "NodeResolutions");
-    check_schema(response_schemas::EDGE_DUPLICATE, "EdgeDuplicate");
-    check_schema(response_schemas::ENTITY_SUMMARY, "EntitySummary");
-    check_schema(response_schemas::SUMMARIZED_ENTITIES, "SummarizedEntities");
-    check_schema(response_schemas::SUMMARY, "Summary");
-    check_schema(response_schemas::SUMMARY_DESCRIPTION, "SummaryDescription");
+    auto entities = extract_json_lines(response_schemas::EXTRACTED_ENTITIES);
+    CHECK(entities.size() == 2);
+    for (auto& j : entities) CHECK(j.contains("extracted_entities"));
+
+    auto edges = extract_json_lines(response_schemas::EXTRACTED_EDGES);
+    CHECK(edges.size() == 2);
+    for (auto& j : edges) CHECK(j.contains("edges"));
+
+    auto resolutions = extract_json_lines(response_schemas::NODE_RESOLUTIONS);
+    CHECK(resolutions.size() == 2);
+    for (auto& j : resolutions) CHECK(j.contains("entity_resolutions"));
+
+    auto dupes = extract_json_lines(response_schemas::EDGE_DUPLICATE);
+    CHECK(dupes.size() == 2);
+    for (auto& j : dupes) {
+        CHECK(j.contains("duplicate_facts"));
+        CHECK(j.contains("contradicted_facts"));
+    }
+
+    auto summaries_single = extract_json_lines(response_schemas::ENTITY_SUMMARY);
+    CHECK(summaries_single.size() == 2);
+    for (auto& j : summaries_single) CHECK(j.contains("summary"));
+
+    auto summaries_batch = extract_json_lines(response_schemas::SUMMARIZED_ENTITIES);
+    CHECK(summaries_batch.size() == 2);
+    for (auto& j : summaries_batch) CHECK(j.contains("summaries"));
+
+    auto summary = extract_json_lines(response_schemas::SUMMARY);
+    CHECK(summary.size() == 2);
+    for (auto& j : summary) CHECK(j.contains("summary"));
+
+    auto desc = extract_json_lines(response_schemas::SUMMARY_DESCRIPTION);
+    CHECK(desc.size() == 2);
+    for (auto& j : desc) CHECK(j.contains("description"));
 }
 
 // ============================================================================

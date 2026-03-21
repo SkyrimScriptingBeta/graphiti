@@ -31,7 +31,7 @@ struct OpenAIClient::Impl {
             for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
                 if (it->role == "user") {
                     it->content += std::format(
-                        "\n\nRespond with a JSON object matching this schema:\n{}",
+                        "\n\nRespond with ONLY a valid JSON object. No explanation, no markdown, no extra text.\n\n{}",
                         *json_schema
                     );
                     break;

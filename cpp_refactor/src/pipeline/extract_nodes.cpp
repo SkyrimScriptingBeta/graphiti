@@ -39,13 +39,16 @@ Result<std::vector<EntityNode>> extract_nodes(
     }
 
     // Parse response
+    auto raw_json = llm_result.value();
+    auto raw_dump = raw_json.dump();
     ExtractedEntities extracted;
     try {
-        extracted = llm_result.value().get<ExtractedEntities>();
+        extracted = raw_json.get<ExtractedEntities>();
     } catch (const std::exception& e) {
         return std::unexpected(GraphitiError{
             ErrorCode::llm_parse_error,
-            std::format("Failed to parse extracted entities: {}", e.what())
+            std::format("Failed to parse extracted entities: {} — raw LLM output: {}",
+                        e.what(), raw_dump)
         });
     }
 
@@ -83,18 +86,12 @@ Result<std::vector<EntityNode>> extract_nodes(
     return nodes;
 }
 
-// Attribute extraction prompt schema (JSON object with nullable string fields)
-static constexpr std::string_view ENTITY_ATTRIBUTES_SCHEMA = R"({
-  "type": "object",
-  "properties": {
-    "attributes": {
-      "type": "object",
-      "description": "Extracted attribute values for the entity"
-    }
-  },
-  "required": ["attributes"],
-  "title": "EntityAttributes"
-})";
+// Attribute extraction few-shot examples
+static constexpr std::string_view ENTITY_ATTRIBUTES_SCHEMA = R"(Example 1:
+{"attributes": {"role": "Senior Engineer", "department": "Infrastructure", "start_date": "2025-01-15"}}
+
+Example 2:
+{"attributes": {"location": "San Francisco", "founded": "2020", "industry": null}})";
 
 VoidResult extract_entity_attributes(
     LLMClient& llm,

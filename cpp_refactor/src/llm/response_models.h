@@ -118,139 +118,58 @@ void to_json(nlohmann::json& j, const Summary& v);
 void to_json(nlohmann::json& j, const SummaryDescription& v);
 
 // ============================================================================
-// JSON Schemas (injected into LLM prompts for structured output)
+// Few-shot examples (injected into LLM prompts to show expected JSON format)
 // ============================================================================
 
 namespace response_schemas {
 
-constexpr std::string_view EXTRACTED_ENTITIES = R"({
-  "type": "object",
-  "properties": {
-    "extracted_entities": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "name": {"type": "string", "description": "Name of the extracted entity"},
-          "entity_type_id": {"type": "integer", "description": "ID of the classified entity type. Must be one of the provided entity_type_id integers."}
-        },
-        "required": ["name", "entity_type_id"]
-      },
-      "description": "List of extracted entities"
-    }
-  },
-  "required": ["extracted_entities"],
-  "title": "ExtractedEntities"
-})";
+constexpr std::string_view EXTRACTED_ENTITIES = R"(Example 1:
+{"extracted_entities": [{"name": "Alice", "entity_type_id": 0}, {"name": "Acme Corp", "entity_type_id": 1}]}
 
-constexpr std::string_view EXTRACTED_EDGES = R"({
-  "type": "object",
-  "properties": {
-    "edges": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "source_entity_name": {"type": "string", "description": "The name of the source entity from the ENTITIES list"},
-          "target_entity_name": {"type": "string", "description": "The name of the target entity from the ENTITIES list"},
-          "relation_type": {"type": "string", "description": "The type of relationship in SCREAMING_SNAKE_CASE"},
-          "fact": {"type": "string", "description": "A natural language description of the relationship"},
-          "valid_at": {"type": ["string", "null"], "description": "ISO 8601 datetime when the fact became true, or null"},
-          "invalid_at": {"type": ["string", "null"], "description": "ISO 8601 datetime when the fact stopped being true, or null"}
-        },
-        "required": ["source_entity_name", "target_entity_name", "relation_type", "fact"]
-      }
-    }
-  },
-  "required": ["edges"],
-  "title": "ExtractedEdges"
-})";
+Example 2:
+{"extracted_entities": [{"name": "Bob", "entity_type_id": 0}, {"name": "Project Atlas", "entity_type_id": 2}, {"name": "React", "entity_type_id": 3}]})";
 
-constexpr std::string_view NODE_RESOLUTIONS = R"({
-  "type": "object",
-  "properties": {
-    "entity_resolutions": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": {"type": "integer", "description": "Integer id of the entity"},
-          "name": {"type": "string", "description": "Name of the entity. Should be the most complete and descriptive name."},
-          "duplicate_name": {"type": "string", "description": "Name of the duplicate entity from EXISTING ENTITIES. Empty string if no duplicate found."}
-        },
-        "required": ["id", "name", "duplicate_name"]
-      },
-      "description": "List of resolved nodes"
-    }
-  },
-  "required": ["entity_resolutions"],
-  "title": "NodeResolutions"
-})";
+constexpr std::string_view EXTRACTED_EDGES = R"(Example 1:
+{"edges": [{"source_entity_name": "Alice", "target_entity_name": "Acme Corp", "relation_type": "WORKS_AT", "fact": "Alice works at Acme Corp as an engineer", "valid_at": "2025-01-15T00:00:00Z", "invalid_at": null}]}
 
-constexpr std::string_view EDGE_DUPLICATE = R"({
-  "type": "object",
-  "properties": {
-    "duplicate_facts": {
-      "type": "array",
-      "items": {"type": "integer"},
-      "description": "List of idx values of duplicate facts. Empty list if none."
-    },
-    "contradicted_facts": {
-      "type": "array",
-      "items": {"type": "integer"},
-      "description": "List of idx values of contradicted facts. Empty list if none."
-    }
-  },
-  "required": ["duplicate_facts", "contradicted_facts"],
-  "title": "EdgeDuplicate"
-})";
+Example 2:
+{"edges": [{"source_entity_name": "Bob", "target_entity_name": "Alice", "relation_type": "REPORTS_TO", "fact": "Bob reports to Alice on the infrastructure team", "valid_at": "2025-03-01T00:00:00Z", "invalid_at": null}, {"source_entity_name": "Bob", "target_entity_name": "Project Atlas", "relation_type": "CONTRIBUTES_TO", "fact": "Bob is a contributor to Project Atlas", "valid_at": null, "invalid_at": null}]})";
 
-constexpr std::string_view ENTITY_SUMMARY = R"({
-  "type": "object",
-  "properties": {
-    "summary": {"type": "string", "description": "Summary of the entity"}
-  },
-  "required": ["summary"],
-  "title": "EntitySummary"
-})";
+constexpr std::string_view NODE_RESOLUTIONS = R"(Example 1 (duplicate found):
+{"entity_resolutions": [{"id": 0, "name": "Robert Smith", "duplicate_name": "Bob Smith"}]}
 
-constexpr std::string_view SUMMARIZED_ENTITIES = R"({
-  "type": "object",
-  "properties": {
-    "summaries": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "name": {"type": "string", "description": "Name of the entity being summarized"},
-          "summary": {"type": "string", "description": "Updated summary for the entity"}
-        },
-        "required": ["name", "summary"]
-      },
-      "description": "List of entity summaries. Only include entities that need summary updates."
-    }
-  },
-  "required": ["summaries"],
-  "title": "SummarizedEntities"
-})";
+Example 2 (no duplicate):
+{"entity_resolutions": [{"id": 0, "name": "Alice Johnson", "duplicate_name": ""}, {"id": 1, "name": "Acme Corp", "duplicate_name": ""}]})";
 
-constexpr std::string_view SUMMARY = R"({
-  "type": "object",
-  "properties": {
-    "summary": {"type": "string", "description": "Summary containing important information. Under 250 characters."}
-  },
-  "required": ["summary"],
-  "title": "Summary"
-})";
+constexpr std::string_view EDGE_DUPLICATE = R"(Example 1 (duplicates and contradictions found):
+{"duplicate_facts": [2], "contradicted_facts": [1, 3]}
 
-constexpr std::string_view SUMMARY_DESCRIPTION = R"({
-  "type": "object",
-  "properties": {
-    "description": {"type": "string", "description": "One sentence description of the provided summary"}
-  },
-  "required": ["description"],
-  "title": "SummaryDescription"
-})";
+Example 2 (no duplicates or contradictions):
+{"duplicate_facts": [], "contradicted_facts": []})";
+
+constexpr std::string_view ENTITY_SUMMARY = R"(Example 1:
+{"summary": "Alice is a senior engineer at Acme Corp who leads the infrastructure team."}
+
+Example 2:
+{"summary": "Project Atlas is a cloud migration initiative started in Q1 2025, currently in phase 2."})";
+
+constexpr std::string_view SUMMARIZED_ENTITIES = R"(Example 1:
+{"summaries": [{"name": "Alice", "summary": "Senior engineer at Acme Corp, leads infrastructure team."}, {"name": "Acme Corp", "summary": "Technology company focused on cloud infrastructure."}]}
+
+Example 2:
+{"summaries": [{"name": "Bob", "summary": "Junior developer contributing to Project Atlas since March 2025."}]})";
+
+constexpr std::string_view SUMMARY = R"(Example 1:
+{"summary": "Alice joined Acme Corp as a senior engineer and leads the infrastructure team."}
+
+Example 2:
+{"summary": "Q3 planning meeting covered the Atlas migration timeline and resource allocation."})";
+
+constexpr std::string_view SUMMARY_DESCRIPTION = R"(Example 1:
+{"description": "Employment and role information for a senior engineer."}
+
+Example 2:
+{"description": "Summary of a quarterly planning meeting about project timelines."})";
 
 } // namespace response_schemas
 

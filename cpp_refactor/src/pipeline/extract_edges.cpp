@@ -38,13 +38,16 @@ Result<std::vector<EntityEdge>> extract_edges(
     }
 
     // Parse response
+    auto raw_json = llm_result.value();
+    auto raw_dump = raw_json.dump();
     ExtractedEdges extracted;
     try {
-        extracted = llm_result.value().get<ExtractedEdges>();
+        extracted = raw_json.get<ExtractedEdges>();
     } catch (const std::exception& e) {
         return std::unexpected(GraphitiError{
             ErrorCode::llm_parse_error,
-            std::format("Failed to parse extracted edges: {}", e.what())
+            std::format("Failed to parse extracted edges: {} — raw LLM output: {}",
+                        e.what(), raw_dump)
         });
     }
 

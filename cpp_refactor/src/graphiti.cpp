@@ -18,8 +18,9 @@
 #include "utils/datetime.h"
 #include "utils/uuid.h"
 
+#include <graphiti/log.h>
+
 #include <algorithm>
-#include <cstdio>
 #include <format>
 #include <future>
 #include <mutex>
@@ -96,12 +97,12 @@ struct Graphiti::Impl {
                 config.kuzu_writer_uri, config.kuzu_writer_target_db);
             auto r = writer_client->connect();
             if (!r.has_value()) {
-                fprintf(stderr, "[graphiti] ❌ Failed to connect to kuzu-writer-server: %s\n",
+                log_info("[graphiti] ❌ Failed to connect to kuzu-writer-server: %s\n",
                         r.error().message.c_str());
-                fprintf(stderr, "[graphiti] Falling back to direct Kuzu writes\n");
+                log_info("[graphiti] Falling back to direct Kuzu writes\n");
                 writer_client.reset();
             } else {
-                fprintf(stderr, "[graphiti] 🔧 Connected to kuzu-writer-server at %s (target=%s)\n",
+                log_info("[graphiti] 🔧 Connected to kuzu-writer-server at %s (target=%s)\n",
                         config.kuzu_writer_uri.c_str(), config.kuzu_writer_target_db.c_str());
             }
         }
@@ -488,7 +489,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     // ========================================================================
     auto bulk_start = std::chrono::steady_clock::now();
     auto step_start = bulk_start;
-    fprintf(stderr, "[graphiti] add_episode_bulk: %zu episodes, max_parallel=%d\n",
+    log_info("[graphiti] add_episode_bulk: %zu episodes, max_parallel=%d\n",
             opts.episodes.size(), std::max(1, impl_->config.max_parallel_extractions));
 
     std::vector<EpisodicNode> episodes;
@@ -521,7 +522,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
 
     {
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
-        fprintf(stderr, "[graphiti] Step 1 (save episodic nodes): %lldms\n", ms);
+        log_debug("[graphiti] Step 1 (save episodic nodes): %lldms\n", ms);
         step_start = std::chrono::steady_clock::now();
     }
 
@@ -544,7 +545,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
 
     {
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
-        fprintf(stderr, "[graphiti] Step 2 (episode context retrieval): %lldms\n", ms);
+        log_debug("[graphiti] Step 2 (episode context retrieval): %lldms\n", ms);
         step_start = std::chrono::steady_clock::now();
     }
 
@@ -555,7 +556,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     int max_workers = std::max(1, impl_->config.max_parallel_extractions);
     std::vector<std::vector<EntityNode>> nodes_by_episode(episodes.size());
 
-    fprintf(stderr, "[graphiti] Step 3: extracting nodes from %zu episodes (max_parallel=%d)\n",
+    log_debug("[graphiti] Step 3: extracting nodes from %zu episodes (max_parallel=%d)\n",
             episodes.size(), max_workers);
     auto step3_start = std::chrono::steady_clock::now();
 
@@ -595,13 +596,13 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                 [&sem, &llm_config, &dst, input = std::move(input),
                  ep_aid, ep_sid, ep_sctx, ep_pids, ep_index]() mutable {
                     sem.acquire();
-                    fprintf(stderr, "[graphiti]   node extraction %zu started\n", ep_index);
+                    log_trace("[graphiti]   node extraction %zu started\n", ep_index);
                     auto t0 = std::chrono::steady_clock::now();
                     OpenAIClient llm(llm_config);
                     auto result = pipeline::extract_nodes(llm, input);
                     auto t1 = std::chrono::steady_clock::now();
                     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-                    fprintf(stderr, "[graphiti]   node extraction %zu done (%lldms)\n", ep_index, ms);
+                    log_trace("[graphiti]   node extraction %zu done (%lldms)\n", ep_index, ms);
                     sem.release();
 
                     if (result.has_value()) {
@@ -624,7 +625,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     {
         auto step3_end = std::chrono::steady_clock::now();
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(step3_end - step3_start).count();
-        fprintf(stderr, "[graphiti] Step 3 complete: %lldms\n", ms);
+        log_debug("[graphiti] Step 3 complete: %lldms\n", ms);
     }
 
     // ========================================================================
@@ -665,7 +666,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
 
     {
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
-        fprintf(stderr, "[graphiti] Step 4 (cross-dedup nodes): %lldms\n", ms);
+        log_debug("[graphiti] Step 4 (cross-dedup nodes): %lldms\n", ms);
         step_start = std::chrono::steady_clock::now();
     }
 
@@ -724,7 +725,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
 
     {
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
-        fprintf(stderr, "[graphiti] Step 5 (dedupe nodes vs graph — LLM): %lldms\n", ms);
+        log_debug("[graphiti] Step 5 (dedupe nodes vs graph — LLM): %lldms\n", ms);
         step_start = std::chrono::steady_clock::now();
     }
 
@@ -733,7 +734,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     // ========================================================================
     std::vector<std::vector<EntityEdge>> edges_by_episode(episodes.size());
 
-    fprintf(stderr, "[graphiti] Step 6: extracting edges from %zu episodes (max_parallel=%d)\n",
+    log_debug("[graphiti] Step 6: extracting edges from %zu episodes (max_parallel=%d)\n",
             episodes.size(), max_workers);
     auto step6_start = std::chrono::steady_clock::now();
 
@@ -771,13 +772,13 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                 [&sem, &llm_config, &dst, input = std::move(input),
                  ep_aid, ep_sid, ep_sctx, ep_pids, ep_uuid, ep_index]() mutable {
                     sem.acquire();
-                    fprintf(stderr, "[graphiti]   edge extraction %zu started\n", ep_index);
+                    log_trace("[graphiti]   edge extraction %zu started\n", ep_index);
                     auto t0 = std::chrono::steady_clock::now();
                     OpenAIClient llm(llm_config);
                     auto result = pipeline::extract_edges(llm, input);
                     auto t1 = std::chrono::steady_clock::now();
                     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-                    fprintf(stderr, "[graphiti]   edge extraction %zu done (%lldms)\n", ep_index, ms);
+                    log_trace("[graphiti]   edge extraction %zu done (%lldms)\n", ep_index, ms);
                     sem.release();
 
                     if (result.has_value()) {
@@ -800,7 +801,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     {
         auto step6_end = std::chrono::steady_clock::now();
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(step6_end - step6_start).count();
-        fprintf(stderr, "[graphiti] Step 6 complete: %lldms\n", ms);
+        log_debug("[graphiti] Step 6 complete: %lldms\n", ms);
     }
 
     // Flatten edges_by_episode into all_edges
@@ -823,7 +824,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     // NOTE: Bulk mode skips edge invalidation for speed
     {
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
-        fprintf(stderr, "[graphiti] Step 7 (remap edge pointers): %lldms\n", ms);
+        log_debug("[graphiti] Step 7 (remap edge pointers): %lldms\n", ms);
         step_start = std::chrono::steady_clock::now();
     }
     auto edge_dedup = pipeline::dedupe_edges(impl_->llm, impl_->driver, all_edges);
@@ -836,7 +837,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
 
     {
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
-        fprintf(stderr, "[graphiti] Step 8 (dedupe edges vs graph — LLM): %lldms\n", ms);
+        log_debug("[graphiti] Step 8 (dedupe edges vs graph — LLM): %lldms\n", ms);
         step_start = std::chrono::steady_clock::now();
     }
 
@@ -856,7 +857,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
 
     {
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
-        fprintf(stderr, "[graphiti] Step 9 (enrich node summaries — LLM): %lldms\n", ms);
+        log_debug("[graphiti] Step 9 (enrich node summaries — LLM): %lldms\n", ms);
         step_start = std::chrono::steady_clock::now();
     }
 
@@ -876,7 +877,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
 
     {
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
-        fprintf(stderr, "[graphiti] Step 10 (embeddings): %lldms\n", ms);
+        log_debug("[graphiti] Step 10 (embeddings): %lldms\n", ms);
         step_start = std::chrono::steady_clock::now();
     }
 
@@ -1065,11 +1066,11 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
 
     {
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
-        fprintf(stderr, "[graphiti] Steps 11-13 (persist + episodic edges + saga): %lldms\n", ms);
+        log_debug("[graphiti] Steps 11-13 (persist + episodic edges + saga): %lldms\n", ms);
     }
     {
         auto total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - bulk_start).count();
-        fprintf(stderr, "[graphiti] add_episode_bulk TOTAL: %lldms\n", total_ms);
+        log_info("[graphiti] add_episode_bulk TOTAL: %lldms\n", total_ms);
     }
 
     // ========================================================================

@@ -316,9 +316,46 @@ int main(int argc, char** argv) {
     fprintf(stderr, "[kuzu-writer] 🔧 Server listening on ws://%s:%d (%zu DBs)\n",
             host.c_str(), port, queues.size());
 
-    // Wait for shutdown signal
+    // Wait for shutdown signal, checkpointing periodically so read-only clients see fresh data
+    auto last_checkpoint = std::chrono::steady_clock::now();
+    constexpr auto checkpoint_interval = std::chrono::seconds(30);
+
     while (g_running) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+        auto now = std::chrono::steady_clock::now();
+        if (now - last_checkpoint >= checkpoint_interval) {
+            last_checkpoint = now;
+            for (auto& [name, queue] : queues) {
+                queue->enqueue([&driver = *queue->driver, &name] {
+                    auto* conn = driver.connection();
+                    if (conn) {
+                        auto result = conn->query("CHECKPOINT;");
+                        if (result->isSuccess()) {
+                            fprintf(stderr, "[kuzu-writer] ✅ CHECKPOINT '%s'\n", name.c_str());
+                        } else {
+                            fprintf(stderr, "[kuzu-writer] ❌ CHECKPOINT '%s' failed: %s\n",
+                                    name.c_str(), result->getErrorMessage().c_str());
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    // Final checkpoint before shutdown
+    fprintf(stderr, "[kuzu-writer] Running final CHECKPOINT on all DBs...\n");
+    for (auto& [name, queue] : queues) {
+        auto* conn = queue->driver->connection();
+        if (conn) {
+            auto result = conn->query("CHECKPOINT;");
+            if (result->isSuccess()) {
+                fprintf(stderr, "[kuzu-writer] ✅ Final CHECKPOINT '%s'\n", name.c_str());
+            } else {
+                fprintf(stderr, "[kuzu-writer] ❌ Final CHECKPOINT '%s' failed: %s\n",
+                        name.c_str(), result->getErrorMessage().c_str());
+            }
+        }
     }
 
     fprintf(stderr, "\n[kuzu-writer] 🛑 Shutting down...\n");

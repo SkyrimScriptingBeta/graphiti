@@ -178,6 +178,9 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     episode.source_context = sctx;
     episode.participant_ids = pids;
 
+    // Save content for extraction before potentially clearing for storage
+    auto episode_body = episode.content;
+
     if (!impl_->config.store_raw_episode_content) {
         episode.content.clear();
     }
@@ -189,7 +192,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
 
     // 3. Extract entities via LLM
     pipeline::ExtractNodesInput extract_input;
-    extract_input.episode_content = episode.content;
+    extract_input.episode_content = episode_body;
     extract_input.episode_type = opts.source;
     if (opts.type_defs) {
         extract_input.entity_types = opts.type_defs->entity_types_prompt_json();
@@ -219,7 +222,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     // 4. Deduplicate nodes against existing graph
     auto dedup_result = pipeline::dedupe_nodes(
         impl_->llm, impl_->driver, impl_->embedder,
-        extracted_nodes, previous_episodes, episode.content, gid
+        extracted_nodes, previous_episodes, episode_body, gid
     );
     if (!dedup_result.has_value()) return std::unexpected(dedup_result.error());
     auto& dedup = dedup_result.value();
@@ -228,7 +231,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
 
     // 5. Extract edges via LLM
     pipeline::ExtractEdgesInput edge_input;
-    edge_input.episode_content = episode.content;
+    edge_input.episode_content = episode_body;
     edge_input.previous_episodes = previous_episodes;
     edge_input.nodes = nodes;
     edge_input.reference_time = datetime::to_iso8601(opts.reference_time);
@@ -271,11 +274,11 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     auto& new_edges = edge_dedup.new_edges;
 
     // 7. Enrich node summaries via LLM
-    (void)pipeline::enrich_node_summaries(impl_->llm, nodes, previous_episodes, episode.content);
+    (void)pipeline::enrich_node_summaries(impl_->llm, nodes, previous_episodes, episode_body);
 
     // 7b. Extract custom attributes for typed entities
     if (opts.type_defs) {
-        (void)pipeline::extract_entity_attributes(impl_->llm, nodes, *opts.type_defs, episode.content);
+        (void)pipeline::extract_entity_attributes(impl_->llm, nodes, *opts.type_defs, episode_body);
     }
 
     // 8. Generate embeddings for nodes and edges

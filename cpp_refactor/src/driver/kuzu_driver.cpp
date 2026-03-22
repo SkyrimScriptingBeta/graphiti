@@ -557,6 +557,63 @@ RETURN {})", ENTITY_NODE_RETURN);
     return collect_entities(result->get());
 }
 
+Result<std::vector<KuzuDriver::NodeSummary>> KuzuDriver::get_node_summaries_by_group(
+    std::string_view group_id) {
+    static const std::string query =
+        R"(MATCH (n:Entity {group_id: $group_id})
+RETURN n.uuid AS uuid, n.name AS name, n.labels AS labels)";
+
+    ParamMap params;
+    params["group_id"] = str_val(group_id);
+
+    auto result = impl_->query_params(query, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    std::vector<NodeSummary> nodes;
+    auto* qr = result->get();
+    while (qr->hasNext()) {
+        auto tuple = qr->getNext();
+        nodes.push_back({
+            .uuid = get_str(tuple->getValue(0)),
+            .name = get_str(tuple->getValue(1)),
+            .labels = get_string_list(tuple->getValue(2)),
+        });
+    }
+    return nodes;
+}
+
+Result<std::vector<KuzuDriver::EdgeSummary>> KuzuDriver::get_edge_summaries_by_nodes(
+    const std::set<std::string>& node_uuids, std::string_view group_id) {
+    // Collect all edges for this group where both endpoints are in node_uuids
+    static const std::string query =
+        R"(MATCH (n:Entity)-[r:RELATES_TO]->(m:Entity)
+WHERE r.group_id = $group_id
+RETURN r.uuid AS uuid, r.name AS name, n.uuid AS src, m.uuid AS tgt)";
+
+    ParamMap params;
+    params["group_id"] = str_val(group_id);
+
+    auto result = impl_->query_params(query, std::move(params));
+    if (!result) return std::unexpected(result.error());
+
+    std::vector<EdgeSummary> edges;
+    auto* qr = result->get();
+    while (qr->hasNext()) {
+        auto tuple = qr->getNext();
+        auto src = get_str(tuple->getValue(2));
+        auto tgt = get_str(tuple->getValue(3));
+        if (node_uuids.count(src) && node_uuids.count(tgt)) {
+            edges.push_back({
+                .uuid = get_str(tuple->getValue(0)),
+                .name = get_str(tuple->getValue(1)),
+                .source_node_uuid = std::move(src),
+                .target_node_uuid = std::move(tgt),
+            });
+        }
+    }
+    return edges;
+}
+
 Result<std::vector<std::string>> KuzuDriver::get_all_group_ids() {
     static const std::string query =
         R"(MATCH (n:Entity)

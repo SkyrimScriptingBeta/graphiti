@@ -193,6 +193,10 @@ public:
     // Records input/output tokens per prompt across all LLM calls.
     const TokenTracker& token_tracker() const;
 
+    // Get a graph overview: top nodes by edge count + their edges.
+    // No search, no embeddings — direct Cypher query. Safe with empty queries.
+    Result<SearchResults> get_graph_overview(std::string_view group_id, int max_nodes = 50, int max_edges = 300);
+
     // Access the underlying Kuzu Database instance.
     // Use this to create additional Connections for your own queries.
     kuzu::main::Database& database() const;

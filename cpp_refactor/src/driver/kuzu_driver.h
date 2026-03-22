@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -166,6 +167,12 @@ public:
     // Entity queries by group
     Result<std::vector<EntityNode>> get_entity_nodes_by_group(std::string_view group_id);
     Result<std::vector<std::string>> get_all_group_ids();
+
+    // Lightweight graph overview — only fetches uuid, name, labels per node
+    struct NodeSummary { std::string uuid; std::string name; std::vector<std::string> labels; };
+    struct EdgeSummary { std::string uuid; std::string name; std::string source_node_uuid; std::string target_node_uuid; };
+    Result<std::vector<NodeSummary>> get_node_summaries_by_group(std::string_view group_id);
+    Result<std::vector<EdgeSummary>> get_edge_summaries_by_nodes(const std::set<std::string>& node_uuids, std::string_view group_id);
 
     // Reranker queries
     Result<int64_t> count_episode_mentions(std::string_view entity_uuid);

@@ -1334,6 +1334,85 @@ const TokenTracker& Graphiti::token_tracker() const {
     return impl_->llm.token_tracker;
 }
 
+Result<SearchResults> Graphiti::get_graph_overview(std::string_view group_id, int max_nodes, int max_edges) {
+    std::lock_guard lock(impl_->mu);
+    auto gid = impl_->resolve_group_id(group_id);
+
+    // Step 1: Lightweight fetch — only uuid, name, labels per node
+    auto summaries_result = impl_->driver.get_node_summaries_by_group(gid);
+    if (!summaries_result) return std::unexpected(summaries_result.error());
+    auto& summaries = *summaries_result;
+
+    // Step 2: Get all edges (lightweight — uuid, name, src, tgt only)
+    // Build full node set first to filter edges
+    std::set<std::string> all_uuids;
+    for (auto& s : summaries) all_uuids.insert(s.uuid);
+
+    auto edges_result = impl_->driver.get_edge_summaries_by_nodes(all_uuids, gid);
+    if (!edges_result) return std::unexpected(edges_result.error());
+    auto& edge_summaries = *edges_result;
+
+    // Step 3: Count edges per node for ranking
+    std::unordered_map<std::string, int> edge_counts;
+    for (auto& e : edge_summaries) {
+        edge_counts[e.source_node_uuid]++;
+        edge_counts[e.target_node_uuid]++;
+    }
+
+    // Step 4: Sort nodes by edge count, cap at max_nodes
+    std::sort(summaries.begin(), summaries.end(),
+        [&](const KuzuDriver::NodeSummary& a, const KuzuDriver::NodeSummary& b) {
+            return edge_counts[a.uuid] > edge_counts[b.uuid];
+        });
+    if ((int)summaries.size() > max_nodes)
+        summaries.resize(max_nodes);
+
+    // Step 5: Build kept set, filter edges to only kept endpoints
+    std::set<std::string> kept;
+    for (auto& s : summaries) kept.insert(s.uuid);
+
+    std::vector<KuzuDriver::EdgeSummary> kept_edges;
+    for (auto& e : edge_summaries) {
+        if (kept.count(e.source_node_uuid) && kept.count(e.target_node_uuid))
+            kept_edges.push_back(std::move(e));
+    }
+
+    // Step 6: Cap edges, preferring high-degree node connections
+    if ((int)kept_edges.size() > max_edges) {
+        std::sort(kept_edges.begin(), kept_edges.end(),
+            [&](const KuzuDriver::EdgeSummary& a, const KuzuDriver::EdgeSummary& b) {
+                return (edge_counts[a.source_node_uuid] + edge_counts[a.target_node_uuid])
+                     > (edge_counts[b.source_node_uuid] + edge_counts[b.target_node_uuid]);
+            });
+        kept_edges.resize(max_edges);
+    }
+
+    // Step 7: Convert to SearchResults (minimal EntityNode/EntityEdge — no heavy fields)
+    SearchResults results;
+    for (auto& s : summaries) {
+        EntityNode node;
+        node.uuid = std::move(s.uuid);
+        node.name = std::move(s.name);
+        node.labels = std::move(s.labels);
+        // All other fields left default (empty) — never fetched from DB
+        results.nodes.push_back(std::move(node));
+    }
+    results.node_scores.assign(results.nodes.size(), 0.0f);
+
+    for (auto& e : kept_edges) {
+        EntityEdge edge;
+        edge.uuid = std::move(e.uuid);
+        edge.name = std::move(e.name);
+        edge.source_node_uuid = std::move(e.source_node_uuid);
+        edge.target_node_uuid = std::move(e.target_node_uuid);
+        // All other fields left default — never fetched from DB
+        results.edges.push_back(std::move(edge));
+    }
+    results.edge_scores.assign(results.edges.size(), 0.0f);
+
+    return results;
+}
+
 kuzu::main::Database& Graphiti::database() const {
     return *impl_->driver.database();
 }

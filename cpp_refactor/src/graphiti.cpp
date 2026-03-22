@@ -40,10 +40,15 @@ struct Graphiti::Impl {
     EmbedderClient& embedder;
     std::unique_ptr<KuzuWriterClient> writer_client;  // set when kuzu_writer_uri is configured
 
+    // When kuzu_writer_uri is set, local driver opens read-only (daemon handles writes)
+    static bool local_read_only(const GraphitiConfig& c) {
+        return c.read_only || !c.kuzu_writer_uri.empty();
+    }
+
     // Default: create OpenAI clients from config
     Impl(GraphitiConfig cfg)
         : config(std::move(cfg))
-        , driver(config.db_path, config.read_only)
+        , driver(config.db_path, local_read_only(config))
         , llm_owned(std::make_unique<OpenAIClient>(config.llm))
         , embedder_owned(std::make_unique<OpenAIEmbedder>(config.embedder))
         , llm(*llm_owned)
@@ -63,7 +68,7 @@ struct Graphiti::Impl {
          std::unique_ptr<LLMClient> custom_llm,
          std::unique_ptr<EmbedderClient> custom_embedder)
         : config(std::move(cfg))
-        , driver(config.db_path, config.read_only)
+        , driver(config.db_path, local_read_only(config))
         , llm_owned(custom_llm ? std::move(custom_llm)
                                 : std::make_unique<OpenAIClient>(config.llm))
         , embedder_owned(custom_embedder ? std::move(custom_embedder)

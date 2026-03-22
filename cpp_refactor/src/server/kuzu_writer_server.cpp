@@ -232,12 +232,17 @@ int main(int argc, char** argv) {
         queue->name = name;
         queue->driver = std::make_unique<KuzuDriver>(path, /*read_only=*/false);
 
-        // Ensure schema is set up
+        // Ensure schema and FTS indices are set up
         auto schema_result = queue->driver->setup_schema();
         if (!schema_result.has_value()) {
             fprintf(stderr, "[kuzu-writer] ERROR: Failed to setup schema for '%s': %s\n",
                     name.c_str(), schema_result.error().message.c_str());
             return 1;
+        }
+        auto fts_result = queue->driver->build_fts_indices();
+        if (!fts_result.has_value()) {
+            fprintf(stderr, "[kuzu-writer] WARNING: Failed to build FTS indices for '%s': %s\n",
+                    name.c_str(), fts_result.error().message.c_str());
         }
 
         queue->start();

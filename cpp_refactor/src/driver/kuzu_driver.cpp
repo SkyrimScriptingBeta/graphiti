@@ -584,11 +584,11 @@ RETURN n.uuid AS uuid, n.name AS name, n.labels AS labels)";
 
 Result<std::vector<KuzuDriver::EdgeSummary>> KuzuDriver::get_edge_summaries_by_nodes(
     const std::set<std::string>& node_uuids, std::string_view group_id) {
-    // Collect all edges for this group where both endpoints are in node_uuids
+    // Edges use intermediate RelatesToNode_ pattern:
+    //   Entity -[:RELATES_TO]-> RelatesToNode_ -[:RELATES_TO]-> Entity
     static const std::string query =
-        R"(MATCH (n:Entity)-[r:RELATES_TO]->(m:Entity)
-WHERE r.group_id = $group_id
-RETURN r.uuid AS uuid, r.name AS name, n.uuid AS src, m.uuid AS tgt)";
+        R"(MATCH (n:Entity)-[:RELATES_TO]->(e:RelatesToNode_ {group_id: $group_id})-[:RELATES_TO]->(m:Entity)
+RETURN e.uuid AS uuid, e.name AS name, n.uuid AS src, m.uuid AS tgt)";
 
     ParamMap params;
     params["group_id"] = str_val(group_id);

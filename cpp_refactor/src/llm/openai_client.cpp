@@ -2,11 +2,13 @@
 
 #include "http/http_client.h"
 
+#include <chrono>
 #include <format>
+#include <thread>
 
 namespace graphiti {
 
-static constexpr int MAX_RETRIES = 2;
+static constexpr int MAX_RETRIES = 5;
 
 struct OpenAIClient::Impl {
     LLMConfig config;
@@ -170,9 +172,17 @@ Result<nlohmann::json> OpenAIClient::generate_response(
 
         auto& err = result.error();
 
-        // Don't retry rate limits or HTTP errors
-        if (err.code == ErrorCode::llm_rate_limit || err.code == ErrorCode::http_error) {
+        // Don't retry non-retryable HTTP errors
+        if (err.code == ErrorCode::http_error) {
             return result;
+        }
+
+        // Retry rate limits with exponential backoff
+        if (err.code == ErrorCode::llm_rate_limit) {
+            if (attempt >= MAX_RETRIES) return result;
+            int delay_ms = 1000 * (1 << attempt);  // 1s, 2s, 4s
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+            continue;
         }
 
         // Retry on parse errors by appending error context

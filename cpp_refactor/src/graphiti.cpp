@@ -3,6 +3,7 @@
 #include <main/kuzu.h>
 
 #include "driver/kuzu_driver.h"
+#include "remote/kuzu_writer_client.h"
 #include "embedder/openai_embedder.h"
 #include "llm/openai_client.h"
 #include "pipeline/bulk_utils.h"
@@ -18,9 +19,12 @@
 #include "utils/uuid.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <format>
+#include <future>
 #include <mutex>
 #include <numeric>
+#include <semaphore>
 #include <set>
 #include <unordered_set>
 
@@ -34,6 +38,7 @@ struct Graphiti::Impl {
     std::unique_ptr<EmbedderClient> embedder_owned;
     LLMClient& llm;
     EmbedderClient& embedder;
+    std::unique_ptr<KuzuWriterClient> writer_client;  // set when kuzu_writer_uri is configured
 
     // Default: create OpenAI clients from config
     Impl(GraphitiConfig cfg)
@@ -42,7 +47,7 @@ struct Graphiti::Impl {
         , llm_owned(std::make_unique<OpenAIClient>(config.llm))
         , embedder_owned(std::make_unique<OpenAIEmbedder>(config.embedder))
         , llm(*llm_owned)
-        , embedder(*embedder_owned) {}
+        , embedder(*embedder_owned) { init_writer_client(); }
 
     // Shared DB + default OpenAI clients
     Impl(GraphitiConfig cfg, kuzu::main::Database& shared_db)
@@ -51,7 +56,7 @@ struct Graphiti::Impl {
         , llm_owned(std::make_unique<OpenAIClient>(config.llm))
         , embedder_owned(std::make_unique<OpenAIEmbedder>(config.embedder))
         , llm(*llm_owned)
-        , embedder(*embedder_owned) {}
+        , embedder(*embedder_owned) { init_writer_client(); }
 
     // Custom providers (nullptr = use OpenAI default from config)
     Impl(GraphitiConfig cfg,
@@ -64,7 +69,7 @@ struct Graphiti::Impl {
         , embedder_owned(custom_embedder ? std::move(custom_embedder)
                                           : std::make_unique<OpenAIEmbedder>(config.embedder))
         , llm(*llm_owned)
-        , embedder(*embedder_owned) {}
+        , embedder(*embedder_owned) { init_writer_client(); }
 
     // Shared DB + custom providers (nullptr = use OpenAI default from config)
     Impl(GraphitiConfig cfg,
@@ -78,7 +83,26 @@ struct Graphiti::Impl {
         , embedder_owned(custom_embedder ? std::move(custom_embedder)
                                           : std::make_unique<OpenAIEmbedder>(config.embedder))
         , llm(*llm_owned)
-        , embedder(*embedder_owned) {}
+        , embedder(*embedder_owned) { init_writer_client(); }
+
+    void init_writer_client() {
+        if (!config.kuzu_writer_uri.empty()) {
+            writer_client = std::make_unique<KuzuWriterClient>(
+                config.kuzu_writer_uri, config.kuzu_writer_target_db);
+            auto r = writer_client->connect();
+            if (!r.has_value()) {
+                fprintf(stderr, "[graphiti] ❌ Failed to connect to kuzu-writer-server: %s\n",
+                        r.error().message.c_str());
+                fprintf(stderr, "[graphiti] Falling back to direct Kuzu writes\n");
+                writer_client.reset();
+            } else {
+                fprintf(stderr, "[graphiti] 🔧 Connected to kuzu-writer-server at %s (target=%s)\n",
+                        config.kuzu_writer_uri.c_str(), config.kuzu_writer_target_db.c_str());
+            }
+        }
+    }
+
+    bool has_writer() const { return writer_client != nullptr; }
 
     std::string resolve_group_id(std::string_view group_id) {
         if (!group_id.empty()) return std::string(group_id);
@@ -152,7 +176,9 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         episode.content.clear();
     }
 
-    auto save_ep = impl_->driver.save_episodic_node(episode);
+    auto save_ep = impl_->has_writer()
+        ? impl_->writer_client->save_episodic_node(episode)
+        : impl_->driver.save_episodic_node(episode);
     if (!save_ep.has_value()) return std::unexpected(save_ep.error());
 
     // 3. Extract entities via LLM
@@ -270,7 +296,9 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         }
         if (is_existing) {
             // Merge attribution ids into the existing node
-            auto existing = impl_->driver.get_entity_node(node.uuid);
+            auto existing = impl_->has_writer()
+                ? impl_->writer_client->get_entity_node(node.uuid)
+                : impl_->driver.get_entity_node(node.uuid);
             if (existing.has_value()) {
                 auto& ex = existing.value();
                 bool changed = false;
@@ -291,22 +319,37 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
                 merge_ids(ex.participant_ids, pids);
 
                 if (changed) {
-                    (void)impl_->driver.save_entity_node(ex);
+                    if (impl_->has_writer())
+                        (void)impl_->writer_client->save_entity_node(ex);
+                    else
+                        (void)impl_->driver.save_entity_node(ex);
                 }
             }
         } else {
-            (void)impl_->driver.save_entity_node(node);
+            if (impl_->has_writer())
+                (void)impl_->writer_client->save_entity_node(node);
+            else
+                (void)impl_->driver.save_entity_node(node);
         }
         if (node.name_embedding.has_value()) {
-            (void)impl_->driver.save_entity_node_embedding(node.uuid, node.name_embedding.value());
+            if (impl_->has_writer())
+                (void)impl_->writer_client->save_entity_node_embedding(node.uuid, node.name_embedding.value());
+            else
+                (void)impl_->driver.save_entity_node_embedding(node.uuid, node.name_embedding.value());
         }
     }
 
     for (auto& edge : new_edges) {
         edge.episodes.push_back(episode.uuid);
-        (void)impl_->driver.save_entity_edge(edge);
+        if (impl_->has_writer())
+            (void)impl_->writer_client->save_entity_edge(edge);
+        else
+            (void)impl_->driver.save_entity_edge(edge);
         if (edge.fact_embedding.has_value()) {
-            (void)impl_->driver.save_entity_edge_embedding(edge.uuid, edge.fact_embedding.value());
+            if (impl_->has_writer())
+                (void)impl_->writer_client->save_entity_edge_embedding(edge.uuid, edge.fact_embedding.value());
+            else
+                (void)impl_->driver.save_entity_edge_embedding(edge.uuid, edge.fact_embedding.value());
         }
     }
 
@@ -317,17 +360,39 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
             auto& edge = edge_result.value();
             edge.expired_at = now;
             edge.invalid_at = now;
-            (void)impl_->driver.save_entity_edge(edge);
+            if (impl_->has_writer())
+                (void)impl_->writer_client->save_entity_edge(edge);
+            else
+                (void)impl_->driver.save_entity_edge(edge);
         }
     }
 
     // 10. Create episodic edges (MENTIONS)
-    auto episodic_result = pipeline::create_episodic_edges(impl_->driver, episode, nodes);
+    if (impl_->has_writer()) {
+        auto edge_now = std::chrono::system_clock::now();
+        for (auto& enode : nodes) {
+            EpisodicEdge ee;
+            ee.uuid = uuid::generate();
+            ee.group_id = episode.group_id;
+            ee.source_node_uuid = episode.uuid;
+            ee.target_node_uuid = enode.uuid;
+            ee.created_at = edge_now;
+            ee.agent_id = episode.agent_id;
+            ee.source_id = episode.source_id;
+            ee.source_context = episode.source_context;
+            ee.participant_ids = episode.participant_ids;
+            (void)impl_->writer_client->save_episodic_edge(ee);
+        }
+    } else {
+        (void)pipeline::create_episodic_edges(impl_->driver, episode, nodes);
+    }
 
     // 11. Saga processing (if saga name provided)
     if (opts.saga.has_value() && !opts.saga.value().empty()) {
         // Get or create saga node
-        auto existing = impl_->driver.get_saga_by_name(opts.saga.value(), gid);
+        auto existing = impl_->has_writer()
+            ? impl_->writer_client->get_saga_by_name(opts.saga.value(), gid)
+            : impl_->driver.get_saga_by_name(opts.saga.value(), gid);
         SagaNode saga_node;
         if (existing.has_value() && existing.value().has_value()) {
             saga_node = std::move(existing.value().value());
@@ -336,7 +401,10 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
             saga_node.name = opts.saga.value();
             saga_node.group_id = gid;
             saga_node.created_at = now;
-            (void)impl_->driver.save_saga_node(saga_node);
+            if (impl_->has_writer())
+                (void)impl_->writer_client->save_saga_node(saga_node);
+            else
+                (void)impl_->driver.save_saga_node(saga_node);
         }
 
         // Find previous episode in saga (if not explicitly provided)
@@ -344,7 +412,9 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         if (opts.saga_previous_episode_uuid.has_value() && !opts.saga_previous_episode_uuid.value().empty()) {
             prev_ep_uuid = opts.saga_previous_episode_uuid.value();
         } else {
-            auto last = impl_->driver.get_last_episode_in_saga(saga_node.uuid, episode.uuid);
+            auto last = impl_->has_writer()
+                ? impl_->writer_client->get_last_episode_in_saga(saga_node.uuid, episode.uuid)
+                : impl_->driver.get_last_episode_in_saga(saga_node.uuid, episode.uuid);
             if (last.has_value() && last.value().has_value()) {
                 prev_ep_uuid = last.value().value();
             }
@@ -352,13 +422,21 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
 
         // Create NEXT_EPISODE edge (prev -> current)
         if (!prev_ep_uuid.empty()) {
-            (void)impl_->driver.save_next_episode_edge(
-                uuid::generate(), prev_ep_uuid, episode.uuid, gid, now);
+            if (impl_->has_writer())
+                (void)impl_->writer_client->save_next_episode_edge(
+                    uuid::generate(), prev_ep_uuid, episode.uuid, gid, now);
+            else
+                (void)impl_->driver.save_next_episode_edge(
+                    uuid::generate(), prev_ep_uuid, episode.uuid, gid, now);
         }
 
         // Create HAS_EPISODE edge (saga -> current episode)
-        (void)impl_->driver.save_has_episode_edge(
-            uuid::generate(), saga_node.uuid, episode.uuid, gid, now);
+        if (impl_->has_writer())
+            (void)impl_->writer_client->save_has_episode_edge(
+                uuid::generate(), saga_node.uuid, episode.uuid, gid, now);
+        else
+            (void)impl_->driver.save_has_episode_edge(
+                uuid::generate(), saga_node.uuid, episode.uuid, gid, now);
     }
 
     // 12. Update communities if requested
@@ -372,7 +450,10 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     // Discard raw episode content from DB if configured
     if (!impl_->config.store_raw_episode_content) {
         episode.content.clear();
-        (void)impl_->driver.save_episodic_node(episode);
+        if (impl_->has_writer())
+            (void)impl_->writer_client->save_episodic_node(episode);
+        else
+            (void)impl_->driver.save_episodic_node(episode);
     }
 
     // Build result
@@ -400,6 +481,11 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     // ========================================================================
     // Step 1: Create and save episodic nodes for all episodes
     // ========================================================================
+    auto bulk_start = std::chrono::steady_clock::now();
+    auto step_start = bulk_start;
+    fprintf(stderr, "[graphiti] add_episode_bulk: %zu episodes, max_parallel=%d\n",
+            opts.episodes.size(), std::max(1, impl_->config.max_parallel_extractions));
+
     std::vector<EpisodicNode> episodes;
     episodes.reserve(opts.episodes.size());
 
@@ -422,8 +508,16 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     }
 
     for (auto& ep : episodes) {
-        auto r = impl_->driver.save_episodic_node(ep);
+        auto r = impl_->has_writer()
+            ? impl_->writer_client->save_episodic_node(ep)
+            : impl_->driver.save_episodic_node(ep);
         if (!r.has_value()) return std::unexpected(r.error());
+    }
+
+    {
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
+        fprintf(stderr, "[graphiti] Step 1 (save episodic nodes): %lldms\n", ms);
+        step_start = std::chrono::steady_clock::now();
     }
 
     // ========================================================================
@@ -443,46 +537,89 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
         episode_contexts.push_back(std::move(ctx));
     }
 
+    {
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
+        fprintf(stderr, "[graphiti] Step 2 (episode context retrieval): %lldms\n", ms);
+        step_start = std::chrono::steady_clock::now();
+    }
+
     // ========================================================================
-    // Step 3: Extract nodes from each episode
+    // Step 3: Extract nodes from each episode (PARALLEL)
     // ========================================================================
     // nodes_by_episode[i] = nodes extracted from episodes[i]
-    std::vector<std::vector<EntityNode>> nodes_by_episode;
-    nodes_by_episode.reserve(episodes.size());
+    int max_workers = std::max(1, impl_->config.max_parallel_extractions);
+    std::vector<std::vector<EntityNode>> nodes_by_episode(episodes.size());
 
-    for (size_t i = 0; i < episodes.size(); ++i) {
-        pipeline::ExtractNodesInput input;
-        input.episode_content = episodes[i].content;
-        input.episode_type = episodes[i].source;
-        if (opts.type_defs) {
-            input.entity_types = opts.type_defs->entity_types_prompt_json();
-            input.type_defs = opts.type_defs;
-        } else {
-            input.entity_types = R"([{"entity_type_id": 0, "entity_type_name": "Entity", "entity_type_description": "A general entity"}])";
-        }
-        input.previous_episodes = episode_contexts[i];
-        input.group_id = gid;
-        input.source_description = episodes[i].source_description;
-        if (opts.custom_instructions.has_value()) {
-            input.custom_instructions = opts.custom_instructions.value();
-        }
+    fprintf(stderr, "[graphiti] Step 3: extracting nodes from %zu episodes (max_parallel=%d)\n",
+            episodes.size(), max_workers);
+    auto step3_start = std::chrono::steady_clock::now();
 
-        auto result = pipeline::extract_nodes(impl_->llm, input);
-        if (result.has_value()) {
-            auto& nodes = result.value();
-            auto& ep_sid = episodes[i].source_id;
-            auto& ep_sctx = episodes[i].source_context;
-            auto& ep_pids = episodes[i].participant_ids;
-            for (auto& node : nodes) {
-                if (!aid.empty()) node.agent_ids = {aid};
-                if (!ep_sid.empty()) node.source_ids = {ep_sid};
-                if (!ep_sctx.empty()) node.source_contexts = {ep_sctx};
-                if (!ep_pids.empty()) node.participant_ids = ep_pids;
+    {
+        std::counting_semaphore sem(max_workers);
+        std::vector<std::future<void>> futures;
+        futures.reserve(episodes.size());
+
+        for (size_t i = 0; i < episodes.size(); ++i) {
+            // Build input on the main thread (reads shared state)
+            pipeline::ExtractNodesInput input;
+            input.episode_content = episodes[i].content;
+            input.episode_type = episodes[i].source;
+            if (opts.type_defs) {
+                input.entity_types = opts.type_defs->entity_types_prompt_json();
+                input.type_defs = opts.type_defs;
+            } else {
+                input.entity_types = R"([{"entity_type_id": 0, "entity_type_name": "Entity", "entity_type_description": "A general entity"}])";
             }
-            nodes_by_episode.push_back(std::move(nodes));
-        } else {
-            nodes_by_episode.push_back({});
+            input.previous_episodes = episode_contexts[i];
+            input.group_id = gid;
+            input.source_description = episodes[i].source_description;
+            if (opts.custom_instructions.has_value()) {
+                input.custom_instructions = opts.custom_instructions.value();
+            }
+
+            // Capture per-episode attribution
+            auto ep_aid = aid;
+            auto ep_sid = episodes[i].source_id;
+            auto ep_sctx = episodes[i].source_context;
+            auto ep_pids = episodes[i].participant_ids;
+            auto& llm_config = impl_->config.llm;
+            auto& dst = nodes_by_episode[i];
+
+            auto ep_index = i;
+            futures.push_back(std::async(std::launch::async,
+                [&sem, &llm_config, &dst, input = std::move(input),
+                 ep_aid, ep_sid, ep_sctx, ep_pids, ep_index]() mutable {
+                    sem.acquire();
+                    fprintf(stderr, "[graphiti]   node extraction %zu started\n", ep_index);
+                    auto t0 = std::chrono::steady_clock::now();
+                    OpenAIClient llm(llm_config);
+                    auto result = pipeline::extract_nodes(llm, input);
+                    auto t1 = std::chrono::steady_clock::now();
+                    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+                    fprintf(stderr, "[graphiti]   node extraction %zu done (%lldms)\n", ep_index, ms);
+                    sem.release();
+
+                    if (result.has_value()) {
+                        for (auto& node : result.value()) {
+                            if (!ep_aid.empty()) node.agent_ids = {ep_aid};
+                            if (!ep_sid.empty()) node.source_ids = {ep_sid};
+                            if (!ep_sctx.empty()) node.source_contexts = {ep_sctx};
+                            if (!ep_pids.empty()) node.participant_ids = ep_pids;
+                        }
+                        dst = std::move(result.value());
+                    }
+                }
+            ));
         }
+
+        // Wait for all node extractions to complete
+        for (auto& f : futures) f.get();
+    }
+
+    {
+        auto step3_end = std::chrono::steady_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(step3_end - step3_start).count();
+        fprintf(stderr, "[graphiti] Step 3 complete: %lldms\n", ms);
     }
 
     // ========================================================================
@@ -519,6 +656,12 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                 }
             }
         }
+    }
+
+    {
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
+        fprintf(stderr, "[graphiti] Step 4 (cross-dedup nodes): %lldms\n", ms);
+        step_start = std::chrono::steady_clock::now();
     }
 
     // ========================================================================
@@ -574,59 +717,122 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
         combined_uuid_map[k] = resolved;
     }
 
+    {
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
+        fprintf(stderr, "[graphiti] Step 5 (dedupe nodes vs graph — LLM): %lldms\n", ms);
+        step_start = std::chrono::steady_clock::now();
+    }
+
     // ========================================================================
-    // Step 6: Extract edges from each episode
+    // Step 6: Extract edges from each episode (PARALLEL)
     // ========================================================================
-    std::vector<EntityEdge> all_edges;
+    std::vector<std::vector<EntityEdge>> edges_by_episode(episodes.size());
 
-    for (size_t i = 0; i < episodes.size(); ++i) {
-        // Build node list for this episode (using deduped nodes)
-        auto& ep_nodes = nodes_by_episode[i];
+    fprintf(stderr, "[graphiti] Step 6: extracting edges from %zu episodes (max_parallel=%d)\n",
+            episodes.size(), max_workers);
+    auto step6_start = std::chrono::steady_clock::now();
 
-        pipeline::ExtractEdgesInput input;
-        input.episode_content = episodes[i].content;
-        input.previous_episodes = episode_contexts[i];
-        input.nodes = ep_nodes;
-        input.reference_time = datetime::to_iso8601(episodes[i].valid_at);
-        input.group_id = gid;
-        if (opts.type_defs && !opts.type_defs->edge_types.empty()) {
-            input.edge_types = opts.type_defs->edge_types_prompt_json();
-        }
-        if (opts.custom_instructions.has_value()) {
-            input.custom_instructions = opts.custom_instructions.value();
-        }
+    {
+        std::counting_semaphore sem(max_workers);
+        std::vector<std::future<void>> futures;
+        futures.reserve(episodes.size());
 
-        auto result = pipeline::extract_edges(impl_->llm, input);
-        if (result.has_value()) {
-            auto& ep_sid = episodes[i].source_id;
-            auto& ep_sctx = episodes[i].source_context;
-            auto& ep_pids = episodes[i].participant_ids;
-            for (auto& edge : result.value()) {
-                edge.episodes.push_back(episodes[i].uuid);
-                if (!aid.empty()) edge.agent_ids = {aid};
-                if (!ep_sid.empty()) edge.source_ids = {ep_sid};
-                if (!ep_sctx.empty()) edge.source_contexts = {ep_sctx};
-                if (!ep_pids.empty()) edge.participant_ids = ep_pids;
-                all_edges.push_back(std::move(edge));
+        for (size_t i = 0; i < episodes.size(); ++i) {
+            auto& ep_nodes = nodes_by_episode[i];
+
+            pipeline::ExtractEdgesInput input;
+            input.episode_content = episodes[i].content;
+            input.previous_episodes = episode_contexts[i];
+            input.nodes = ep_nodes;
+            input.reference_time = datetime::to_iso8601(episodes[i].valid_at);
+            input.group_id = gid;
+            if (opts.type_defs && !opts.type_defs->edge_types.empty()) {
+                input.edge_types = opts.type_defs->edge_types_prompt_json();
             }
+            if (opts.custom_instructions.has_value()) {
+                input.custom_instructions = opts.custom_instructions.value();
+            }
+
+            auto ep_aid = aid;
+            auto ep_sid = episodes[i].source_id;
+            auto ep_sctx = episodes[i].source_context;
+            auto ep_pids = episodes[i].participant_ids;
+            auto ep_uuid = episodes[i].uuid;
+            auto& llm_config = impl_->config.llm;
+            auto& dst = edges_by_episode[i];
+
+            auto ep_index = i;
+            futures.push_back(std::async(std::launch::async,
+                [&sem, &llm_config, &dst, input = std::move(input),
+                 ep_aid, ep_sid, ep_sctx, ep_pids, ep_uuid, ep_index]() mutable {
+                    sem.acquire();
+                    fprintf(stderr, "[graphiti]   edge extraction %zu started\n", ep_index);
+                    auto t0 = std::chrono::steady_clock::now();
+                    OpenAIClient llm(llm_config);
+                    auto result = pipeline::extract_edges(llm, input);
+                    auto t1 = std::chrono::steady_clock::now();
+                    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+                    fprintf(stderr, "[graphiti]   edge extraction %zu done (%lldms)\n", ep_index, ms);
+                    sem.release();
+
+                    if (result.has_value()) {
+                        for (auto& edge : result.value()) {
+                            edge.episodes.push_back(ep_uuid);
+                            if (!ep_aid.empty()) edge.agent_ids = {ep_aid};
+                            if (!ep_sid.empty()) edge.source_ids = {ep_sid};
+                            if (!ep_sctx.empty()) edge.source_contexts = {ep_sctx};
+                            if (!ep_pids.empty()) edge.participant_ids = ep_pids;
+                        }
+                        dst = std::move(result.value());
+                    }
+                }
+            ));
+        }
+
+        for (auto& f : futures) f.get();
+    }
+
+    {
+        auto step6_end = std::chrono::steady_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(step6_end - step6_start).count();
+        fprintf(stderr, "[graphiti] Step 6 complete: %lldms\n", ms);
+    }
+
+    // Flatten edges_by_episode into all_edges
+    std::vector<EntityEdge> all_edges;
+    for (auto& ep_edges : edges_by_episode) {
+        for (auto& edge : ep_edges) {
+            all_edges.push_back(std::move(edge));
         }
     }
 
     // ========================================================================
     // Step 7: Remap edge pointers using combined UUID map
     // ========================================================================
+    step_start = std::chrono::steady_clock::now();
     pipeline::resolve_edge_pointers(all_edges, combined_uuid_map);
 
     // ========================================================================
     // Step 8: Deduplicate edges against existing graph
     // ========================================================================
     // NOTE: Bulk mode skips edge invalidation for speed
+    {
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
+        fprintf(stderr, "[graphiti] Step 7 (remap edge pointers): %lldms\n", ms);
+        step_start = std::chrono::steady_clock::now();
+    }
     auto edge_dedup = pipeline::dedupe_edges(impl_->llm, impl_->driver, all_edges);
     std::vector<EntityEdge> final_edges;
     if (edge_dedup.has_value()) {
         final_edges = std::move(edge_dedup.value().new_edges);
     } else {
         final_edges = std::move(all_edges);
+    }
+
+    {
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
+        fprintf(stderr, "[graphiti] Step 8 (dedupe edges vs graph — LLM): %lldms\n", ms);
+        step_start = std::chrono::steady_clock::now();
     }
 
     // ========================================================================
@@ -643,6 +849,12 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
         );
     }
 
+    {
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
+        fprintf(stderr, "[graphiti] Step 9 (enrich node summaries — LLM): %lldms\n", ms);
+        step_start = std::chrono::steady_clock::now();
+    }
+
     // ========================================================================
     // Step 10: Generate embeddings
     // ========================================================================
@@ -655,6 +867,12 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
         try {
             edge.fact_embedding = impl_->embedder.create(edge.fact);
         } catch (...) {}
+    }
+
+    {
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
+        fprintf(stderr, "[graphiti] Step 10 (embeddings): %lldms\n", ms);
+        step_start = std::chrono::steady_clock::now();
     }
 
     // ========================================================================
@@ -670,7 +888,9 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
         }
         if (is_existing) {
             // Merge attribution ids into the existing node
-            auto existing = impl_->driver.get_entity_node(node.uuid);
+            auto existing = impl_->has_writer()
+                ? impl_->writer_client->get_entity_node(node.uuid)
+                : impl_->driver.get_entity_node(node.uuid);
             if (existing.has_value()) {
                 auto& ex = existing.value();
                 bool changed = false;
@@ -692,21 +912,36 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                 merge_ids(ex.participant_ids, node.participant_ids);
 
                 if (changed) {
-                    (void)impl_->driver.save_entity_node(ex);
+                    if (impl_->has_writer())
+                        (void)impl_->writer_client->save_entity_node(ex);
+                    else
+                        (void)impl_->driver.save_entity_node(ex);
                 }
             }
         } else {
-            (void)impl_->driver.save_entity_node(node);
+            if (impl_->has_writer())
+                (void)impl_->writer_client->save_entity_node(node);
+            else
+                (void)impl_->driver.save_entity_node(node);
         }
         if (node.name_embedding.has_value()) {
-            (void)impl_->driver.save_entity_node_embedding(node.uuid, node.name_embedding.value());
+            if (impl_->has_writer())
+                (void)impl_->writer_client->save_entity_node_embedding(node.uuid, node.name_embedding.value());
+            else
+                (void)impl_->driver.save_entity_node_embedding(node.uuid, node.name_embedding.value());
         }
     }
 
     for (auto& edge : final_edges) {
-        (void)impl_->driver.save_entity_edge(edge);
+        if (impl_->has_writer())
+            (void)impl_->writer_client->save_entity_edge(edge);
+        else
+            (void)impl_->driver.save_entity_edge(edge);
         if (edge.fact_embedding.has_value()) {
-            (void)impl_->driver.save_entity_edge_embedding(edge.uuid, edge.fact_embedding.value());
+            if (impl_->has_writer())
+                (void)impl_->writer_client->save_entity_edge_embedding(edge.uuid, edge.fact_embedding.value());
+            else
+                (void)impl_->driver.save_entity_edge_embedding(edge.uuid, edge.fact_embedding.value());
         }
     }
 
@@ -731,14 +966,34 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
             }
         }
 
-        (void)pipeline::create_episodic_edges(impl_->driver, episodes[i], ep_unique_nodes);
+        if (impl_->has_writer()) {
+            // Inline episodic edge creation for remote writer path
+            auto edge_now = std::chrono::system_clock::now();
+            for (auto& enode : ep_unique_nodes) {
+                EpisodicEdge edge;
+                edge.uuid = uuid::generate();
+                edge.group_id = episodes[i].group_id;
+                edge.source_node_uuid = episodes[i].uuid;
+                edge.target_node_uuid = enode.uuid;
+                edge.created_at = edge_now;
+                edge.agent_id = episodes[i].agent_id;
+                edge.source_id = episodes[i].source_id;
+                edge.source_context = episodes[i].source_context;
+                edge.participant_ids = episodes[i].participant_ids;
+                (void)impl_->writer_client->save_episodic_edge(edge);
+            }
+        } else {
+            (void)pipeline::create_episodic_edges(impl_->driver, episodes[i], ep_unique_nodes);
+        }
     }
 
     // ========================================================================
     // Step 13: Saga processing (if saga name provided)
     // ========================================================================
     if (opts.saga.has_value() && !opts.saga.value().empty()) {
-        auto existing = impl_->driver.get_saga_by_name(opts.saga.value(), gid);
+        auto existing = impl_->has_writer()
+            ? impl_->writer_client->get_saga_by_name(opts.saga.value(), gid)
+            : impl_->driver.get_saga_by_name(opts.saga.value(), gid);
         SagaNode saga_node;
         if (existing.has_value() && existing.value().has_value()) {
             saga_node = std::move(existing.value().value());
@@ -747,7 +1002,10 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
             saga_node.name = opts.saga.value();
             saga_node.group_id = gid;
             saga_node.created_at = now;
-            (void)impl_->driver.save_saga_node(saga_node);
+            if (impl_->has_writer())
+                (void)impl_->writer_client->save_saga_node(saga_node);
+            else
+                (void)impl_->driver.save_saga_node(saga_node);
         }
 
         // Sort episodes by valid_at for correct NEXT_EPISODE ordering
@@ -758,7 +1016,9 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
 
         // Find previous episode already in saga
         std::string prev_ep_uuid;
-        auto last = impl_->driver.get_last_episode_in_saga(saga_node.uuid);
+        auto last = impl_->has_writer()
+            ? impl_->writer_client->get_last_episode_in_saga(saga_node.uuid)
+            : impl_->driver.get_last_episode_in_saga(saga_node.uuid);
         if (last.has_value() && last.value().has_value()) {
             prev_ep_uuid = last.value().value();
         }
@@ -767,12 +1027,20 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
             auto& ep = episodes[idx];
 
             if (!prev_ep_uuid.empty()) {
-                (void)impl_->driver.save_next_episode_edge(
-                    uuid::generate(), prev_ep_uuid, ep.uuid, gid, now);
+                if (impl_->has_writer())
+                    (void)impl_->writer_client->save_next_episode_edge(
+                        uuid::generate(), prev_ep_uuid, ep.uuid, gid, now);
+                else
+                    (void)impl_->driver.save_next_episode_edge(
+                        uuid::generate(), prev_ep_uuid, ep.uuid, gid, now);
             }
 
-            (void)impl_->driver.save_has_episode_edge(
-                uuid::generate(), saga_node.uuid, ep.uuid, gid, now);
+            if (impl_->has_writer())
+                (void)impl_->writer_client->save_has_episode_edge(
+                    uuid::generate(), saga_node.uuid, ep.uuid, gid, now);
+            else
+                (void)impl_->driver.save_has_episode_edge(
+                    uuid::generate(), saga_node.uuid, ep.uuid, gid, now);
 
             prev_ep_uuid = ep.uuid;
         }
@@ -783,8 +1051,20 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     if (!impl_->config.store_raw_episode_content) {
         for (auto& ep : episodes) {
             ep.content.clear();
-            (void)impl_->driver.save_episodic_node(ep);
+            if (impl_->has_writer())
+                (void)impl_->writer_client->save_episodic_node(ep);
+            else
+                (void)impl_->driver.save_episodic_node(ep);
         }
+    }
+
+    {
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - step_start).count();
+        fprintf(stderr, "[graphiti] Steps 11-13 (persist + episodic edges + saga): %lldms\n", ms);
+    }
+    {
+        auto total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - bulk_start).count();
+        fprintf(stderr, "[graphiti] add_episode_bulk TOTAL: %lldms\n", total_ms);
     }
 
     // ========================================================================
@@ -1000,22 +1280,42 @@ Result<Graphiti::AddTripletResult> Graphiti::add_triplet(
     edge.target_node_uuid = target_node.uuid;
 
     // Save nodes
-    (void)impl_->driver.save_entity_node(source_node);
+    if (impl_->has_writer())
+        (void)impl_->writer_client->save_entity_node(source_node);
+    else
+        (void)impl_->driver.save_entity_node(source_node);
     if (source_node.name_embedding.has_value()) {
-        (void)impl_->driver.save_entity_node_embedding(
-            source_node.uuid, source_node.name_embedding.value());
+        if (impl_->has_writer())
+            (void)impl_->writer_client->save_entity_node_embedding(
+                source_node.uuid, source_node.name_embedding.value());
+        else
+            (void)impl_->driver.save_entity_node_embedding(
+                source_node.uuid, source_node.name_embedding.value());
     }
 
-    (void)impl_->driver.save_entity_node(target_node);
+    if (impl_->has_writer())
+        (void)impl_->writer_client->save_entity_node(target_node);
+    else
+        (void)impl_->driver.save_entity_node(target_node);
     if (target_node.name_embedding.has_value()) {
-        (void)impl_->driver.save_entity_node_embedding(
-            target_node.uuid, target_node.name_embedding.value());
+        if (impl_->has_writer())
+            (void)impl_->writer_client->save_entity_node_embedding(
+                target_node.uuid, target_node.name_embedding.value());
+        else
+            (void)impl_->driver.save_entity_node_embedding(
+                target_node.uuid, target_node.name_embedding.value());
     }
 
     // Save edge
-    (void)impl_->driver.save_entity_edge(edge);
+    if (impl_->has_writer())
+        (void)impl_->writer_client->save_entity_edge(edge);
+    else
+        (void)impl_->driver.save_entity_edge(edge);
     if (edge.fact_embedding.has_value()) {
-        (void)impl_->driver.save_entity_edge_embedding(edge.uuid, edge.fact_embedding.value());
+        if (impl_->has_writer())
+            (void)impl_->writer_client->save_entity_edge_embedding(edge.uuid, edge.fact_embedding.value());
+        else
+            (void)impl_->driver.save_entity_edge_embedding(edge.uuid, edge.fact_embedding.value());
     }
 
     AddTripletResult result;

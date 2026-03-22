@@ -30,6 +30,10 @@ struct GraphitiConfig {
     bool store_raw_episode_content = true;
     std::string onnx_model_path;  // if set, used to create OnnxEmbedder
     bool read_only = false;       // if true, opens Kuzu in read-only mode (no write lock)
+    int max_parallel_extractions = 4;  // max concurrent LLM calls in add_episode_bulk()
+    std::string kuzu_writer_uri;  // e.g. "ws://127.0.0.1:9876" — when set, ALL writes go over WebSocket
+                                   // to a centralized kuzu-writer-server daemon. Reads stay local.
+    std::string kuzu_writer_target_db;  // e.g. "keel" — which DB on the writer server to target
 
     // Build config from environment variables:
     //   OPENAI_API_KEY        -> llm.api_key, embedder.api_key
@@ -101,6 +105,21 @@ struct GraphitiConfig {
         auto group_id = env("GRAPHITI_GROUP_ID");
         if (!group_id.empty()) {
             config.default_group_id = group_id;
+        }
+
+        auto max_parallel = env("GRAPHITI_MAX_PARALLEL");
+        if (!max_parallel.empty()) {
+            config.max_parallel_extractions = std::max(1, std::stoi(max_parallel));
+        }
+
+        auto writer_uri = env("KUZU_WRITER_URI");
+        if (!writer_uri.empty()) {
+            config.kuzu_writer_uri = writer_uri;
+        }
+
+        auto writer_target = env("KUZU_WRITER_TARGET_DB");
+        if (!writer_target.empty()) {
+            config.kuzu_writer_target_db = writer_target;
         }
 
         return config;

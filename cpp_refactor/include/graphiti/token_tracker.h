@@ -64,6 +64,19 @@ public:
         return total;
     }
 
+    // Merge another tracker's usage into this one.
+    void merge(const TokenTracker& other) {
+        auto other_usage = other.get_usage();
+        std::lock_guard lock(mu_);
+        for (auto& [name, entry] : other_usage) {
+            auto& ours = usage_[name];
+            ours.prompt_name = name;
+            ours.call_count += entry.call_count;
+            ours.total_input_tokens += entry.total_input_tokens;
+            ours.total_output_tokens += entry.total_output_tokens;
+        }
+    }
+
     void reset() {
         std::lock_guard lock(mu_);
         usage_.clear();

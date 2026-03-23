@@ -56,34 +56,47 @@ Result<DedupeNodesResult> dedupe_nodes(
             node_json, "", existing_json
         );
 
-        auto llm_result = llm.generate_response(
-            messages, response_schemas::NODE_RESOLUTIONS, ModelSize::small
-        );
+        constexpr int MAX_RETRIES = 2;
+        for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
+            auto llm_result = llm.generate_response(
+                messages, response_schemas::NODE_RESOLUTIONS, ModelSize::small
+            );
 
-        if (!llm_result.has_value()) continue; // On error, keep the node as-is
+            if (!llm_result.has_value()) break; // LLM error — keep node as-is
 
-        try {
-            auto resolutions = llm_result.value().get<NodeResolutions>();
-            if (!resolutions.entity_resolutions.empty()) {
-                auto& res = resolutions.entity_resolutions[0];
+            try {
+                auto resolutions = llm_result.value().get<NodeResolutions>();
+                if (!resolutions.entity_resolutions.empty()) {
+                    auto& res = resolutions.entity_resolutions[0];
 
-                // Update name to the best version
-                node.name = res.name;
+                    // Update name to the best version
+                    node.name = res.name;
 
-                if (!res.duplicate_name.empty()) {
-                    // Find the existing node UUID by name
-                    for (auto& existing : search_result.value()) {
-                        if (existing.name == res.duplicate_name) {
-                            // Map new UUID to existing UUID
-                            result.uuid_map[node.uuid] = existing.uuid;
-                            node.uuid = existing.uuid;
-                            break;
+                    if (!res.duplicate_name.empty()) {
+                        // Find the existing node UUID by name
+                        for (auto& existing : search_result.value()) {
+                            if (existing.name == res.duplicate_name) {
+                                // Map new UUID to existing UUID
+                                result.uuid_map[node.uuid] = existing.uuid;
+                                node.uuid = existing.uuid;
+                                break;
+                            }
                         }
                     }
                 }
+                break; // success
+            } catch (const std::exception& e) {
+                if (attempt < MAX_RETRIES) {
+                    fprintf(stderr, "  [graphiti] node dedup parse failed (attempt %d/%d), retrying: %s\n",
+                            attempt + 1, MAX_RETRIES + 1, e.what());
+                    messages.push_back({"user",
+                        std::format("The previous response was invalid. Error: {}. "
+                                    "Please try again with valid JSON.", e.what())
+                    });
+                    continue;
+                }
+                // Final attempt failed — keep node as-is
             }
-        } catch (...) {
-            // Parse error — keep node as-is
         }
     }
 

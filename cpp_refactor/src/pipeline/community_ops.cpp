@@ -131,10 +131,18 @@ Summaries:
 [{{"summary": "{}"}}, {{"summary": "{}"}}])", left, right)}
     };
 
-    auto resp = llm.generate_response(messages, response_schemas::SUMMARY, ModelSize::small);
-    if (resp.has_value()) {
-        auto result = extract_string_from_response(resp.value());
-        if (!result.empty()) return result;
+    constexpr int MAX_RETRIES = 2;
+    for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
+        auto resp = llm.generate_response(messages, response_schemas::SUMMARY, ModelSize::small);
+        if (resp.has_value()) {
+            auto result = extract_string_from_response(resp.value());
+            if (!result.empty()) return result;
+        }
+        if (attempt < MAX_RETRIES) {
+            fprintf(stderr, "  [graphiti] community summary failed (attempt %d/%d), retrying\n",
+                    attempt + 1, MAX_RETRIES + 1);
+            messages.push_back({"user", "The previous response was invalid. Please try again with valid JSON."});
+        }
     }
     // Fallback: concatenate
     return std::format("{} {}", left, right);
@@ -153,10 +161,18 @@ Summary:
 {})", summary)}
     };
 
-    auto resp = llm.generate_response(messages, response_schemas::SUMMARY_DESCRIPTION, ModelSize::small);
-    if (resp.has_value()) {
-        auto result = extract_string_from_response(resp.value());
-        if (!result.empty()) return result;
+    constexpr int MAX_RETRIES = 2;
+    for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
+        auto resp = llm.generate_response(messages, response_schemas::SUMMARY_DESCRIPTION, ModelSize::small);
+        if (resp.has_value()) {
+            auto result = extract_string_from_response(resp.value());
+            if (!result.empty()) return result;
+        }
+        if (attempt < MAX_RETRIES) {
+            fprintf(stderr, "  [graphiti] community description failed (attempt %d/%d), retrying\n",
+                    attempt + 1, MAX_RETRIES + 1);
+            messages.push_back({"user", "The previous response was invalid. Please try again with valid JSON."});
+        }
     }
     return "Community";
 }

@@ -49,34 +49,49 @@ Result<DedupeEdgesResult> dedupe_edges(
             existing_facts, invalidation_candidates, new_fact
         );
 
-        auto llm_result = llm.generate_response(
-            messages, response_schemas::EDGE_DUPLICATE, ModelSize::small
-        );
+        constexpr int MAX_RETRIES = 2;
+        bool edge_handled = false;
+        for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
+            auto llm_result = llm.generate_response(
+                messages, response_schemas::EDGE_DUPLICATE, ModelSize::small
+            );
 
-        if (!llm_result.has_value()) {
-            // On LLM error, keep the edge (err on the side of adding)
-            result.new_edges.push_back(new_edge);
-            continue;
-        }
-
-        try {
-            auto dedup = llm_result.value().get<EdgeDuplicate>();
-
-            // Check if the new edge is a duplicate of any existing edge
-            bool is_duplicate = !dedup.duplicate_facts.empty();
-
-            if (!is_duplicate) {
+            if (!llm_result.has_value()) {
+                // LLM error — keep the edge
                 result.new_edges.push_back(new_edge);
+                edge_handled = true;
+                break;
             }
 
-            // Mark contradicted edges for invalidation
-            for (int contradicted_idx : dedup.contradicted_facts) {
-                if (contradicted_idx >= 0 && contradicted_idx < static_cast<int>(existing_edges.size())) {
-                    invalidated_set.insert(existing_edges[contradicted_idx].uuid);
+            try {
+                auto dedup = llm_result.value().get<EdgeDuplicate>();
+
+                bool is_duplicate = !dedup.duplicate_facts.empty();
+                if (!is_duplicate) {
+                    result.new_edges.push_back(new_edge);
+                }
+
+                for (int contradicted_idx : dedup.contradicted_facts) {
+                    if (contradicted_idx >= 0 && contradicted_idx < static_cast<int>(existing_edges.size())) {
+                        invalidated_set.insert(existing_edges[contradicted_idx].uuid);
+                    }
+                }
+                edge_handled = true;
+                break; // success
+            } catch (const std::exception& e) {
+                if (attempt < MAX_RETRIES) {
+                    fprintf(stderr, "  [graphiti] edge dedup parse failed (attempt %d/%d), retrying: %s\n",
+                            attempt + 1, MAX_RETRIES + 1, e.what());
+                    messages.push_back({"user",
+                        std::format("The previous response was invalid. Error: {}. "
+                                    "Please try again with valid JSON.", e.what())
+                    });
+                    continue;
                 }
             }
-        } catch (...) {
-            // Parse error — keep the edge
+        }
+        if (!edge_handled) {
+            // All retries failed — keep the edge
             result.new_edges.push_back(new_edge);
         }
     }

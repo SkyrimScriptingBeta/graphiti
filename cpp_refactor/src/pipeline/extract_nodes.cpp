@@ -159,19 +159,37 @@ Use null for any attribute that cannot be determined from the context.)",
             node.name, custom_type, episode_content, schema
         );
 
-        auto result = llm.generate_response(
-            {{"system", std::move(sys)}, {"user", std::move(user)}},
-            ENTITY_ATTRIBUTES_SCHEMA, ModelSize::small
-        );
+        std::vector<Message> attr_messages = {{"system", std::move(sys)}, {"user", std::move(user)}};
+        constexpr int MAX_ATTR_RETRIES = 2;
+        for (int attempt = 0; attempt <= MAX_ATTR_RETRIES; ++attempt) {
+            auto result = llm.generate_response(
+                attr_messages, ENTITY_ATTRIBUTES_SCHEMA, ModelSize::small
+            );
 
-        if (result.has_value()) {
-            try {
-                auto& response = result.value();
-                if (response.contains("attributes") && response["attributes"].is_object()) {
-                    node.attributes = response["attributes"];
+            if (result.has_value()) {
+                try {
+                    auto& response = result.value();
+                    if (response.contains("attributes") && response["attributes"].is_object()) {
+                        node.attributes = response["attributes"];
+                    }
+                    break; // success
+                } catch (const std::exception& e) {
+                    if (attempt < MAX_ATTR_RETRIES) {
+                        fprintf(stderr, "  [graphiti] attribute parse failed (attempt %d/%d), retrying: %s\n",
+                                attempt + 1, MAX_ATTR_RETRIES + 1, e.what());
+                        attr_messages.push_back({"user",
+                            std::format("The previous response was invalid. Error: {}. "
+                                        "Please try again with valid JSON.", e.what())
+                        });
+                        continue;
+                    }
                 }
-            } catch (...) {
-                // Attribute extraction failure is non-fatal
+            } else {
+                if (attempt < MAX_ATTR_RETRIES) {
+                    fprintf(stderr, "  [graphiti] attribute LLM call failed (attempt %d/%d), retrying\n",
+                            attempt + 1, MAX_ATTR_RETRIES + 1);
+                    continue;
+                }
             }
         }
     }

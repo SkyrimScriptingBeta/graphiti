@@ -218,29 +218,44 @@ Result<std::vector<std::pair<std::string, float>>> cross_encoder_rerank(
             {"user", prompt}
         };
 
-        auto response = llm.generate_response(messages, std::nullopt, ModelSize::small);
-        if (!response.has_value()) {
+        constexpr int MAX_RETRIES = 2;
+        bool rerank_done = false;
+        for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
+            auto response = llm.generate_response(messages, std::nullopt, ModelSize::small);
+            if (!response.has_value()) {
+                if (attempt < MAX_RETRIES) {
+                    fprintf(stderr, "  [graphiti] rerank failed (attempt %d/%d), retrying\n",
+                            attempt + 1, MAX_RETRIES + 1);
+                    continue;
+                }
+                results.emplace_back(passage, 0.5f);
+                rerank_done = true;
+                break;
+            }
+
+            // Parse: look for "true" or "false" in the response
+            std::string content;
+            if (response.value().is_string()) {
+                content = response.value().get<std::string>();
+            } else if (response.value().contains("content")) {
+                content = response.value()["content"].get<std::string>();
+            } else {
+                content = response.value().dump();
+            }
+
+            std::string lower;
+            for (char c : content) lower += static_cast<char>(std::tolower(c));
+
+            if (lower.find("true") != std::string::npos) {
+                results.emplace_back(passage, 0.9f);
+            } else {
+                results.emplace_back(passage, 0.1f);
+            }
+            rerank_done = true;
+            break; // success
+        }
+        if (!rerank_done) {
             results.emplace_back(passage, 0.5f);
-            continue;
-        }
-
-        // Parse: look for "true" or "false" in the response
-        std::string content;
-        if (response.value().is_string()) {
-            content = response.value().get<std::string>();
-        } else if (response.value().contains("content")) {
-            content = response.value()["content"].get<std::string>();
-        } else {
-            content = response.value().dump();
-        }
-
-        std::string lower;
-        for (char c : content) lower += static_cast<char>(std::tolower(c));
-
-        if (lower.find("true") != std::string::npos) {
-            results.emplace_back(passage, 0.9f);
-        } else {
-            results.emplace_back(passage, 0.1f);
         }
     }
 

@@ -124,22 +124,25 @@ void to_json(nlohmann::json& j, const SummaryDescription& v);
 namespace response_schemas {
 
 constexpr std::string_view EXTRACTED_ENTITIES = R"(Example 1:
-{"extracted_entities": [{"name": "Alice", "entity_type_id": 0}, {"name": "Acme Corp", "entity_type_id": 1}]}
+{"extracted_entities": [{"name": "Zenith Corp", "entity_type_id": 0}, {"name": "Mara Chen", "entity_type_id": 0}, {"name": "PostgreSQL", "entity_type_id": 0}]}
 
 Example 2:
-{"extracted_entities": [{"name": "Bob", "entity_type_id": 0}, {"name": "Project Atlas", "entity_type_id": 2}, {"name": "React", "entity_type_id": 3}]})";
+{"extracted_entities": [{"name": "Sprint 3", "entity_type_id": 0}, {"name": "Terraform", "entity_type_id": 0}, {"name": "auth-service", "entity_type_id": 0}, {"name": "Juno", "entity_type_id": 0}, {"name": "Rex", "entity_type_id": 0}]})";
 
-constexpr std::string_view EXTRACTED_EDGES = R"(Example 1:
-{"edges": [{"source_entity_name": "Alice", "target_entity_name": "Acme Corp", "relation_type": "WORKS_AT", "fact": "Alice works at Acme Corp as an engineer", "valid_at": "2025-01-15T00:00:00Z", "invalid_at": null}]}
+constexpr std::string_view EXTRACTED_EDGES = R"(Preferred relation types (use these when they fit, or derive your own in SCREAMING_SNAKE_CASE):
+HAS_ROLE, MEMBER_OF, LEADS, SAME_AS, WORKS_WITH, WRITES, PRODUCES, REVIEWS, VALIDATES, USES, ATTACHES, DEPENDS_ON, IMPLEMENTS, BUILT_WITH, RESPONSIBLE_FOR, REQUIRES, TRANSITIONS_TO, BLOCKS, UNBLOCKS, KICKED_OFF_BY, DISCOVERED, LEARNED_FROM, CONTRADICTS, SUPERSEDES, CAUSED_BY, FOLLOWS, VIOLATES, CITES, INTRODUCED_IN, REMOVED_IN, REPLACED_BY, CHANGED_FROM, IS_A, DEVELOPS
+
+Example 1:
+{"edges": [{"source_entity_name": "Mara Chen", "target_entity_name": "Zenith Corp", "relation_type": "MEMBER_OF", "fact": "Mara Chen is a member of Zenith Corp", "valid_at": "2025-01-15T00:00:00Z", "invalid_at": null}, {"source_entity_name": "Mara Chen", "target_entity_name": "PostgreSQL", "relation_type": "WORKS_WITH", "fact": "Mara Chen works with PostgreSQL for data storage", "valid_at": null, "invalid_at": null}]}
 
 Example 2:
-{"edges": [{"source_entity_name": "Bob", "target_entity_name": "Alice", "relation_type": "REPORTS_TO", "fact": "Bob reports to Alice on the infrastructure team", "valid_at": "2025-03-01T00:00:00Z", "invalid_at": null}, {"source_entity_name": "Bob", "target_entity_name": "Project Atlas", "relation_type": "CONTRIBUTES_TO", "fact": "Bob is a contributor to Project Atlas", "valid_at": null, "invalid_at": null}]})";
+{"edges": [{"source_entity_name": "Juno", "target_entity_name": "auth-service", "relation_type": "DEVELOPS", "fact": "Juno develops the auth-service", "valid_at": null, "invalid_at": null}, {"source_entity_name": "Rex", "target_entity_name": "Juno", "relation_type": "HAS_ROLE", "fact": "Rex has the role of architect on the team", "valid_at": "2025-03-01T00:00:00Z", "invalid_at": null}, {"source_entity_name": "auth-service", "target_entity_name": "Sprint 3", "relation_type": "INTRODUCED_IN", "fact": "auth-service was introduced in Sprint 3", "valid_at": null, "invalid_at": null}, {"source_entity_name": "Terraform", "target_entity_name": "auth-service", "relation_type": "DEPENDS_ON", "fact": "auth-service depends on Terraform for infrastructure", "valid_at": null, "invalid_at": null}]})";
 
 constexpr std::string_view NODE_RESOLUTIONS = R"(Example 1 (duplicate found):
-{"entity_resolutions": [{"id": 0, "name": "Robert Smith", "duplicate_name": "Bob Smith"}]}
+{"entity_resolutions": [{"id": 0, "name": "Mara Chen", "duplicate_name": "M. Chen"}]}
 
 Example 2 (no duplicate):
-{"entity_resolutions": [{"id": 0, "name": "Alice Johnson", "duplicate_name": ""}, {"id": 1, "name": "Acme Corp", "duplicate_name": ""}]})";
+{"entity_resolutions": [{"id": 0, "name": "Juno", "duplicate_name": ""}, {"id": 1, "name": "Zenith Corp", "duplicate_name": ""}]})";
 
 constexpr std::string_view EDGE_DUPLICATE = R"(Example 1 (duplicates and contradictions found):
 {"duplicate_facts": [2], "contradicted_facts": [1, 3]}
@@ -148,28 +151,28 @@ Example 2 (no duplicates or contradictions):
 {"duplicate_facts": [], "contradicted_facts": []})";
 
 constexpr std::string_view ENTITY_SUMMARY = R"(Example 1:
-{"summary": "Alice is a senior engineer at Acme Corp who leads the infrastructure team."}
+{"summary": "Mara Chen is the lead database engineer at Zenith Corp, responsible for PostgreSQL infrastructure."}
 
 Example 2:
-{"summary": "Project Atlas is a cloud migration initiative started in Q1 2025, currently in phase 2."})";
+{"summary": "Sprint 3 focused on auth-service delivery, introduced Terraform for infrastructure management."})";
 
 constexpr std::string_view SUMMARIZED_ENTITIES = R"(Example 1:
-{"summaries": [{"name": "Alice", "summary": "Senior engineer at Acme Corp, leads infrastructure team."}, {"name": "Acme Corp", "summary": "Technology company focused on cloud infrastructure."}]}
+{"summaries": [{"name": "Juno", "summary": "Backend developer building auth-service, works with Terraform."}, {"name": "Zenith Corp", "summary": "Software company building distributed systems."}]}
 
 Example 2:
-{"summaries": [{"name": "Bob", "summary": "Junior developer contributing to Project Atlas since March 2025."}]})";
+{"summaries": [{"name": "Rex", "summary": "Architect responsible for system design and PR reviews since March 2025."}]})";
 
 constexpr std::string_view SUMMARY = R"(Example 1:
-{"summary": "Alice joined Acme Corp as a senior engineer and leads the infrastructure team."}
+{"summary": "Mara Chen joined Zenith Corp as lead database engineer, responsible for PostgreSQL infrastructure."}
 
 Example 2:
-{"summary": "Q3 planning meeting covered the Atlas migration timeline and resource allocation."})";
+{"summary": "Sprint 3 planning covered auth-service delivery timeline and Terraform migration."})";
 
 constexpr std::string_view SUMMARY_DESCRIPTION = R"(Example 1:
-{"description": "Employment and role information for a senior engineer."}
+{"description": "Role and responsibility information for a database engineer."}
 
 Example 2:
-{"description": "Summary of a quarterly planning meeting about project timelines."})";
+{"description": "Summary of a sprint planning session about service delivery and infrastructure."})";
 
 } // namespace response_schemas
 

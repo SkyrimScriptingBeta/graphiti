@@ -223,6 +223,7 @@ std::vector<Message> extract_edges(
     user += std::format(
         R"(# TASK
 Extract all factual relationships between the given ENTITIES based on the CURRENT MESSAGE.
+Be thorough — extract every relationship between entities, including roles, responsibilities, dependencies, ownership, and process flows. Aim to capture all meaningful connections, not just the most obvious ones.
 Only extract facts that:
 - involve two DISTINCT ENTITIES from the ENTITIES list,
 - are clearly stated or unambiguously implied in the CURRENT MESSAGE,
@@ -247,7 +248,9 @@ You may use information from the PREVIOUS MESSAGES only to disambiguate referenc
 # RELATION TYPE RULES
 
 - If FACT_TYPES are provided and the relationship matches one of the types (considering the entity type signature), use that fact_type_name as the `relation_type`.
-- Otherwise, derive a `relation_type` from the relationship predicate in SCREAMING_SNAKE_CASE (e.g., WORKS_AT, LIVES_IN, IS_FRIENDS_WITH).
+- Otherwise, prefer one of these standard relation types when they fit:
+  HAS_ROLE, MEMBER_OF, LEADS, SAME_AS, IS_A, WORKS_WITH, DEVELOPS, DEPENDS_ON, IMPLEMENTS, BUILT_WITH, RESPONSIBLE_FOR, WRITES, REVIEWS, VALIDATES, USES, ATTACHES, REQUIRES, TRANSITIONS_TO, BLOCKS, UNBLOCKS, KICKED_OFF_BY, DISCOVERED, LEARNED_FROM, CONTRADICTS, SUPERSEDES, CAUSED_BY, FOLLOWS, VIOLATES, CITES, INTRODUCED_IN, REMOVED_IN, REPLACED_BY, CHANGED_FROM, PRODUCES
+- If none of the above fit, derive a `relation_type` in SCREAMING_SNAKE_CASE.
 
 # DATETIME RULES
 

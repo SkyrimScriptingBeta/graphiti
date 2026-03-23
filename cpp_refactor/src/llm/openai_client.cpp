@@ -107,6 +107,22 @@ struct OpenAIClient::Impl {
         // Extract choices[0].message.content
         auto content_str = resp_json.at("choices").at(0).at("message").at("content").get<std::string>();
 
+        // Strip markdown JSON fences (```json ... ```) that some models wrap around their output
+        if (content_str.size() >= 7 && content_str[0] == '`') {
+            auto first_nl = content_str.find('\n');
+            if (first_nl != std::string::npos) {
+                auto last_fence = content_str.rfind("```");
+                if (last_fence != std::string::npos && last_fence > first_nl) {
+                    content_str = content_str.substr(first_nl + 1, last_fence - first_nl - 1);
+                    // Trim whitespace
+                    while (!content_str.empty() && (content_str.front() == '\n' || content_str.front() == ' '))
+                        content_str.erase(content_str.begin());
+                    while (!content_str.empty() && (content_str.back() == '\n' || content_str.back() == ' '))
+                        content_str.pop_back();
+                }
+            }
+        }
+
         // Parse the content as JSON
         try {
             auto parsed = nlohmann::json::parse(content_str);

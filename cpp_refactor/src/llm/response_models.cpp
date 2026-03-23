@@ -60,7 +60,15 @@ void to_json(nlohmann::json& j, const ExtractedEdge& v) {
 // ============================================================================
 
 void from_json(const nlohmann::json& j, ExtractedEdges& v) {
-    j.at("edges").get_to(v.edges);
+    // Parse edges individually — skip malformed ones instead of losing all edges
+    for (auto& edge_json : j.at("edges")) {
+        try {
+            v.edges.push_back(edge_json.get<ExtractedEdge>());
+        } catch (const std::exception& e) {
+            // Log and skip — one bad edge shouldn't kill 30 good ones
+            fprintf(stderr, "  [graphiti] skipping malformed edge: %s\n", e.what());
+        }
+    }
 }
 
 void to_json(nlohmann::json& j, const ExtractedEdges& v) {

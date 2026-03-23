@@ -29,26 +29,43 @@ Result<std::vector<EntityEdge>> extract_edges(
         input.edge_types, input.custom_instructions
     );
 
-    // Call LLM
-    auto llm_result = llm.generate_response(
-        messages, response_schemas::EXTRACTED_EDGES, ModelSize::small
-    );
-    if (!llm_result.has_value()) {
-        return std::unexpected(llm_result.error());
-    }
-
-    // Parse response
-    auto raw_json = llm_result.value();
-    auto raw_dump = raw_json.dump();
+    // Call LLM with retry on edge parse failures
     ExtractedEdges extracted;
-    try {
-        extracted = raw_json.get<ExtractedEdges>();
-    } catch (const std::exception& e) {
-        return std::unexpected(GraphitiError{
-            ErrorCode::llm_parse_error,
-            std::format("Failed to parse extracted edges: {} — raw LLM output: {}",
-                        e.what(), raw_dump)
-        });
+    constexpr int MAX_EDGE_RETRIES = 2;
+    for (int attempt = 0; attempt <= MAX_EDGE_RETRIES; ++attempt) {
+        auto llm_result = llm.generate_response(
+            messages, response_schemas::EXTRACTED_EDGES, ModelSize::small
+        );
+        if (!llm_result.has_value()) {
+            return std::unexpected(llm_result.error());
+        }
+
+        auto raw_json = llm_result.value();
+        try {
+            extracted = raw_json.get<ExtractedEdges>();
+            break;  // success
+        } catch (const std::exception& e) {
+            if (attempt < MAX_EDGE_RETRIES) {
+                fprintf(stderr, "  [graphiti] edge parse failed (attempt %d/%d), retrying: %s\n",
+                        attempt + 1, MAX_EDGE_RETRIES + 1, e.what());
+                // Append error context so the LLM can self-correct
+                messages.push_back({
+                    "user",
+                    std::format(
+                        "The previous response had malformed edges. Error: {}. "
+                        "Please try again with valid JSON. Every edge must have: "
+                        "source_entity_name, target_entity_name, relation_type, fact, valid_at, invalid_at.",
+                        e.what()
+                    )
+                });
+                continue;
+            }
+            return std::unexpected(GraphitiError{
+                ErrorCode::llm_parse_error,
+                std::format("Failed to parse extracted edges after {} attempts: {} — raw LLM output: {}",
+                            MAX_EDGE_RETRIES + 1, e.what(), raw_json.dump())
+            });
+        }
     }
 
     // Convert to EntityEdge objects

@@ -30,26 +30,37 @@ Result<std::vector<EntityNode>> extract_nodes(
         );
     }
 
-    // Call LLM
-    auto llm_result = llm.generate_response(
-        messages, response_schemas::EXTRACTED_ENTITIES, ModelSize::small
-    );
-    if (!llm_result.has_value()) {
-        return std::unexpected(llm_result.error());
-    }
-
-    // Parse response
-    auto raw_json = llm_result.value();
-    auto raw_dump = raw_json.dump();
+    // Call LLM with retry on parse failures
     ExtractedEntities extracted;
-    try {
-        extracted = raw_json.get<ExtractedEntities>();
-    } catch (const std::exception& e) {
-        return std::unexpected(GraphitiError{
-            ErrorCode::llm_parse_error,
-            std::format("Failed to parse extracted entities: {} — raw LLM output: {}",
-                        e.what(), raw_dump)
-        });
+    constexpr int MAX_RETRIES = 2;
+    for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
+        auto llm_result = llm.generate_response(
+            messages, response_schemas::EXTRACTED_ENTITIES, ModelSize::small
+        );
+        if (!llm_result.has_value()) {
+            return std::unexpected(llm_result.error());
+        }
+
+        auto raw_json = llm_result.value();
+        try {
+            extracted = raw_json.get<ExtractedEntities>();
+            break;
+        } catch (const std::exception& e) {
+            if (attempt < MAX_RETRIES) {
+                fprintf(stderr, "  [graphiti] entity parse failed (attempt %d/%d), retrying: %s\n",
+                        attempt + 1, MAX_RETRIES + 1, e.what());
+                messages.push_back({"user",
+                    std::format("The previous response was invalid. Error: {}. "
+                                "Please try again with valid JSON matching the expected format.", e.what())
+                });
+                continue;
+            }
+            return std::unexpected(GraphitiError{
+                ErrorCode::llm_parse_error,
+                std::format("Failed to parse extracted entities after {} attempts: {} — raw: {}",
+                            MAX_RETRIES + 1, e.what(), raw_json.dump())
+            });
+        }
     }
 
     // Convert to EntityNode objects

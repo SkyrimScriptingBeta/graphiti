@@ -20,7 +20,13 @@ void to_json(nlohmann::json& j, const ExtractedEntity& v) {
 // ============================================================================
 
 void from_json(const nlohmann::json& j, ExtractedEntities& v) {
-    j.at("extracted_entities").get_to(v.extracted_entities);
+    for (auto& entity_json : j.at("extracted_entities")) {
+        try {
+            v.extracted_entities.push_back(entity_json.get<ExtractedEntity>());
+        } catch (const std::exception& e) {
+            fprintf(stderr, "  [graphiti] skipping malformed entity: %s\n", e.what());
+        }
+    }
 }
 
 void to_json(nlohmann::json& j, const ExtractedEntities& v) {

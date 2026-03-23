@@ -153,6 +153,16 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     auto& sctx = opts.source_context;
     auto& pids = opts.participant_ids;
     auto now = std::chrono::system_clock::now();
+    auto step_start = std::chrono::steady_clock::now();
+    auto log_step = [&](const char* label) {
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - step_start).count();
+        log_debug("[graphiti] add_episode %s: %lldms\n", label, elapsed);
+        step_start = std::chrono::steady_clock::now();
+    };
+
+    log_debug("[graphiti] add_episode: body=%zu chars, group=%s\n",
+              opts.body.size(), gid.c_str());
 
     // 1. Retrieve previous episodes for context
     auto prev_result = impl_->driver.retrieve_episodes(gid, opts.reference_time, 10, opts.source);
@@ -189,6 +199,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         ? impl_->writer_client->save_episodic_node(episode)
         : impl_->driver.save_episodic_node(episode);
     if (!save_ep.has_value()) return std::unexpected(save_ep.error());
+    log_step("Step 1-2 (episode context + save)");
 
     // 3. Extract entities via LLM
     pipeline::ExtractNodesInput extract_input;
@@ -210,6 +221,8 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     auto nodes_result = pipeline::extract_nodes(impl_->llm, extract_input);
     if (!nodes_result.has_value()) return std::unexpected(nodes_result.error());
     auto extracted_nodes = std::move(nodes_result.value());
+    log_step("Step 3 (extract nodes — LLM)");
+    log_debug("[graphiti]   → %zu nodes extracted\n", extracted_nodes.size());
 
     // Set attribution ids on extracted nodes
     for (auto& node : extracted_nodes) {
@@ -228,6 +241,8 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     auto& dedup = dedup_result.value();
     auto& nodes = dedup.nodes;
     auto& uuid_map = dedup.uuid_map;
+    log_step("Step 4 (dedupe nodes — LLM + embeddings)");
+    log_debug("[graphiti]   → %zu nodes after dedup, %zu mappings\n", nodes.size(), uuid_map.size());
 
     // 5. Extract edges via LLM
     pipeline::ExtractEdgesInput edge_input;
@@ -246,6 +261,8 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     auto edges_result = pipeline::extract_edges(impl_->llm, edge_input);
     if (!edges_result.has_value()) return std::unexpected(edges_result.error());
     auto extracted_edges = std::move(edges_result.value());
+    log_step("Step 5 (extract edges — LLM)");
+    log_debug("[graphiti]   → %zu edges extracted\n", extracted_edges.size());
 
     // Set attribution ids on extracted edges
     for (auto& edge : extracted_edges) {
@@ -272,13 +289,19 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     if (!edge_dedup_result.has_value()) return std::unexpected(edge_dedup_result.error());
     auto& edge_dedup = edge_dedup_result.value();
     auto& new_edges = edge_dedup.new_edges;
+    log_step("Step 6 (dedupe edges — LLM)");
+    log_debug("[graphiti]   → %zu new edges, %zu invalidated\n",
+              new_edges.size(), edge_dedup.invalidated_uuids.size());
 
     // 7. Enrich node summaries via LLM
     (void)pipeline::enrich_node_summaries(impl_->llm, nodes, previous_episodes, episode_body);
 
+    log_step("Step 7 (enrich node summaries — LLM)");
+
     // 7b. Extract custom attributes for typed entities
     if (opts.type_defs) {
         (void)pipeline::extract_entity_attributes(impl_->llm, nodes, *opts.type_defs, episode_body);
+        log_step("Step 7b (extract attributes — LLM)");
     }
 
     // 8. Generate embeddings for nodes and edges
@@ -292,6 +315,8 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
             edge.fact_embedding = impl_->embedder.create(edge.fact);
         } catch (...) {}
     }
+    log_step("Step 8 (embeddings)");
+    log_debug("[graphiti]   → %zu node embeddings, %zu edge embeddings\n", nodes.size(), new_edges.size());
 
     // 9. Persist everything to Kuzu
     for (auto& node : nodes) {
@@ -465,12 +490,16 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
             (void)impl_->driver.save_episodic_node(episode);
     }
 
+    log_step("Step 9-12 (persist + episodic edges + saga + communities)");
+
     // Build result
     AddEpisodeResult result;
     result.episode = std::move(episode);
     result.nodes = std::move(nodes);
     result.edges = std::move(new_edges);
 
+    log_debug("[graphiti] add_episode complete: %zu nodes, %zu edges\n",
+              result.nodes.size(), result.edges.size());
     return result;
 }
 

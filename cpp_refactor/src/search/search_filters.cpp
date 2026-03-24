@@ -145,6 +145,17 @@ FilterQueryResult build_edge_filter_clauses(const SearchFilters& filters) {
             "any(pid IN e.participant_ids WHERE list_contains([{}], pid))", parts_list));
     }
 
+    // Exclude participant filter
+    if (!filters.exclude_participant_ids.empty()) {
+        std::string exclude_list;
+        for (size_t i = 0; i < filters.exclude_participant_ids.size(); ++i) {
+            if (i > 0) exclude_list += ", ";
+            exclude_list += std::format("'{}'", filters.exclude_participant_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "NOT any(pid IN e.participant_ids WHERE list_contains([{}], pid))", exclude_list));
+    }
+
     // Temporal filters
     if (filters.valid_at.has_value()) {
         auto expr = build_date_filter_expr("e.valid_at", filters.valid_at.value(), param_counter);
@@ -221,6 +232,17 @@ FilterQueryResult build_node_filter_clauses(const SearchFilters& filters) {
         }
         result.clauses.push_back(std::format(
             "any(pid IN n.participant_ids WHERE list_contains([{}], pid))", parts_list));
+    }
+
+    // Exclude participant filter
+    if (!filters.exclude_participant_ids.empty()) {
+        std::string exclude_list;
+        for (size_t i = 0; i < filters.exclude_participant_ids.size(); ++i) {
+            if (i > 0) exclude_list += ", ";
+            exclude_list += std::format("'{}'", filters.exclude_participant_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "NOT any(pid IN n.participant_ids WHERE list_contains([{}], pid))", exclude_list));
     }
 
     return result;

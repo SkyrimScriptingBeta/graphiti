@@ -74,6 +74,10 @@ struct SearchFilters {
     // Participant filter (optional, empty = no filter)
     // Filter to items where any of these participants were present.
     std::vector<std::string> participant_ids;
+
+    // Exclude participant filter (optional, empty = no filter)
+    // Filter to items where NONE of these participants were present.
+    std::vector<std::string> exclude_participant_ids;
 };
 
 // Convert ComparisonOp to Cypher operator string

@@ -4,6 +4,7 @@
 #include <graphiti/token_tracker.h>
 
 #include <nlohmann/json.hpp>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -28,6 +29,10 @@ public:
     ) = 0;
 
     TokenTracker token_tracker;
+
+    // Optional per-attempt callback for logging. Set by LoggingLLMClient.
+    // Called before each attempt (is_pre_call=true) and after (is_pre_call=false).
+    std::function<void(const std::vector<Message>&, const Result<nlohmann::json>&, bool)> on_attempt;
 };
 
 } // namespace graphiti

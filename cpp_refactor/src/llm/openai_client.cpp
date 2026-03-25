@@ -184,7 +184,16 @@ Result<nlohmann::json> OpenAIClient::generate_response(
     int64_t total_output = 0;
 
     for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
+        // Pre-call logging
+        if (on_attempt) {
+            Result<nlohmann::json> empty = std::unexpected(GraphitiError{ErrorCode::ok, ""});
+            on_attempt(msgs, empty, true);
+        }
+
         auto result = impl_->call_completions(msgs, json_schema, model_size);
+
+        // Post-call logging
+        if (on_attempt) on_attempt(msgs, result, false);
 
         if (result.has_value()) {
             // Extract and strip usage metadata

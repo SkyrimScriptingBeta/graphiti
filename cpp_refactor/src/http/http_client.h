@@ -27,7 +27,7 @@ public:
         const std::string& path,
         const std::map<std::string, std::string>& headers,
         const std::string& json_body,
-        int timeout_seconds = 60
+        int timeout_seconds = 300  // 5 min — local models on large prompts need time
     );
 
 private:

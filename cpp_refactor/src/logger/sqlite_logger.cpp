@@ -81,8 +81,14 @@ void SqliteGraphitiLogger::on_llm_call(const LLMCallInfo& info) {
     std::lock_guard lock(mu_);
     try {
         ensure_open();
+    } catch (const std::exception& e) {
+        fprintf(stderr, "  [graphiti-logger] ❌ Failed to open log DB '%s': %s\n",
+                db_path_.c_str(), e.what());
+        return;
     } catch (...) {
-        return;  // Can't log, but don't crash Graphiti
+        fprintf(stderr, "  [graphiti-logger] ❌ Failed to open log DB '%s': unknown error\n",
+                db_path_.c_str());
+        return;
     }
 
     static const char* SQL =

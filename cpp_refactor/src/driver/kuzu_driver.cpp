@@ -561,7 +561,9 @@ Result<std::vector<KuzuDriver::NodeSummary>> KuzuDriver::get_node_summaries_by_g
     std::string_view group_id) {
     static const std::string query =
         R"(MATCH (n:Entity {group_id: $group_id})
-RETURN n.uuid AS uuid, n.name AS name, n.labels AS labels)";
+RETURN n.uuid AS uuid, n.name AS name, n.labels AS labels,
+       n.agent_ids AS agent_ids, n.source_ids AS source_ids,
+       n.source_contexts AS source_contexts, n.participant_ids AS participant_ids)";
 
     ParamMap params;
     params["group_id"] = str_val(group_id);
@@ -574,9 +576,13 @@ RETURN n.uuid AS uuid, n.name AS name, n.labels AS labels)";
     while (qr->hasNext()) {
         auto tuple = qr->getNext();
         nodes.push_back({
-            .uuid = get_str(tuple->getValue(0)),
-            .name = get_str(tuple->getValue(1)),
-            .labels = get_string_list(tuple->getValue(2)),
+            .uuid             = get_str(tuple->getValue(0)),
+            .name             = get_str(tuple->getValue(1)),
+            .labels           = get_string_list(tuple->getValue(2)),
+            .agent_ids        = get_string_list(tuple->getValue(3)),
+            .source_ids       = get_string_list(tuple->getValue(4)),
+            .source_contexts  = get_string_list(tuple->getValue(5)),
+            .participant_ids  = get_string_list(tuple->getValue(6)),
         });
     }
     return nodes;
@@ -588,7 +594,9 @@ Result<std::vector<KuzuDriver::EdgeSummary>> KuzuDriver::get_edge_summaries_by_n
     //   Entity -[:RELATES_TO]-> RelatesToNode_ -[:RELATES_TO]-> Entity
     static const std::string query =
         R"(MATCH (n:Entity)-[:RELATES_TO]->(e:RelatesToNode_ {group_id: $group_id})-[:RELATES_TO]->(m:Entity)
-RETURN e.uuid AS uuid, e.name AS name, n.uuid AS src, m.uuid AS tgt)";
+RETURN e.uuid AS uuid, e.name AS name, n.uuid AS src, m.uuid AS tgt,
+       e.agent_ids AS agent_ids, e.source_ids AS source_ids,
+       e.source_contexts AS source_contexts, e.participant_ids AS participant_ids)";
 
     ParamMap params;
     params["group_id"] = str_val(group_id);
@@ -604,10 +612,14 @@ RETURN e.uuid AS uuid, e.name AS name, n.uuid AS src, m.uuid AS tgt)";
         auto tgt = get_str(tuple->getValue(3));
         if (node_uuids.count(src) && node_uuids.count(tgt)) {
             edges.push_back({
-                .uuid = get_str(tuple->getValue(0)),
-                .name = get_str(tuple->getValue(1)),
+                .uuid             = get_str(tuple->getValue(0)),
+                .name             = get_str(tuple->getValue(1)),
                 .source_node_uuid = std::move(src),
                 .target_node_uuid = std::move(tgt),
+                .agent_ids        = get_string_list(tuple->getValue(4)),
+                .source_ids       = get_string_list(tuple->getValue(5)),
+                .source_contexts  = get_string_list(tuple->getValue(6)),
+                .participant_ids  = get_string_list(tuple->getValue(7)),
             });
         }
     }

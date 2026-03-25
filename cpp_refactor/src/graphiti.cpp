@@ -1443,21 +1443,27 @@ Result<SearchResults> Graphiti::get_graph_overview(std::string_view group_id, in
     SearchResults results;
     for (auto& s : summaries) {
         EntityNode node;
-        node.uuid = std::move(s.uuid);
-        node.name = std::move(s.name);
-        node.labels = std::move(s.labels);
-        // All other fields left default (empty) — never fetched from DB
+        node.uuid             = std::move(s.uuid);
+        node.name             = std::move(s.name);
+        node.labels           = std::move(s.labels);
+        node.agent_ids        = std::move(s.agent_ids);
+        node.source_ids       = std::move(s.source_ids);
+        node.source_contexts  = std::move(s.source_contexts);
+        node.participant_ids  = std::move(s.participant_ids);
         results.nodes.push_back(std::move(node));
     }
     results.node_scores.assign(results.nodes.size(), 0.0f);
 
     for (auto& e : kept_edges) {
         EntityEdge edge;
-        edge.uuid = std::move(e.uuid);
-        edge.name = std::move(e.name);
+        edge.uuid             = std::move(e.uuid);
+        edge.name             = std::move(e.name);
         edge.source_node_uuid = std::move(e.source_node_uuid);
         edge.target_node_uuid = std::move(e.target_node_uuid);
-        // All other fields left default — never fetched from DB
+        edge.agent_ids        = std::move(e.agent_ids);
+        edge.source_ids       = std::move(e.source_ids);
+        edge.source_contexts  = std::move(e.source_contexts);
+        edge.participant_ids  = std::move(e.participant_ids);
         results.edges.push_back(std::move(edge));
     }
     results.edge_scores.assign(results.edges.size(), 0.0f);

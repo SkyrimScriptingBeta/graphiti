@@ -689,14 +689,36 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
 
             auto ep_index = i;
             auto ep_name = episodes[i].name;
+            auto* loggers_ptr = &impl_->loggers;  // thread-safe: logger has its own mutex
             futures.push_back(std::async(std::launch::async,
                 [&sem, &llm_config, &dst, input = std::move(input),
-                 ep_aid, ep_sid, ep_sctx, ep_pids, ep_index, ep_name]() mutable {
+                 ep_aid, ep_sid, ep_sctx, ep_pids, ep_index, ep_name, loggers_ptr]() mutable {
                     sem.acquire();
                     log_trace("[graphiti]   node extraction %zu \"%s\" started\n",
                               ep_index, ep_name.c_str());
                     auto t0 = std::chrono::steady_clock::now();
                     OpenAIClient llm(llm_config);
+                    // Wire per-attempt logging if loggers are registered
+                    if (loggers_ptr && !loggers_ptr->empty()) {
+                        std::string model = llm_config.small_model;
+                        llm.on_attempt = [loggers_ptr, model](
+                            const std::vector<Message>& msgs, const Result<nlohmann::json>& result, bool is_pre) {
+                            GraphitiLogger::LLMCallInfo info;
+                            info.model = model;
+                            info.prompt_name = "extract_nodes_bulk";
+                            for (auto& m : msgs) info.request_messages.push_back({m.role, m.content});
+                            if (is_pre) { info.success = true; info.attempt = 0; }
+                            else if (result.has_value()) {
+                                info.success = true; info.attempt = 1;
+                                info.response_body = result->dump();
+                            } else {
+                                info.success = false; info.attempt = 1;
+                                info.error_message = result.error().message;
+                                info.error_code = "error";
+                            }
+                            for (auto* l : *loggers_ptr) l->on_llm_call(info);
+                        };
+                    }
                     auto result = pipeline::extract_nodes(llm, input);
                     auto t1 = std::chrono::steady_clock::now();
                     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
@@ -868,14 +890,35 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
 
             auto ep_index = i;
             auto ep_name2 = episodes[i].name;
+            auto* loggers_ptr2 = &impl_->loggers;
             futures.push_back(std::async(std::launch::async,
                 [&sem, &llm_config, &dst, input = std::move(input),
-                 ep_aid, ep_sid, ep_sctx, ep_pids, ep_uuid, ep_index, ep_name2]() mutable {
+                 ep_aid, ep_sid, ep_sctx, ep_pids, ep_uuid, ep_index, ep_name2, loggers_ptr2]() mutable {
                     sem.acquire();
                     log_trace("[graphiti]   edge extraction %zu \"%s\" started\n",
                               ep_index, ep_name2.c_str());
                     auto t0 = std::chrono::steady_clock::now();
                     OpenAIClient llm(llm_config);
+                    if (loggers_ptr2 && !loggers_ptr2->empty()) {
+                        std::string model = llm_config.small_model;
+                        llm.on_attempt = [loggers_ptr2, model](
+                            const std::vector<Message>& msgs, const Result<nlohmann::json>& result, bool is_pre) {
+                            GraphitiLogger::LLMCallInfo info;
+                            info.model = model;
+                            info.prompt_name = "extract_edges_bulk";
+                            for (auto& m : msgs) info.request_messages.push_back({m.role, m.content});
+                            if (is_pre) { info.success = true; info.attempt = 0; }
+                            else if (result.has_value()) {
+                                info.success = true; info.attempt = 1;
+                                info.response_body = result->dump();
+                            } else {
+                                info.success = false; info.attempt = 1;
+                                info.error_message = result.error().message;
+                                info.error_code = "error";
+                            }
+                            for (auto* l : *loggers_ptr2) l->on_llm_call(info);
+                        };
+                    }
                     auto result = pipeline::extract_edges(llm, input);
                     auto t1 = std::chrono::steady_clock::now();
                     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();

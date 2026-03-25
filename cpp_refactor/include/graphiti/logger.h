@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace graphiti {
 
@@ -17,6 +18,12 @@ class GraphitiLogger {
 public:
     virtual ~GraphitiLogger() = default;
 
+    // A single message in an LLM conversation (role + content).
+    struct LogMessage {
+        std::string role;     // "system", "user", "assistant"
+        std::string content;
+    };
+
     // Called after every LLM call (success or failure).
     struct LLMCallInfo {
         std::string_view model;          // e.g. "gpt-4.1-nano"
@@ -29,6 +36,9 @@ public:
         std::string_view error_message;
         int     attempt       = 1;       // which retry attempt (1 = first try)
         int     max_attempts  = 1;
+        // Full request and response content
+        std::vector<LogMessage> request_messages;  // the full prompt as sent to the LLM
+        std::string response_body;                 // raw JSON response from the LLM
     };
     virtual void on_llm_call(const LLMCallInfo& info) = 0;
 

@@ -48,6 +48,7 @@ target("graphiti-sqlite-logger")
     add_includedirs("include", {public = true})
     add_deps("graphiti")
     add_packages("sqlite3-fts5-vec", {public = true})
+    add_packages("nlohmann_json")
 
 target("graphiti-kuzu-writer-server")
     set_kind("binary")

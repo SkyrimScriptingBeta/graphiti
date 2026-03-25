@@ -42,12 +42,16 @@ public:
         info.model       = model;
         info.latency_ms  = elapsed;
 
+        // Full request messages
+        for (auto& msg : messages) {
+            info.request_messages.push_back({msg.role, msg.content});
+        }
+
         if (result.has_value()) {
             info.success = true;
-            // Token usage is tracked by inner client's token_tracker
-            auto usage = inner_->token_tracker.get_total_usage();
-            // Get the last call's tokens by checking the delta
-            // (TokenTracker accumulates, so we rely on the __token_usage__ field if present)
+            // Full response body
+            info.response_body = result->dump();
+            // Token usage
             if (result->contains("__token_usage__")) {
                 auto& tu = (*result)["__token_usage__"];
                 if (tu.contains("input_tokens")) info.input_tokens = tu["input_tokens"].get<int64_t>();

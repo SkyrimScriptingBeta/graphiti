@@ -3,6 +3,8 @@
 #define SQLITE_CORE
 #include <sqlite3.h>
 
+#include <nlohmann/json.hpp>
+
 #include <stdexcept>
 
 namespace graphiti {
@@ -20,7 +22,9 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     attempt         INTEGER DEFAULT 1,
     max_attempts    INTEGER DEFAULT 1,
     error_code      TEXT,
-    error_message   TEXT
+    error_message   TEXT,
+    request_messages TEXT,
+    response_body   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS embedding_calls (
@@ -83,8 +87,9 @@ void SqliteGraphitiLogger::on_llm_call(const LLMCallInfo& info) {
 
     static const char* SQL =
         "INSERT INTO llm_calls (model, prompt_name, input_tokens, output_tokens, "
-        "latency_ms, success, attempt, max_attempts, error_code, error_message) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        "latency_ms, success, attempt, max_attempts, error_code, error_message, "
+        "request_messages, response_body) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db_, SQL, -1, &stmt, nullptr) != SQLITE_OK) return;
@@ -105,6 +110,23 @@ void SqliteGraphitiLogger::on_llm_call(const LLMCallInfo& info) {
         sqlite3_bind_text(stmt, 10, info.error_message.data(), (int)info.error_message.size(), SQLITE_TRANSIENT);
     else
         sqlite3_bind_null(stmt, 10);
+
+    // Serialize request messages as JSON array
+    if (!info.request_messages.empty()) {
+        nlohmann::json msgs = nlohmann::json::array();
+        for (auto& m : info.request_messages)
+            msgs.push_back({{"role", m.role}, {"content", m.content}});
+        auto s = msgs.dump();
+        sqlite3_bind_text(stmt, 11, s.data(), (int)s.size(), SQLITE_TRANSIENT);
+    } else {
+        sqlite3_bind_null(stmt, 11);
+    }
+
+    // Response body
+    if (!info.response_body.empty())
+        sqlite3_bind_text(stmt, 12, info.response_body.data(), (int)info.response_body.size(), SQLITE_TRANSIENT);
+    else
+        sqlite3_bind_null(stmt, 12);
 
     sqlite3_step(stmt);
     sqlite3_finalize(stmt);

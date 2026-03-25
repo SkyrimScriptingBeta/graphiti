@@ -246,6 +246,25 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         if (!pids.empty()) node.participant_ids = pids;
     }
 
+    // 3b. Deduplicate nodes within the batch by name (programmatic, no LLM)
+    {
+        std::unordered_map<std::string, size_t> seen;
+        std::vector<EntityNode> unique_nodes;
+        for (auto& node : extracted_nodes) {
+            auto it = seen.find(node.name);
+            if (it == seen.end()) {
+                seen[node.name] = unique_nodes.size();
+                unique_nodes.push_back(std::move(node));
+            }
+            // else: duplicate name, skip it
+        }
+        if (unique_nodes.size() < extracted_nodes.size()) {
+            log_debug("[graphiti]   → deduped %zu → %zu nodes by name\n",
+                      extracted_nodes.size(), unique_nodes.size());
+        }
+        extracted_nodes = std::move(unique_nodes);
+    }
+
     // 4. Deduplicate nodes against existing graph
     auto dedup_result = pipeline::dedupe_nodes(
         *impl_->llm, impl_->driver, *impl_->embedder,

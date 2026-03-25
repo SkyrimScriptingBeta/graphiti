@@ -112,7 +112,21 @@ VoidResult KuzuWriterClient::connect() {
             auto response = json::parse(msg->str, nullptr, false);
             if (response.is_discarded() || !response.contains("id")) return;
 
-            if (response["id"].is_null()) return;
+            if (response["id"].is_null()) {
+                fprintf(stderr, "[kuzu-writer-client] ❌ Received response with null id: %s\n",
+                        msg->str.substr(0, 500).c_str());
+                // Can't match to a pending request — fail ALL pending so nothing hangs
+                std::lock_guard lock(impl_->pending_mu);
+                for (auto& [pid, req] : impl_->pending) {
+                    if (!req.fulfilled) {
+                        req.response = {{"error", {{"message",
+                            "Daemon returned null id in response: " + msg->str.substr(0, 500)}}}};
+                        req.fulfilled = true;
+                    }
+                }
+                impl_->pending_cv.notify_all();
+                return;
+            }
             auto id = response["id"].get<std::string>();
             std::lock_guard lock(impl_->pending_mu);
             if (auto it = impl_->pending.find(id); it != impl_->pending.end()) {

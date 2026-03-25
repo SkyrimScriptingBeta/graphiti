@@ -1,6 +1,10 @@
 #include "prompts.h"
+#include "prompt_loader.h"
 
 #include <format>
+#include <string_view>
+
+using namespace std::literals;
 
 namespace graphiti::prompts {
 
@@ -23,21 +27,14 @@ static constexpr int MAX_SUMMARY_CHARS = 500;
 // Entity Extraction
 // ============================================================================
 
-std::vector<Message> extract_message(
-    std::string_view entity_types,
-    const nlohmann::json& previous_episodes,
-    std::string_view episode_content,
-    std::string_view custom_instructions
-) {
-    std::string sys = std::format(
-        "You are an AI assistant that extracts entity nodes from conversational messages. "
-        "Your primary task is to extract and classify the speaker and other significant entities "
-        "mentioned in the conversation.{}",
-        DO_NOT_ESCAPE_UNICODE
-    );
+// Variables: {0}=entity_types, {1}=previous_episodes_json, {2}=episode_content, {3}=custom_instructions
+static constexpr std::string_view EXTRACT_MESSAGE_SYSTEM =
+    "You are an AI assistant that extracts entity nodes from conversational messages. "
+    "Your primary task is to extract and classify the speaker and other significant entities "
+    "mentioned in the conversation.\nDo not escape unicode characters.\n";
 
-    std::string user = std::format(
-        R"(<ENTITY TYPES>
+static constexpr std::string_view EXTRACT_MESSAGE_USER =
+    R"(<ENTITY TYPES>
 {0}
 </ENTITY TYPES>
 
@@ -72,29 +69,44 @@ Pronoun references such as he/she/they or this/that/those should be disambiguate
 5. **Formatting**:
    - Be **explicit and unambiguous** in naming entities (e.g., use full names when available).
 
-{3})",
-        entity_types,
-        to_prompt_json(previous_episodes),
-        episode_content,
-        custom_instructions
+{3})";
+
+std::vector<Message> extract_message(
+    std::string_view entity_types,
+    const nlohmann::json& previous_episodes,
+    std::string_view episode_content,
+    std::string_view custom_instructions
+) {
+    auto sys_override = load_prompt_override("extract_message", "system");
+    auto user_override = load_prompt_override("extract_message", "user");
+
+    std::string sys = std::vformat(
+        sys_override.value_or(std::string(EXTRACT_MESSAGE_SYSTEM)),
+        std::make_format_args(entity_types)
+    );
+
+    auto prev_json = to_prompt_json(previous_episodes);
+    std::string user = std::vformat(
+        user_override.value_or(std::string(EXTRACT_MESSAGE_USER)),
+        std::make_format_args(entity_types, prev_json, episode_content, custom_instructions)
     );
 
     return {{"system", std::move(sys)}, {"user", std::move(user)}};
 }
 
+// Variables: {0}=entity_types, {1}=episode_content, {2}=custom_instructions
 std::vector<Message> extract_text(
     std::string_view entity_types,
     std::string_view episode_content,
     std::string_view custom_instructions
 ) {
-    std::string sys = std::format(
+    std::string sys = resolve_prompt("extract_text", "system",
         "You are an AI assistant that extracts entity nodes from text. "
         "Your primary task is to extract and classify the speaker and other significant entities "
-        "mentioned in the provided text.{}",
-        DO_NOT_ESCAPE_UNICODE
-    );
+        "mentioned in the provided text.\nDo not escape unicode characters.\n");
 
-    std::string user = std::format(
+    std::string user = std::vformat(
+        resolve_prompt("extract_text", "user",
         R"(<ENTITY TYPES>
 {0}
 </ENTITY TYPES>
@@ -113,28 +125,27 @@ Guidelines:
 1. Extract significant entities, concepts, or actors mentioned in the conversation.
 2. Avoid creating nodes for relationships or actions.
 3. Avoid creating nodes for temporal information like dates, times or years (these will be added to edges later).
-4. Be as explicit as possible in your node names, using full names and avoiding abbreviations.)",
-        entity_types,
-        episode_content,
-        custom_instructions
+4. Be as explicit as possible in your node names, using full names and avoiding abbreviations.)"),
+        std::make_format_args(entity_types, episode_content, custom_instructions)
     );
 
     return {{"system", std::move(sys)}, {"user", std::move(user)}};
 }
 
+// Variables: {0}=entity_types, {1}=source_description, {2}=episode_content, {3}=custom_instructions
 std::vector<Message> extract_json(
     std::string_view entity_types,
     std::string_view source_description,
     std::string_view episode_content,
     std::string_view custom_instructions
 ) {
-    std::string sys = std::format(
+    std::string sys = resolve_prompt("extract_json", "system",
         "You are an AI assistant that extracts entity nodes from JSON. "
-        "Your primary task is to extract and classify relevant entities from JSON files{}",
-        DO_NOT_ESCAPE_UNICODE
-    );
+        "Your primary task is to extract and classify relevant entities from JSON files.\n"
+        "Do not escape unicode characters.\n");
 
-    std::string user = std::format(
+    std::string user = std::vformat(
+        resolve_prompt("extract_json", "user",
         R"(<ENTITY TYPES>
 {0}
 </ENTITY TYPES>
@@ -155,11 +166,8 @@ Indicate the classified entity type by providing its entity_type_id.
 Guidelines:
 1. Extract all entities that the JSON represents. This will often be something like a "name" or "user" field
 2. Extract all entities mentioned in all other properties throughout the JSON structure
-3. Do NOT extract any properties that contain dates)",
-        entity_types,
-        source_description,
-        episode_content,
-        custom_instructions
+3. Do NOT extract any properties that contain dates)"),
+        std::make_format_args(entity_types, source_description, episode_content, custom_instructions)
     );
 
     return {{"system", std::move(sys)}, {"user", std::move(user)}};
@@ -177,14 +185,27 @@ std::vector<Message> extract_edges(
     const nlohmann::json& edge_types,
     std::string_view custom_instructions
 ) {
-    std::string sys = std::format(
+    std::string sys = resolve_prompt("extract_edges", "system",
         "You are an expert fact extractor that extracts fact triples from text. "
-        "1. Extracted fact triples should also be extracted with relevant date information."
+        "1. Extracted fact triples should also be extracted with relevant date information. "
         "2. Treat the CURRENT TIME as the time the CURRENT MESSAGE was sent. "
-        "All temporal information should be extracted relative to this time.{}",
-        DO_NOT_ESCAPE_UNICODE
-    );
+        "All temporal information should be extracted relative to this time.\n"
+        "Do not escape unicode characters.\n");
 
+    // Check for full user override — if present, it replaces the entire multi-part user template
+    // Variables: {0}=previous_episodes, {1}=episode_content, {2}=entities, {3}=reference_time,
+    //            {4}=edge_types (may be empty), {5}=custom_instructions
+    auto user_override = load_prompt_override("extract_edges", "user");
+    if (user_override) {
+        auto prev_json = to_prompt_json(previous_episodes);
+        auto nodes_json = to_prompt_json(nodes);
+        auto etypes = (!edge_types.is_null() && !edge_types.empty()) ? to_prompt_json(edge_types) : std::string{};
+        std::string user = std::vformat(*user_override,
+            std::make_format_args(prev_json, episode_content, nodes_json, reference_time, etypes, custom_instructions));
+        return {{"system", std::move(sys)}, {"user", std::move(user)}};
+    }
+
+    // Default: build user message in parts (compiled-in prompts)
     std::string user = std::format(
         R"(<PREVIOUS_MESSAGES>
 {0}
@@ -208,16 +229,8 @@ std::vector<Message> extract_edges(
         reference_time
     );
 
-    // Conditionally add edge types
     if (!edge_types.is_null() && !edge_types.empty()) {
-        user += std::format(
-            R"(
-<FACT_TYPES>
-{}
-</FACT_TYPES>
-)",
-            to_prompt_json(edge_types)
-        );
+        user += std::format("\n<FACT_TYPES>\n{}\n</FACT_TYPES>\n", to_prompt_json(edge_types));
     }
 
     user += std::format(
@@ -270,6 +283,7 @@ You may use information from the PREVIOUS MESSAGES only to disambiguate referenc
 // Node Deduplication
 // ============================================================================
 
+// Variables: {0}=previous_episodes, {1}=episode_content, {2}=extracted_node, {3}=entity_type_description, {4}=existing_nodes
 std::vector<Message> dedupe_node(
     const nlohmann::json& previous_episodes,
     std::string_view episode_content,
@@ -277,14 +291,21 @@ std::vector<Message> dedupe_node(
     std::string_view entity_type_description,
     const nlohmann::json& existing_nodes
 ) {
-    std::string sys = std::format(
+    std::string sys = resolve_prompt("dedupe_node", "system",
         "You are a helpful assistant that determines whether or not a NEW ENTITY "
-        "is a duplicate of any EXISTING ENTITIES.{}",
-        DO_NOT_ESCAPE_UNICODE
-    );
+        "is a duplicate of any EXISTING ENTITIES.\nDo not escape unicode characters.\n");
 
-    std::string user = std::format(
-        R"(<PREVIOUS MESSAGES>
+    auto prev_json = to_prompt_json(previous_episodes);
+    auto node_json = to_prompt_json(extracted_node);
+    auto existing_json = to_prompt_json(existing_nodes);
+    auto user_override = load_prompt_override("dedupe_node", "user");
+    std::string user;
+    if (user_override) {
+        user = std::vformat(*user_override,
+            std::make_format_args(prev_json, episode_content, node_json, entity_type_description, existing_json));
+    } else {
+        user = std::vformat(
+            R"(<PREVIOUS MESSAGES>
 {0}
 </PREVIOUS MESSAGES>
 <CURRENT MESSAGE>
@@ -327,16 +348,13 @@ Respond with a JSON object containing an "entity_resolutions" array with a singl
 }}
 
 Only use names that appear in EXISTING ENTITIES, and return empty string when unsure.)",
-        to_prompt_json(previous_episodes),
-        episode_content,
-        to_prompt_json(extracted_node),
-        entity_type_description,
-        to_prompt_json(existing_nodes)
-    );
+            std::make_format_args(prev_json, episode_content, node_json, entity_type_description, existing_json));
+    }
 
     return {{"system", std::move(sys)}, {"user", std::move(user)}};
 }
 
+// Variables: {0}=previous_episodes, {1}=episode_content, {2}=extracted_nodes, {3}=existing_nodes, {4}=count, {5}=count-1
 std::vector<Message> dedupe_nodes(
     const nlohmann::json& previous_episodes,
     std::string_view episode_content,
@@ -344,15 +362,23 @@ std::vector<Message> dedupe_nodes(
     const nlohmann::json& existing_nodes
 ) {
     auto count = extracted_nodes.size();
+    auto count_minus_1 = count > 0 ? count - 1 : (size_t)0;
 
-    std::string sys = std::format(
+    std::string sys = resolve_prompt("dedupe_nodes", "system",
         "You are a helpful assistant that determines whether or not ENTITIES extracted "
-        "from a conversation are duplicates of existing entities.{}",
-        DO_NOT_ESCAPE_UNICODE
-    );
+        "from a conversation are duplicates of existing entities.\nDo not escape unicode characters.\n");
 
-    std::string user = std::format(
-        R"(<PREVIOUS MESSAGES>
+    auto prev_json = to_prompt_json(previous_episodes);
+    auto nodes_json = to_prompt_json(extracted_nodes);
+    auto existing_json = to_prompt_json(existing_nodes);
+    auto user_override = load_prompt_override("dedupe_nodes", "user");
+    std::string user;
+    if (user_override) {
+        user = std::vformat(*user_override,
+            std::make_format_args(prev_json, episode_content, nodes_json, existing_json, count, count_minus_1));
+    } else {
+        user = std::vformat(
+            R"(<PREVIOUS MESSAGES>
 {0}
 </PREVIOUS MESSAGES>
 <CURRENT MESSAGE>
@@ -406,13 +432,8 @@ For every entity, return an object with the following keys:
 - Only use names that appear in EXISTING ENTITIES.
 - Use empty string if there is no duplicate.
 - Never fabricate entity names.)",
-        to_prompt_json(previous_episodes),
-        episode_content,
-        to_prompt_json(extracted_nodes),
-        to_prompt_json(existing_nodes),
-        count,
-        count > 0 ? count - 1 : 0
-    );
+            std::make_format_args(prev_json, episode_content, nodes_json, existing_json, count, count_minus_1));
+    }
 
     return {{"system", std::move(sys)}, {"user", std::move(user)}};
 }
@@ -421,18 +442,18 @@ For every entity, return an object with the following keys:
 // Edge Deduplication
 // ============================================================================
 
+// Variables: {0}=existing_edges, {1}=edge_invalidation_candidates, {2}=new_edge
 std::vector<Message> resolve_edge(
     std::string_view existing_edges,
     std::string_view edge_invalidation_candidates,
     std::string_view new_edge
 ) {
-    std::string sys = std::format(
+    std::string sys = resolve_prompt("resolve_edge", "system",
         "You are a helpful assistant that de-duplicates facts from fact lists and determines "
-        "which existing facts are contradicted by the new fact.{}",
-        DO_NOT_ESCAPE_UNICODE
-    );
+        "which existing facts are contradicted by the new fact.\nDo not escape unicode characters.\n");
 
-    std::string user = std::format(
+    std::string user = std::vformat(
+        resolve_prompt("resolve_edge", "user",
         R"(Task:
 You will receive TWO lists of facts with CONTINUOUS idx numbering across both lists.
 EXISTING FACTS are indexed first, followed by FACT INVALIDATION CANDIDATES.
@@ -467,10 +488,8 @@ Guidelines:
 
 <NEW FACT>
 {2}
-</NEW FACT>)",
-        existing_edges,
-        edge_invalidation_candidates,
-        new_edge
+</NEW FACT>)"),
+        std::make_format_args(existing_edges, edge_invalidation_candidates, new_edge)
     );
 
     return {{"system", std::move(sys)}, {"user", std::move(user)}};
@@ -480,17 +499,20 @@ Guidelines:
 // Summarization
 // ============================================================================
 
+// Variables: {0}=max_chars, {1}=summary_instructions, {2}=previous_episodes, {3}=episode_content, {4}=node
 std::vector<Message> extract_summary(
     const nlohmann::json& previous_episodes,
     std::string_view episode_content,
     const nlohmann::json& node
 ) {
-    std::string sys = std::format(
-        "You are a helpful assistant that extracts entity summaries from the provided text.{}",
-        DO_NOT_ESCAPE_UNICODE
-    );
+    std::string sys = resolve_prompt("extract_summary", "system",
+        "You are a helpful assistant that extracts entity summaries from the provided text.\n"
+        "Do not escape unicode characters.\n");
 
-    std::string user = std::format(
+    auto prev_json = to_prompt_json(previous_episodes);
+    auto node_json = to_prompt_json(node);
+    std::string user = std::vformat(
+        resolve_prompt("extract_summary", "user",
         R"(Given the MESSAGES and the ENTITY, update the summary that combines relevant information about the entity
 from the messages and relevant information from the existing summary. Summary must be under {0} characters.
 
@@ -503,28 +525,27 @@ from the messages and relevant information from the existing summary. Summary mu
 
 <ENTITY>
 {4}
-</ENTITY>)",
-        MAX_SUMMARY_CHARS,
-        SUMMARY_INSTRUCTIONS,
-        to_prompt_json(previous_episodes),
-        episode_content,
-        to_prompt_json(node)
+</ENTITY>)"),
+        std::make_format_args(MAX_SUMMARY_CHARS, SUMMARY_INSTRUCTIONS, prev_json, episode_content, node_json)
     );
 
     return {{"system", std::move(sys)}, {"user", std::move(user)}};
 }
 
+// Variables: {0}=max_chars, {1}=summary_instructions, {2}=previous_episodes, {3}=episode_content, {4}=entities
 std::vector<Message> extract_summaries_batch(
     const nlohmann::json& previous_episodes,
     std::string_view episode_content,
     const nlohmann::json& entities
 ) {
-    std::string sys = std::format(
-        "You are a helpful assistant that generates concise entity summaries from provided context.{}",
-        DO_NOT_ESCAPE_UNICODE
-    );
+    std::string sys = resolve_prompt("extract_summaries_batch", "system",
+        "You are a helpful assistant that generates concise entity summaries from provided context.\n"
+        "Do not escape unicode characters.\n");
 
-    std::string user = std::format(
+    auto prev_json = to_prompt_json(previous_episodes);
+    auto entities_json = to_prompt_json(entities);
+    std::string user = std::vformat(
+        resolve_prompt("extract_summaries_batch", "user",
         R"(Given the MESSAGES and a list of ENTITIES, generate an updated summary for each entity that needs one.
 Each summary must be under {0} characters.
 
@@ -541,30 +562,27 @@ Each summary must be under {0} characters.
 
 For each entity, combine relevant information from the MESSAGES with any existing summary content.
 Only return summaries for entities that have meaningful information to summarize.
-If an entity has no relevant information in the messages and no existing summary, you may skip it.)",
-        MAX_SUMMARY_CHARS,
-        SUMMARY_INSTRUCTIONS,
-        to_prompt_json(previous_episodes),
-        episode_content,
-        to_prompt_json(entities)
+If an entity has no relevant information in the messages and no existing summary, you may skip it.)"),
+        std::make_format_args(MAX_SUMMARY_CHARS, SUMMARY_INSTRUCTIONS, prev_json, episode_content, entities_json)
     );
 
     return {{"system", std::move(sys)}, {"user", std::move(user)}};
 }
 
+// Variables: {0}=summary
 std::vector<Message> summary_description(std::string_view summary) {
-    std::string sys = std::format(
-        "You are a helpful assistant that describes provided contents in a single sentence.{}",
-        DO_NOT_ESCAPE_UNICODE
-    );
+    std::string sys = resolve_prompt("summary_description", "system",
+        "You are a helpful assistant that describes provided contents in a single sentence.\n"
+        "Do not escape unicode characters.\n");
 
-    std::string user = std::format(
+    std::string user = std::vformat(
+        resolve_prompt("summary_description", "user",
         R"(Create a short one sentence description of the summary that explains what kind of information is summarized.
 Summaries must be under 250 characters.
 
 Summary:
-{})",
-        summary
+{0})"),
+        std::make_format_args(summary)
     );
 
     return {{"system", std::move(sys)}, {"user", std::move(user)}};

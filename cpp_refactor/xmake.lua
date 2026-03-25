@@ -15,6 +15,9 @@ add_requires("openssl3")
 -- YAML parsing for custom type definitions
 add_requires("yaml-cpp")
 
+-- SQLite for the optional graphiti-sqlite-logger target
+add_requires("sqlite3-fts5-vec")
+
 -- ONNX runtime for local embeddings (optional, used by stress_9_local_onnx)
 add_requires("onnxruntime-wasm-compatible", {optional = true})
 
@@ -25,6 +28,7 @@ target("graphiti")
     set_kind("static")
     add_files("src/**.cpp")
     remove_files("src/server/**.cpp")
+    remove_files("src/logger/**.cpp")
     add_includedirs("include", {public = true})
     add_headerfiles("include/(**.h)")
     add_includedirs("src", {private = true})
@@ -37,6 +41,13 @@ target("graphiti")
     if is_plat("windows") then
         add_syslinks("bcrypt")
     end
+
+target("graphiti-sqlite-logger")
+    set_kind("static")
+    add_files("src/logger/*.cpp")
+    add_includedirs("include", {public = true})
+    add_deps("graphiti")
+    add_packages("sqlite3-fts5-vec", {public = true})
 
 target("graphiti-kuzu-writer-server")
     set_kind("binary")

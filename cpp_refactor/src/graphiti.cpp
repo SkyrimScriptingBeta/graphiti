@@ -14,6 +14,8 @@
 #include "pipeline/extract_edges.h"
 #include "pipeline/extract_nodes.h"
 #include "pipeline/node_enrichment.h"
+#include "llm/logging_llm_client.h"
+#include "embedder/logging_embedder.h"
 #include "search/search.h"
 #include "utils/datetime.h"
 #include "utils/uuid.h"
@@ -37,9 +39,21 @@ struct Graphiti::Impl {
     KuzuDriver driver;
     std::unique_ptr<LLMClient> llm_owned;
     std::unique_ptr<EmbedderClient> embedder_owned;
-    LLMClient& llm;
-    EmbedderClient& embedder;
+    LLMClient* llm;
+    EmbedderClient* embedder;
     std::unique_ptr<KuzuWriterClient> writer_client;  // set when kuzu_writer_uri is configured
+    std::vector<GraphitiLogger*> loggers;                    // non-owned
+    std::vector<std::unique_ptr<GraphitiLogger>> owned_loggers;  // owned
+
+    void log_llm(const GraphitiLogger::LLMCallInfo& info) {
+        for (auto* l : loggers) l->on_llm_call(info);
+    }
+    void log_embedding(const GraphitiLogger::EmbeddingCallInfo& info) {
+        for (auto* l : loggers) l->on_embedding_call(info);
+    }
+    void log_pipeline(const GraphitiLogger::PipelineStepInfo& info) {
+        for (auto* l : loggers) l->on_pipeline_step(info);
+    }
 
     // When kuzu_writer_uri is set, local driver opens read-only (daemon handles writes)
     static bool local_read_only(const GraphitiConfig& c) {
@@ -52,8 +66,8 @@ struct Graphiti::Impl {
         , driver(config.db_path, local_read_only(config))
         , llm_owned(std::make_unique<OpenAIClient>(config.llm))
         , embedder_owned(std::make_unique<OpenAIEmbedder>(config.embedder))
-        , llm(*llm_owned)
-        , embedder(*embedder_owned) { init_writer_client(); }
+        , llm(llm_owned.get())
+        , embedder(embedder_owned.get()) { init_writer_client(); }
 
     // Shared DB + default OpenAI clients
     Impl(GraphitiConfig cfg, kuzu::main::Database& shared_db)
@@ -61,8 +75,8 @@ struct Graphiti::Impl {
         , driver(shared_db)
         , llm_owned(std::make_unique<OpenAIClient>(config.llm))
         , embedder_owned(std::make_unique<OpenAIEmbedder>(config.embedder))
-        , llm(*llm_owned)
-        , embedder(*embedder_owned) { init_writer_client(); }
+        , llm(llm_owned.get())
+        , embedder(embedder_owned.get()) { init_writer_client(); }
 
     // Custom providers (nullptr = use OpenAI default from config)
     Impl(GraphitiConfig cfg,
@@ -74,8 +88,8 @@ struct Graphiti::Impl {
                                 : std::make_unique<OpenAIClient>(config.llm))
         , embedder_owned(custom_embedder ? std::move(custom_embedder)
                                           : std::make_unique<OpenAIEmbedder>(config.embedder))
-        , llm(*llm_owned)
-        , embedder(*embedder_owned) { init_writer_client(); }
+        , llm(llm_owned.get())
+        , embedder(embedder_owned.get()) { init_writer_client(); }
 
     // Shared DB + custom providers (nullptr = use OpenAI default from config)
     Impl(GraphitiConfig cfg,
@@ -88,8 +102,8 @@ struct Graphiti::Impl {
                                 : std::make_unique<OpenAIClient>(config.llm))
         , embedder_owned(custom_embedder ? std::move(custom_embedder)
                                           : std::make_unique<OpenAIEmbedder>(config.embedder))
-        , llm(*llm_owned)
-        , embedder(*embedder_owned) { init_writer_client(); }
+        , llm(llm_owned.get())
+        , embedder(embedder_owned.get()) { init_writer_client(); }
 
     void init_writer_client() {
         if (!config.kuzu_writer_uri.empty()) {
@@ -218,7 +232,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         extract_input.custom_instructions = opts.custom_instructions.value();
     }
 
-    auto nodes_result = pipeline::extract_nodes(impl_->llm, extract_input);
+    auto nodes_result = pipeline::extract_nodes(*impl_->llm, extract_input);
     if (!nodes_result.has_value()) return std::unexpected(nodes_result.error());
     auto extracted_nodes = std::move(nodes_result.value());
     log_step("Step 3 (extract nodes — LLM)");
@@ -234,7 +248,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
 
     // 4. Deduplicate nodes against existing graph
     auto dedup_result = pipeline::dedupe_nodes(
-        impl_->llm, impl_->driver, impl_->embedder,
+        *impl_->llm, impl_->driver, *impl_->embedder,
         extracted_nodes, previous_episodes, episode_body, gid
     );
     if (!dedup_result.has_value()) return std::unexpected(dedup_result.error());
@@ -258,7 +272,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         edge_input.custom_instructions = opts.custom_instructions.value();
     }
 
-    auto edges_result = pipeline::extract_edges(impl_->llm, edge_input);
+    auto edges_result = pipeline::extract_edges(*impl_->llm, edge_input);
     if (!edges_result.has_value()) return std::unexpected(edges_result.error());
     auto extracted_edges = std::move(edges_result.value());
     log_step("Step 5 (extract edges — LLM)");
@@ -284,7 +298,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
 
     // 6. Deduplicate edges against existing graph
     auto edge_dedup_result = pipeline::dedupe_edges(
-        impl_->llm, impl_->driver, extracted_edges
+        *impl_->llm, impl_->driver, extracted_edges
     );
     if (!edge_dedup_result.has_value()) return std::unexpected(edge_dedup_result.error());
     auto& edge_dedup = edge_dedup_result.value();
@@ -294,25 +308,25 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
               new_edges.size(), edge_dedup.invalidated_uuids.size());
 
     // 7. Enrich node summaries via LLM
-    (void)pipeline::enrich_node_summaries(impl_->llm, nodes, previous_episodes, episode_body);
+    (void)pipeline::enrich_node_summaries(*impl_->llm, nodes, previous_episodes, episode_body);
 
     log_step("Step 7 (enrich node summaries — LLM)");
 
     // 7b. Extract custom attributes for typed entities
     if (opts.type_defs) {
-        (void)pipeline::extract_entity_attributes(impl_->llm, nodes, *opts.type_defs, episode_body);
+        (void)pipeline::extract_entity_attributes(*impl_->llm, nodes, *opts.type_defs, episode_body);
         log_step("Step 7b (extract attributes — LLM)");
     }
 
     // 8. Generate embeddings for nodes and edges
     for (auto& node : nodes) {
         try {
-            node.name_embedding = impl_->embedder.create(node.name);
+            node.name_embedding = impl_->embedder->create(node.name);
         } catch (...) {}
     }
     for (auto& edge : new_edges) {
         try {
-            edge.fact_embedding = impl_->embedder.create(edge.fact);
+            edge.fact_embedding = impl_->embedder->create(edge.fact);
         } catch (...) {}
     }
     log_step("Step 8 (embeddings)");
@@ -477,7 +491,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     if (opts.update_communities) {
         for (auto& node : nodes) {
             (void)pipeline::update_community(
-                impl_->driver, impl_->llm, impl_->embedder, node);
+                impl_->driver, *impl_->llm, *impl_->embedder, node);
         }
     }
 
@@ -725,7 +739,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     }
 
     auto dedup_result = pipeline::dedupe_nodes(
-        impl_->llm, impl_->driver, impl_->embedder,
+        *impl_->llm, impl_->driver, *impl_->embedder,
         all_unique_nodes, nlohmann::json::array(), combined_content, gid
     );
 
@@ -859,7 +873,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
         log_debug("[graphiti] Step 7 (remap edge pointers): %lldms\n", ms);
         step_start = std::chrono::steady_clock::now();
     }
-    auto edge_dedup = pipeline::dedupe_edges(impl_->llm, impl_->driver, all_edges);
+    auto edge_dedup = pipeline::dedupe_edges(*impl_->llm, impl_->driver, all_edges);
     std::vector<EntityEdge> final_edges;
     if (edge_dedup.has_value()) {
         final_edges = std::move(edge_dedup.value().new_edges);
@@ -877,13 +891,13 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     // Step 9: Enrich node summaries
     // ========================================================================
     (void)pipeline::enrich_node_summaries(
-        impl_->llm, deduped_nodes, nlohmann::json::array(), combined_content
+        *impl_->llm, deduped_nodes, nlohmann::json::array(), combined_content
     );
 
     // Step 9b: Extract custom attributes for typed entities
     if (opts.type_defs) {
         (void)pipeline::extract_entity_attributes(
-            impl_->llm, deduped_nodes, *opts.type_defs, combined_content
+            *impl_->llm, deduped_nodes, *opts.type_defs, combined_content
         );
     }
 
@@ -898,12 +912,12 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     // ========================================================================
     for (auto& node : deduped_nodes) {
         try {
-            node.name_embedding = impl_->embedder.create(node.name);
+            node.name_embedding = impl_->embedder->create(node.name);
         } catch (...) {}
     }
     for (auto& edge : final_edges) {
         try {
-            edge.fact_embedding = impl_->embedder.create(edge.fact);
+            edge.fact_embedding = impl_->embedder->create(edge.fact);
         } catch (...) {}
     }
 
@@ -1120,7 +1134,7 @@ Result<std::vector<EntityEdge>> Graphiti::search(SearchOptions opts) {
     auto gid = impl_->resolve_group_id(opts.group_id);
 
     auto result = hybrid_edge_search(
-        impl_->driver, impl_->embedder, opts.query, gid, opts.num_results, 0.0f,
+        impl_->driver, *impl_->embedder, opts.query, gid, opts.num_results, 0.0f,
         opts.filters.has_value() ? &opts.filters.value() : nullptr
     );
 
@@ -1137,7 +1151,7 @@ Result<SearchResults> Graphiti::search_advanced(SearchAdvancedOptions opts) {
         opts.bfs_origin_node_uuids.has_value() ? &opts.bfs_origin_node_uuids.value() : nullptr;
 
     return search_orchestrator(
-        impl_->driver, impl_->embedder, impl_->llm,
+        impl_->driver, *impl_->embedder, *impl_->llm,
         opts.query, gid, opts.config,
         opts.filters.has_value() ? &opts.filters.value() : nullptr,
         opts.center_node_uuid.has_value() ? &opts.center_node_uuid.value() : nullptr,
@@ -1149,7 +1163,7 @@ Result<std::pair<std::vector<CommunityNode>, std::vector<CommunityEdge>>>
 Graphiti::build_communities(const std::vector<std::string>& group_ids) {
     std::lock_guard lock(impl_->mu);
     return pipeline::build_communities(
-        impl_->driver, impl_->llm, impl_->embedder, group_ids);
+        impl_->driver, *impl_->llm, *impl_->embedder, group_ids);
 }
 
 VoidResult Graphiti::delete_group(std::string_view group_id) {
@@ -1280,17 +1294,17 @@ Result<Graphiti::AddTripletResult> Graphiti::add_triplet(
     // Generate embeddings if missing
     if (!source_node.name_embedding.has_value() && !source_node.name.empty()) {
         try {
-            source_node.name_embedding = impl_->embedder.create(source_node.name);
+            source_node.name_embedding = impl_->embedder->create(source_node.name);
         } catch (...) {}
     }
     if (!target_node.name_embedding.has_value() && !target_node.name.empty()) {
         try {
-            target_node.name_embedding = impl_->embedder.create(target_node.name);
+            target_node.name_embedding = impl_->embedder->create(target_node.name);
         } catch (...) {}
     }
     if (!edge.fact_embedding.has_value() && !edge.fact.empty()) {
         try {
-            edge.fact_embedding = impl_->embedder.create(edge.fact);
+            edge.fact_embedding = impl_->embedder->create(edge.fact);
         } catch (...) {}
     }
 
@@ -1363,7 +1377,7 @@ Result<Graphiti::AddTripletResult> Graphiti::add_triplet(
 }
 
 const TokenTracker& Graphiti::token_tracker() const {
-    return impl_->llm.token_tracker;
+    return impl_->llm->token_tracker;
 }
 
 Result<SearchResults> Graphiti::get_graph_overview(std::string_view group_id, int max_nodes, int max_edges) {
@@ -1443,6 +1457,30 @@ Result<SearchResults> Graphiti::get_graph_overview(std::string_view group_id, in
     results.edge_scores.assign(results.edges.size(), 0.0f);
 
     return results;
+}
+
+void Graphiti::add_logger(GraphitiLogger* logger) {
+    bool first = impl_->loggers.empty();
+    impl_->loggers.push_back(logger);
+    if (first) {
+        // Wrap LLM and embedder with logging decorators
+        impl_->llm_owned = std::make_unique<LoggingLLMClient>(std::move(impl_->llm_owned), impl_->loggers);
+        impl_->llm = impl_->llm_owned.get();
+        impl_->embedder_owned = std::make_unique<LoggingEmbedder>(std::move(impl_->embedder_owned), impl_->loggers);
+        impl_->embedder = impl_->embedder_owned.get();
+    }
+}
+
+void Graphiti::add_logger(std::unique_ptr<GraphitiLogger> logger) {
+    bool first = impl_->loggers.empty();
+    impl_->loggers.push_back(logger.get());
+    impl_->owned_loggers.push_back(std::move(logger));
+    if (first) {
+        impl_->llm_owned = std::make_unique<LoggingLLMClient>(std::move(impl_->llm_owned), impl_->loggers);
+        impl_->llm = impl_->llm_owned.get();
+        impl_->embedder_owned = std::make_unique<LoggingEmbedder>(std::move(impl_->embedder_owned), impl_->loggers);
+        impl_->embedder = impl_->embedder_owned.get();
+    }
 }
 
 kuzu::main::Database& Graphiti::database() const {

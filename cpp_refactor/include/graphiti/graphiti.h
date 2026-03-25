@@ -4,6 +4,7 @@
 #include <graphiti/embedder.h>
 #include <graphiti/error.h>
 #include <graphiti/llm_client.h>
+#include <graphiti/logger.h>
 #include <graphiti/search_config.h>
 #include <graphiti/search_filters.h>
 #include <graphiti/token_tracker.h>
@@ -196,6 +197,12 @@ public:
     // Get a graph overview: top nodes by edge count + their edges.
     // No search, no embeddings — direct Cypher query. Safe with empty queries.
     Result<SearchResults> get_graph_overview(std::string_view group_id, int max_nodes = 50, int max_edges = 300);
+
+    // Add an observability logger. Multiple loggers can be added.
+    // Graphiti does NOT take ownership — the logger must outlive this instance,
+    // OR pass a unique_ptr and Graphiti will own it.
+    void add_logger(GraphitiLogger* logger);
+    void add_logger(std::unique_ptr<GraphitiLogger> logger);
 
     // Access the underlying Kuzu Database instance.
     // Use this to create additional Connections for your own queries.

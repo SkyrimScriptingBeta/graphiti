@@ -118,7 +118,16 @@ struct OpenAIClient::Impl {
         }
 
         // Extract choices[0].message.content
-        auto content_str = resp_json.at("choices").at(0).at("message").at("content").get<std::string>();
+        auto& content_val = resp_json.at("choices").at(0).at("message").at("content");
+        if (content_val.is_null()) {
+            log_trace("[graphiti-llm] ⚠️ LLM returned null content, raw response: %s\n",
+                      resp.body.substr(0, 500).c_str());
+            return std::unexpected(GraphitiError{
+                ErrorCode::llm_parse_error,
+                "LLM returned null content in response"
+            });
+        }
+        auto content_str = content_val.get<std::string>();
 
         // Strip markdown JSON fences (```json ... ```) that some models wrap around their output
         if (content_str.size() >= 7 && content_str[0] == '`') {

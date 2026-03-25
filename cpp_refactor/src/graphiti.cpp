@@ -1476,7 +1476,9 @@ void Graphiti::add_logger(GraphitiLogger* logger) {
     impl_->loggers.push_back(logger);
     if (first) {
         // Wrap LLM and embedder with logging decorators
-        impl_->llm_owned = std::make_unique<LoggingLLMClient>(std::move(impl_->llm_owned), impl_->loggers);
+        impl_->llm_owned = std::make_unique<LoggingLLMClient>(
+            std::move(impl_->llm_owned), impl_->loggers,
+            impl_->config.llm.model, impl_->config.llm.small_model);
         impl_->llm = impl_->llm_owned.get();
         impl_->embedder_owned = std::make_unique<LoggingEmbedder>(std::move(impl_->embedder_owned), impl_->loggers);
         impl_->embedder = impl_->embedder_owned.get();
@@ -1488,7 +1490,9 @@ void Graphiti::add_logger(std::unique_ptr<GraphitiLogger> logger) {
     impl_->loggers.push_back(logger.get());
     impl_->owned_loggers.push_back(std::move(logger));
     if (first) {
-        impl_->llm_owned = std::make_unique<LoggingLLMClient>(std::move(impl_->llm_owned), impl_->loggers);
+        impl_->llm_owned = std::make_unique<LoggingLLMClient>(
+            std::move(impl_->llm_owned), impl_->loggers,
+            impl_->config.llm.model, impl_->config.llm.small_model);
         impl_->llm = impl_->llm_owned.get();
         impl_->embedder_owned = std::make_unique<LoggingEmbedder>(std::move(impl_->embedder_owned), impl_->loggers);
         impl_->embedder = impl_->embedder_owned.get();

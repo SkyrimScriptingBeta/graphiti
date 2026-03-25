@@ -12,8 +12,10 @@ namespace graphiti {
 // Decorator that wraps any LLMClient and logs calls to registered GraphitiLoggers.
 class LoggingLLMClient : public LLMClient {
 public:
-    LoggingLLMClient(std::unique_ptr<LLMClient> inner, std::vector<GraphitiLogger*>& loggers)
-        : inner_(std::move(inner)), loggers_(loggers) {}
+    LoggingLLMClient(std::unique_ptr<LLMClient> inner, std::vector<GraphitiLogger*>& loggers,
+                     std::string model_name = "", std::string small_model_name = "")
+        : inner_(std::move(inner)), loggers_(loggers)
+        , model_name_(std::move(model_name)), small_model_name_(std::move(small_model_name)) {}
 
     Result<nlohmann::json> generate_response(
         const std::vector<Message>& messages,
@@ -34,8 +36,10 @@ public:
             } catch (...) {}
         }
 
-        // Extract model name
-        std::string model = model_size == ModelSize::small ? "small" : "medium";
+        // Resolve actual model name
+        std::string model = model_size == ModelSize::small
+            ? (small_model_name_.empty() ? "small" : small_model_name_)
+            : (model_name_.empty() ? "medium" : model_name_);
 
         GraphitiLogger::LLMCallInfo info;
         info.prompt_name = prompt_name;
@@ -80,7 +84,9 @@ public:
 
 private:
     std::unique_ptr<LLMClient> inner_;
-    std::vector<GraphitiLogger*>& loggers_;  // reference to Impl::loggers
+    std::vector<GraphitiLogger*>& loggers_;
+    std::string model_name_;        // actual model name e.g. "gpt-4.1-mini"
+    std::string small_model_name_;  // actual small model name e.g. "gpt-4.1-nano"
 };
 
 } // namespace graphiti

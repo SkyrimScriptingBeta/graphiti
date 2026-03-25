@@ -7,8 +7,11 @@ namespace graphiti {
 // ============================================================================
 
 void from_json(const nlohmann::json& j, ExtractedEntity& v) {
-    j.at("name").get_to(v.name);
-    j.at("entity_type_id").get_to(v.entity_type_id);
+    if (j.contains("name") && !j["name"].is_null())
+        j["name"].get_to(v.name);
+    if (j.contains("entity_type_id") && !j["entity_type_id"].is_null())
+        j["entity_type_id"].get_to(v.entity_type_id);
+    if (v.name.empty()) throw std::runtime_error("entity name is empty or null");
 }
 
 void to_json(nlohmann::json& j, const ExtractedEntity& v) {
@@ -38,16 +41,20 @@ void to_json(nlohmann::json& j, const ExtractedEntities& v) {
 // ============================================================================
 
 void from_json(const nlohmann::json& j, ExtractedEdge& v) {
-    j.at("source_entity_name").get_to(v.source_entity_name);
-    j.at("target_entity_name").get_to(v.target_entity_name);
-    j.at("relation_type").get_to(v.relation_type);
-    j.at("fact").get_to(v.fact);
-    if (j.contains("valid_at") && !j["valid_at"].is_null()) {
+    auto safe_str = [&](const char* key) -> std::string {
+        if (j.contains(key) && !j[key].is_null()) return j[key].get<std::string>();
+        return "";
+    };
+    v.source_entity_name = safe_str("source_entity_name");
+    v.target_entity_name = safe_str("target_entity_name");
+    v.relation_type      = safe_str("relation_type");
+    v.fact               = safe_str("fact");
+    if (j.contains("valid_at") && !j["valid_at"].is_null())
         v.valid_at = j["valid_at"].get<std::string>();
-    }
-    if (j.contains("invalid_at") && !j["invalid_at"].is_null()) {
+    if (j.contains("invalid_at") && !j["invalid_at"].is_null())
         v.invalid_at = j["invalid_at"].get<std::string>();
-    }
+    if (v.source_entity_name.empty() || v.target_entity_name.empty())
+        throw std::runtime_error("edge missing source or target entity name");
 }
 
 void to_json(nlohmann::json& j, const ExtractedEdge& v) {
@@ -86,9 +93,10 @@ void to_json(nlohmann::json& j, const ExtractedEdges& v) {
 // ============================================================================
 
 void from_json(const nlohmann::json& j, NodeDuplicate& v) {
-    j.at("id").get_to(v.id);
-    j.at("name").get_to(v.name);
-    j.at("duplicate_name").get_to(v.duplicate_name);
+    if (j.contains("id") && !j["id"].is_null()) j["id"].get_to(v.id);
+    if (j.contains("name") && !j["name"].is_null()) j["name"].get_to(v.name);
+    if (j.contains("duplicate_name") && !j["duplicate_name"].is_null())
+        j["duplicate_name"].get_to(v.duplicate_name);
 }
 
 void to_json(nlohmann::json& j, const NodeDuplicate& v) {
@@ -126,7 +134,8 @@ void to_json(nlohmann::json& j, const EdgeDuplicate& v) {
 // ============================================================================
 
 void from_json(const nlohmann::json& j, EntitySummary& v) {
-    j.at("summary").get_to(v.summary);
+    if (j.contains("summary") && !j["summary"].is_null())
+        j["summary"].get_to(v.summary);
 }
 
 void to_json(nlohmann::json& j, const EntitySummary& v) {
@@ -138,8 +147,8 @@ void to_json(nlohmann::json& j, const EntitySummary& v) {
 // ============================================================================
 
 void from_json(const nlohmann::json& j, SummarizedEntity& v) {
-    j.at("name").get_to(v.name);
-    j.at("summary").get_to(v.summary);
+    if (j.contains("name") && !j["name"].is_null()) j["name"].get_to(v.name);
+    if (j.contains("summary") && !j["summary"].is_null()) j["summary"].get_to(v.summary);
 }
 
 void to_json(nlohmann::json& j, const SummarizedEntity& v) {

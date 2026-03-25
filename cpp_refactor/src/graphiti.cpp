@@ -179,8 +179,10 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
               opts.body.size(), gid.c_str(), opts.name.c_str());
 
     // 1. Retrieve previous episodes for context
-    log_trace("[graphiti] → Step 1: retrieve_episodes\n");
+    log_trace("[graphiti] → Step 1: retrieve_episodes...\n");
     auto prev_result = impl_->driver.retrieve_episodes(gid, opts.reference_time, 10, opts.source);
+    log_trace("[graphiti] ✓ Step 1: retrieve_episodes done (%s)\n",
+              prev_result.has_value() ? std::to_string(prev_result->size()).c_str() : "failed");
     nlohmann::json previous_episodes = nlohmann::json::array();
     if (prev_result.has_value()) {
         for (auto& ep : prev_result.value()) {
@@ -189,6 +191,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     }
 
     // 2. Create episodic node
+    log_trace("[graphiti] → Step 2: save_episodic_node...\n");
     EpisodicNode episode;
     episode.uuid = uuid::generate();
     episode.name = std::move(opts.name);
@@ -213,11 +216,13 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     auto save_ep = impl_->has_writer()
         ? impl_->writer_client->save_episodic_node(episode)
         : impl_->driver.save_episodic_node(episode);
+    log_trace("[graphiti] ✓ Step 2: save_episodic_node done (%s)\n",
+              save_ep.has_value() ? "ok" : save_ep.error().message.c_str());
     if (!save_ep.has_value()) return std::unexpected(save_ep.error());
     log_step("Step 1-2 (episode context + save)");
 
     // 3. Extract entities via LLM
-    log_trace("[graphiti] → Step 3: extract_nodes (LLM)\n");
+    log_trace("[graphiti] → Step 3: extract_nodes (LLM)...\n");
     pipeline::ExtractNodesInput extract_input;
     extract_input.episode_content = episode_body;
     extract_input.episode_type = opts.source;
@@ -235,6 +240,8 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     }
 
     auto nodes_result = pipeline::extract_nodes(*impl_->llm, extract_input);
+    log_trace("[graphiti] ✓ Step 3: extract_nodes done (%s)\n",
+              nodes_result.has_value() ? std::to_string(nodes_result->size()).c_str() : nodes_result.error().message.c_str());
     if (!nodes_result.has_value()) return std::unexpected(nodes_result.error());
     auto extracted_nodes = std::move(nodes_result.value());
     log_step("Step 3 (extract nodes — LLM)");
@@ -268,10 +275,13 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     }
 
     // 4. Deduplicate nodes against existing graph
+    log_trace("[graphiti] → Step 4: dedupe_nodes vs graph...\n");
     auto dedup_result = pipeline::dedupe_nodes(
         *impl_->llm, impl_->driver, *impl_->embedder,
         extracted_nodes, previous_episodes, episode_body, gid
     );
+    log_trace("[graphiti] ✓ Step 4: dedupe_nodes done (%s)\n",
+              dedup_result.has_value() ? "ok" : dedup_result.error().message.c_str());
     if (!dedup_result.has_value()) return std::unexpected(dedup_result.error());
     auto& dedup = dedup_result.value();
     auto& nodes = dedup.nodes;
@@ -295,6 +305,8 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     }
 
     auto edges_result = pipeline::extract_edges(*impl_->llm, edge_input);
+    log_trace("[graphiti] ✓ Step 5: extract_edges done (%s)\n",
+              edges_result.has_value() ? std::to_string(edges_result->size()).c_str() : edges_result.error().message.c_str());
     if (!edges_result.has_value()) return std::unexpected(edges_result.error());
     auto extracted_edges = std::move(edges_result.value());
     log_step("Step 5 (extract edges — LLM)");
@@ -319,6 +331,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     }
 
     // 6. Deduplicate edges against existing graph
+    log_trace("[graphiti] → Step 6: dedupe_edges vs graph...\n");
     auto edge_dedup_result = pipeline::dedupe_edges(
         *impl_->llm, impl_->driver, extracted_edges
     );
@@ -330,7 +343,9 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
               new_edges.size(), edge_dedup.invalidated_uuids.size());
 
     // 7. Enrich node summaries via LLM
+    log_trace("[graphiti] → Step 7: enrich_node_summaries...\n");
     (void)pipeline::enrich_node_summaries(*impl_->llm, nodes, previous_episodes, episode_body);
+    log_trace("[graphiti] ✓ Step 7: enrich_node_summaries done\n");
 
     log_step("Step 7 (enrich node summaries — LLM)");
 
@@ -341,6 +356,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     }
 
     // 8. Generate embeddings for nodes and edges
+    log_trace("[graphiti] → Step 8: embeddings...\n");
     for (auto& node : nodes) {
         try {
             node.name_embedding = impl_->embedder->create(node.name);
@@ -354,7 +370,10 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     log_step("Step 8 (embeddings)");
     log_debug("[graphiti]   → %zu node embeddings, %zu edge embeddings\n", nodes.size(), new_edges.size());
 
+    log_trace("[graphiti] ✓ Step 8: embeddings done\n");
+
     // 9. Persist everything to Kuzu
+    log_trace("[graphiti] → Step 9: persist to Kuzu...\n");
     for (auto& node : nodes) {
         // Check if this node was dedup-matched to an existing one
         bool is_existing = false;
@@ -437,7 +456,10 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         }
     }
 
+    log_trace("[graphiti] ✓ Step 9: persist done\n");
+
     // 10. Create episodic edges (MENTIONS)
+    log_trace("[graphiti] → Step 10: episodic edges...\n");
     if (impl_->has_writer()) {
         auto edge_now = std::chrono::system_clock::now();
         for (auto& enode : nodes) {
@@ -457,7 +479,10 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         (void)pipeline::create_episodic_edges(impl_->driver, episode, nodes);
     }
 
+    log_trace("[graphiti] ✓ Step 10: episodic edges done\n");
+
     // 11. Saga processing (if saga name provided)
+    log_trace("[graphiti] → Step 11: saga processing...\n");
     if (opts.saga.has_value() && !opts.saga.value().empty()) {
         // Get or create saga node
         auto existing = impl_->has_writer()
@@ -509,7 +534,10 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
                 uuid::generate(), saga_node.uuid, episode.uuid, gid, now);
     }
 
+    log_trace("[graphiti] ✓ Step 11: saga done\n");
+
     // 12. Update communities if requested
+    log_trace("[graphiti] → Step 12: communities...\n");
     if (opts.update_communities) {
         for (auto& node : nodes) {
             (void)pipeline::update_community(

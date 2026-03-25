@@ -22,12 +22,7 @@ public:
         std::optional<std::string_view> json_schema = std::nullopt,
         ModelSize model_size = ModelSize::medium
     ) override {
-        auto start = std::chrono::steady_clock::now();
-        auto result = inner_->generate_response(messages, json_schema, model_size);
-        auto elapsed = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - start).count();
-
-        // Extract prompt name from schema title
+        // Extract prompt name from schema title BEFORE calling
         std::string prompt_name = "unknown";
         if (json_schema.has_value()) {
             try {
@@ -35,6 +30,26 @@ public:
                 if (j.contains("title")) prompt_name = j["title"].get<std::string>();
             } catch (...) {}
         }
+
+        // Log request BEFORE sending so we have it even if the call crashes
+        {
+            GraphitiLogger::LLMCallInfo pre_info;
+            std::string model = model_size == ModelSize::small
+                ? (small_model_name_.empty() ? "small" : small_model_name_)
+                : (model_name_.empty() ? "medium" : model_name_);
+            pre_info.model = model;
+            pre_info.prompt_name = prompt_name;
+            pre_info.success = true;  // will be updated after call
+            pre_info.attempt = 0;     // 0 = pre-call log
+            for (auto& msg : messages)
+                pre_info.request_messages.push_back({msg.role, msg.content});
+            for (auto* l : loggers_) l->on_llm_call(pre_info);
+        }
+
+        auto start = std::chrono::steady_clock::now();
+        auto result = inner_->generate_response(messages, json_schema, model_size);
+        auto elapsed = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - start).count();
 
         // Resolve actual model name
         std::string model = model_size == ModelSize::small

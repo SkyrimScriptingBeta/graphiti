@@ -2,6 +2,8 @@
 
 #include "http/http_client.h"
 
+#include <graphiti/log.h>
+
 #include <chrono>
 #include <format>
 #include <thread>
@@ -62,11 +64,22 @@ struct OpenAIClient::Impl {
             {"Authorization", std::format("Bearer {}", config.api_key)},
         };
 
+        log_trace("[graphiti-llm] → POST %s/v1/chat/completions (model=%s, msgs=%zu)\n",
+                  config.base_url.c_str(), model.c_str(), messages.size());
+        auto t0 = std::chrono::steady_clock::now();
         auto result = http().post_json(
             config.base_url, "/v1/chat/completions", headers, request_body.dump()
         );
+        auto llm_ms = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - t0).count();
 
-        if (!result.has_value()) return std::unexpected(result.error());
+        if (!result.has_value()) {
+            log_trace("[graphiti-llm] ✗ HTTP failed after %.0fms: %s\n",
+                      llm_ms, result.error().message.c_str());
+            return std::unexpected(result.error());
+        }
+        log_trace("[graphiti-llm] ✓ HTTP %d after %.0fms (%zu bytes)\n",
+                  result->status, llm_ms, result->body.size());
 
         auto& resp = result.value();
 

@@ -30,6 +30,10 @@ public:
 
     TokenTracker token_tracker;
 
+    // Set this before calling generate_response() to tag log entries.
+    // e.g. "extract_message", "dedupe_node", "extract_edges"
+    std::string prompt_name;
+
     // Optional per-attempt callback for logging. Set by LoggingLLMClient.
     // Called before each attempt (is_pre_call=true) and after (is_pre_call=false).
     std::function<void(const std::vector<Message>&, const Result<nlohmann::json>&, bool)> on_attempt;

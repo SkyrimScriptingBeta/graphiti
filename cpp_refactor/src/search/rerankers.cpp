@@ -220,6 +220,7 @@ Result<std::vector<std::pair<std::string, float>>> cross_encoder_rerank(
 
         constexpr int MAX_RETRIES = 2;
         bool rerank_done = false;
+        llm.prompt_name = "rerank";
         for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
             auto response = llm.generate_response(messages, std::nullopt, ModelSize::small);
             if (!response.has_value()) {

@@ -132,6 +132,7 @@ Summaries:
     };
 
     constexpr int MAX_RETRIES = 2;
+    llm.prompt_name = "summarize_pair";
     for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
         auto resp = llm.generate_response(messages, response_schemas::SUMMARY, ModelSize::small);
         if (resp.has_value()) {
@@ -162,6 +163,7 @@ Summary:
     };
 
     constexpr int MAX_RETRIES = 2;
+    llm.prompt_name = "generate_summary_description";
     for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
         auto resp = llm.generate_response(messages, response_schemas::SUMMARY_DESCRIPTION, ModelSize::small);
         if (resp.has_value()) {

@@ -12,8 +12,9 @@ namespace graphiti {
 // Decorator that wraps any EmbedderClient and logs calls to registered GraphitiLoggers.
 class LoggingEmbedder : public EmbedderClient {
 public:
-    LoggingEmbedder(std::unique_ptr<EmbedderClient> inner, std::vector<GraphitiLogger*>& loggers)
-        : inner_(std::move(inner)), loggers_(loggers) {}
+    LoggingEmbedder(std::unique_ptr<EmbedderClient> inner, std::vector<GraphitiLogger*>& loggers,
+                    std::string model_name = "")
+        : inner_(std::move(inner)), loggers_(loggers), model_name_(std::move(model_name)) {}
 
     std::vector<float> create(std::string_view input) override {
         auto start = std::chrono::steady_clock::now();
@@ -23,6 +24,7 @@ public:
                 std::chrono::steady_clock::now() - start).count();
 
             GraphitiLogger::EmbeddingCallInfo info;
+            info.model       = model_name_;
             info.input_count = 1;
             info.dimensions  = static_cast<int>(result.size());
             info.latency_ms  = elapsed;
@@ -35,6 +37,7 @@ public:
                 std::chrono::steady_clock::now() - start).count();
 
             GraphitiLogger::EmbeddingCallInfo info;
+            info.model         = model_name_;
             info.input_count   = 1;
             info.latency_ms    = elapsed;
             info.success       = false;
@@ -53,6 +56,7 @@ public:
                 std::chrono::steady_clock::now() - start).count();
 
             GraphitiLogger::EmbeddingCallInfo info;
+            info.model       = model_name_;
             info.input_count = static_cast<int>(inputs.size());
             info.dimensions  = result.empty() ? 0 : static_cast<int>(result[0].size());
             info.latency_ms  = elapsed;
@@ -65,6 +69,7 @@ public:
                 std::chrono::steady_clock::now() - start).count();
 
             GraphitiLogger::EmbeddingCallInfo info;
+            info.model         = model_name_;
             info.input_count   = static_cast<int>(inputs.size());
             info.latency_ms    = elapsed;
             info.success       = false;
@@ -78,6 +83,7 @@ public:
 private:
     std::unique_ptr<EmbedderClient> inner_;
     std::vector<GraphitiLogger*>& loggers_;
+    std::string model_name_;
 };
 
 } // namespace graphiti

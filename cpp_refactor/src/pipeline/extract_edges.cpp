@@ -32,6 +32,7 @@ Result<std::vector<EntityEdge>> extract_edges(
     // Call LLM with retry on edge parse failures
     ExtractedEdges extracted;
     constexpr int MAX_EDGE_RETRIES = 2;
+    llm.prompt_name = "extract_edges";
     for (int attempt = 0; attempt <= MAX_EDGE_RETRIES; ++attempt) {
         auto llm_result = llm.generate_response(
             messages, response_schemas::EXTRACTED_EDGES, ModelSize::small

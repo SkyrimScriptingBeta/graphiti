@@ -35,6 +35,9 @@ Result<std::vector<EntityNode>> extract_nodes(
     // Call LLM with retry on parse failures
     ExtractedEntities extracted;
     constexpr int MAX_RETRIES = 2;
+    llm.prompt_name = (input.episode_type == EpisodeType::message) ? "extract_message"
+                    : (input.episode_type == EpisodeType::json)    ? "extract_json"
+                    :                                                "extract_text";
     for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
         auto llm_result = llm.generate_response(
             messages, response_schemas::EXTRACTED_ENTITIES, ModelSize::small
@@ -167,6 +170,7 @@ Use null for any attribute that cannot be determined from the context.)",
 
         std::vector<Message> attr_messages = {{"system", std::move(sys)}, {"user", std::move(user)}};
         constexpr int MAX_ATTR_RETRIES = 2;
+        llm.prompt_name = "extract_entity_attributes";
         for (int attempt = 0; attempt <= MAX_ATTR_RETRIES; ++attempt) {
             auto result = llm.generate_response(
                 attr_messages, ENTITY_ATTRIBUTES_SCHEMA, ModelSize::small

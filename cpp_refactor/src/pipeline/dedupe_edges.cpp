@@ -57,6 +57,7 @@ Result<DedupeEdgesResult> dedupe_edges(
 
         constexpr int MAX_RETRIES = 2;
         bool edge_handled = false;
+        llm.prompt_name = "resolve_edge";
         for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
             auto llm_result = llm.generate_response(
                 messages, response_schemas::EDGE_DUPLICATE, ModelSize::small

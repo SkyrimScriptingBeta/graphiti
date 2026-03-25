@@ -35,6 +35,7 @@ VoidResult enrich_node_summaries(
     );
 
     constexpr int MAX_RETRIES = 2;
+    llm.prompt_name = "extract_summaries_batch";
     for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
         auto llm_result = llm.generate_response(
             messages, response_schemas::SUMMARIZED_ENTITIES, ModelSize::small

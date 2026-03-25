@@ -61,6 +61,7 @@ Result<DedupeNodesResult> dedupe_nodes(
         );
 
         constexpr int MAX_RETRIES = 2;
+        llm.prompt_name = "dedupe_node";
         for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
             auto llm_result = llm.generate_response(
                 messages, response_schemas::NODE_RESOLUTIONS, ModelSize::small

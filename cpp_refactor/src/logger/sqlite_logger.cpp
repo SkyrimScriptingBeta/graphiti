@@ -13,6 +13,7 @@ static const char* SCHEMA = R"(
 CREATE TABLE IF NOT EXISTS llm_calls (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime')),
+    started_at      TEXT,
     model           TEXT,
     prompt_name     TEXT,
     input_tokens    INTEGER DEFAULT 0,
@@ -20,7 +21,6 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     latency_ms      REAL DEFAULT 0,
     success         INTEGER DEFAULT 1,
     attempt         INTEGER DEFAULT 1,
-    max_attempts    INTEGER DEFAULT 1,
     error_code      TEXT,
     error_message   TEXT,
     request_messages TEXT,
@@ -92,22 +92,25 @@ void SqliteGraphitiLogger::on_llm_call(const LLMCallInfo& info) {
     }
 
     static const char* SQL =
-        "INSERT INTO llm_calls (model, prompt_name, input_tokens, output_tokens, "
-        "latency_ms, success, attempt, max_attempts, error_code, error_message, "
+        "INSERT INTO llm_calls (started_at, model, prompt_name, input_tokens, output_tokens, "
+        "latency_ms, success, attempt, error_code, error_message, "
         "request_messages, response_body) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db_, SQL, -1, &stmt, nullptr) != SQLITE_OK) return;
 
-    sqlite3_bind_text(stmt, 1, info.model.data(), (int)info.model.size(), SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 2, info.prompt_name.data(), (int)info.prompt_name.size(), SQLITE_TRANSIENT);
-    sqlite3_bind_int64(stmt, 3, info.input_tokens);
-    sqlite3_bind_int64(stmt, 4, info.output_tokens);
-    sqlite3_bind_double(stmt, 5, info.latency_ms);
-    sqlite3_bind_int(stmt, 6, info.success ? 1 : 0);
-    sqlite3_bind_int(stmt, 7, info.attempt);
-    sqlite3_bind_int(stmt, 8, info.max_attempts);
+    if (!info.started_at.empty())
+        sqlite3_bind_text(stmt, 1, info.started_at.data(), (int)info.started_at.size(), SQLITE_TRANSIENT);
+    else
+        sqlite3_bind_null(stmt, 1);
+    sqlite3_bind_text(stmt, 2, info.model.data(), (int)info.model.size(), SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 3, info.prompt_name.data(), (int)info.prompt_name.size(), SQLITE_TRANSIENT);
+    sqlite3_bind_int64(stmt, 4, info.input_tokens);
+    sqlite3_bind_int64(stmt, 5, info.output_tokens);
+    sqlite3_bind_double(stmt, 6, info.latency_ms);
+    sqlite3_bind_int(stmt, 7, info.success ? 1 : 0);
+    sqlite3_bind_int(stmt, 8, info.attempt);
     if (!info.error_code.empty())
         sqlite3_bind_text(stmt, 9, info.error_code.data(), (int)info.error_code.size(), SQLITE_TRANSIENT);
     else

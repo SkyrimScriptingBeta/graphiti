@@ -27,7 +27,7 @@ public:
     // Called after every LLM call (success or failure).
     struct LLMCallInfo {
         std::string_view model;          // e.g. "gpt-4.1-nano"
-        std::string_view prompt_name;    // e.g. "EXTRACTED_ENTITIES", "SUMMARIZED_ENTITIES"
+        std::string_view prompt_name;    // e.g. "extract_entities", "dedupe_nodes"
         int64_t input_tokens  = 0;
         int64_t output_tokens = 0;
         double  latency_ms    = 0.0;
@@ -35,7 +35,7 @@ public:
         std::string_view error_code;     // e.g. "llm_rate_limit", "llm_parse_error"
         std::string_view error_message;
         int     attempt       = 1;       // which retry attempt (1 = first try)
-        int     max_attempts  = 1;
+        std::string started_at;          // ISO8601 wall-clock time when call started
         // Full request and response content
         std::vector<LogMessage> request_messages;  // the full prompt as sent to the LLM
         std::string response_body;                 // raw JSON response from the LLM

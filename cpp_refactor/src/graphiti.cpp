@@ -168,10 +168,21 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     auto& pids = opts.participant_ids;
     auto now = std::chrono::system_clock::now();
     auto step_start = std::chrono::steady_clock::now();
-    auto log_step = [&](const char* label) {
+    auto log_step = [&](const char* label, bool success = true, int items_in = 0, int items_out = 0,
+                         std::string_view error_msg = "") {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - step_start).count();
         log_debug("[graphiti] add_episode %s: %lldms\n", label, elapsed);
+
+        GraphitiLogger::PipelineStepInfo pinfo;
+        pinfo.step_name = label;
+        pinfo.latency_ms = static_cast<double>(elapsed);
+        pinfo.success = success;
+        pinfo.error_message = error_msg;
+        pinfo.items_in = items_in;
+        pinfo.items_out = items_out;
+        impl_->log_pipeline(pinfo);
+
         step_start = std::chrono::steady_clock::now();
     };
 
@@ -219,7 +230,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     log_trace("[graphiti] ✓ Step 2: save_episodic_node done (%s)\n",
               save_ep.has_value() ? "ok" : save_ep.error().message.c_str());
     if (!save_ep.has_value()) return std::unexpected(save_ep.error());
-    log_step("Step 1-2 (episode context + save)");
+    log_step("save_episode");
 
     // 3. Extract entities via LLM
     log_trace("[graphiti] → Step 3: extract_nodes (LLM)...\n");
@@ -244,7 +255,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
               nodes_result.has_value() ? std::to_string(nodes_result->size()).c_str() : nodes_result.error().message.c_str());
     if (!nodes_result.has_value()) return std::unexpected(nodes_result.error());
     auto extracted_nodes = std::move(nodes_result.value());
-    log_step("Step 3 (extract nodes — LLM)");
+    log_step("extract_nodes", true, 1, static_cast<int>(extracted_nodes.size()));
     log_debug("[graphiti]   → %zu nodes extracted\n", extracted_nodes.size());
 
     // Set attribution ids on extracted nodes
@@ -286,7 +297,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     auto& dedup = dedup_result.value();
     auto& nodes = dedup.nodes;
     auto& uuid_map = dedup.uuid_map;
-    log_step("Step 4 (dedupe nodes — LLM + embeddings)");
+    log_step("dedupe_nodes", true, static_cast<int>(extracted_nodes.size()), static_cast<int>(nodes.size()));
     log_debug("[graphiti]   → %zu nodes after dedup, %zu mappings\n", nodes.size(), uuid_map.size());
 
     // 5. Extract edges via LLM
@@ -309,7 +320,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
               edges_result.has_value() ? std::to_string(edges_result->size()).c_str() : edges_result.error().message.c_str());
     if (!edges_result.has_value()) return std::unexpected(edges_result.error());
     auto extracted_edges = std::move(edges_result.value());
-    log_step("Step 5 (extract edges — LLM)");
+    log_step("extract_edges", true, static_cast<int>(nodes.size()), static_cast<int>(extracted_edges.size()));
     log_debug("[graphiti]   → %zu edges extracted\n", extracted_edges.size());
 
     // Set attribution ids on extracted edges
@@ -338,7 +349,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     if (!edge_dedup_result.has_value()) return std::unexpected(edge_dedup_result.error());
     auto& edge_dedup = edge_dedup_result.value();
     auto& new_edges = edge_dedup.new_edges;
-    log_step("Step 6 (dedupe edges — LLM)");
+    log_step("dedupe_edges", true, static_cast<int>(extracted_edges.size()), static_cast<int>(new_edges.size()));
     log_debug("[graphiti]   → %zu new edges, %zu invalidated\n",
               new_edges.size(), edge_dedup.invalidated_uuids.size());
 
@@ -347,12 +358,12 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     (void)pipeline::enrich_node_summaries(*impl_->llm, nodes, previous_episodes, episode_body);
     log_trace("[graphiti] ✓ Step 7: enrich_node_summaries done\n");
 
-    log_step("Step 7 (enrich node summaries — LLM)");
+    log_step("enrich_node_summaries", true, static_cast<int>(nodes.size()), static_cast<int>(nodes.size()));
 
     // 7b. Extract custom attributes for typed entities
     if (opts.type_defs) {
         (void)pipeline::extract_entity_attributes(*impl_->llm, nodes, *opts.type_defs, episode_body);
-        log_step("Step 7b (extract attributes — LLM)");
+        log_step("extract_entity_attributes");
     }
 
     // 8. Generate embeddings for nodes and edges
@@ -367,7 +378,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
             edge.fact_embedding = impl_->embedder->create(edge.fact);
         } catch (...) {}
     }
-    log_step("Step 8 (embeddings)");
+    log_step("embeddings");
     log_debug("[graphiti]   → %zu node embeddings, %zu edge embeddings\n", nodes.size(), new_edges.size());
 
     log_trace("[graphiti] ✓ Step 8: embeddings done\n");
@@ -554,7 +565,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
             (void)impl_->driver.save_episodic_node(episode);
     }
 
-    log_step("Step 9-12 (persist + episodic edges + saga + communities)");
+    log_step("persist_and_communities");
 
     // Build result
     AddEpisodeResult result;
@@ -701,18 +712,25 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                     // Wire per-attempt logging if loggers are registered
                     if (loggers_ptr && !loggers_ptr->empty()) {
                         std::string model = llm_config.small_model;
-                        llm.on_attempt = [loggers_ptr, model](
+                        int attempt_num = 0;
+                        llm.on_attempt = [loggers_ptr, model, &attempt_num](
                             const std::vector<Message>& msgs, const Result<nlohmann::json>& result, bool is_pre) {
+                            if (is_pre) { attempt_num++; return; }
                             GraphitiLogger::LLMCallInfo info;
                             info.model = model;
                             info.prompt_name = "extract_nodes_bulk";
+                            info.attempt = attempt_num;
                             for (auto& m : msgs) info.request_messages.push_back({m.role, m.content});
-                            if (is_pre) { info.success = true; info.attempt = 0; }
-                            else if (result.has_value()) {
-                                info.success = true; info.attempt = 1;
+                            if (result.has_value()) {
+                                info.success = true;
                                 info.response_body = result->dump();
+                                if (result->contains("__token_usage__")) {
+                                    auto& tu = (*result)["__token_usage__"];
+                                    if (tu.contains("input_tokens")) info.input_tokens = tu["input_tokens"].get<int64_t>();
+                                    if (tu.contains("output_tokens")) info.output_tokens = tu["output_tokens"].get<int64_t>();
+                                }
                             } else {
-                                info.success = false; info.attempt = 1;
+                                info.success = false;
                                 info.error_message = result.error().message;
                                 info.error_code = "error";
                             }
@@ -901,18 +919,25 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                     OpenAIClient llm(llm_config);
                     if (loggers_ptr2 && !loggers_ptr2->empty()) {
                         std::string model = llm_config.small_model;
-                        llm.on_attempt = [loggers_ptr2, model](
+                        int attempt_num = 0;
+                        llm.on_attempt = [loggers_ptr2, model, &attempt_num](
                             const std::vector<Message>& msgs, const Result<nlohmann::json>& result, bool is_pre) {
+                            if (is_pre) { attempt_num++; return; }
                             GraphitiLogger::LLMCallInfo info;
                             info.model = model;
                             info.prompt_name = "extract_edges_bulk";
+                            info.attempt = attempt_num;
                             for (auto& m : msgs) info.request_messages.push_back({m.role, m.content});
-                            if (is_pre) { info.success = true; info.attempt = 0; }
-                            else if (result.has_value()) {
-                                info.success = true; info.attempt = 1;
+                            if (result.has_value()) {
+                                info.success = true;
                                 info.response_body = result->dump();
+                                if (result->contains("__token_usage__")) {
+                                    auto& tu = (*result)["__token_usage__"];
+                                    if (tu.contains("input_tokens")) info.input_tokens = tu["input_tokens"].get<int64_t>();
+                                    if (tu.contains("output_tokens")) info.output_tokens = tu["output_tokens"].get<int64_t>();
+                                }
                             } else {
-                                info.success = false; info.attempt = 1;
+                                info.success = false;
                                 info.error_message = result.error().message;
                                 info.error_code = "error";
                             }
@@ -1573,7 +1598,8 @@ void Graphiti::add_logger(GraphitiLogger* logger) {
             std::move(impl_->llm_owned), impl_->loggers,
             impl_->config.llm.model, impl_->config.llm.small_model);
         impl_->llm = impl_->llm_owned.get();
-        impl_->embedder_owned = std::make_unique<LoggingEmbedder>(std::move(impl_->embedder_owned), impl_->loggers);
+        impl_->embedder_owned = std::make_unique<LoggingEmbedder>(
+            std::move(impl_->embedder_owned), impl_->loggers, impl_->config.embedder.model);
         impl_->embedder = impl_->embedder_owned.get();
     }
 }
@@ -1587,7 +1613,8 @@ void Graphiti::add_logger(std::unique_ptr<GraphitiLogger> logger) {
             std::move(impl_->llm_owned), impl_->loggers,
             impl_->config.llm.model, impl_->config.llm.small_model);
         impl_->llm = impl_->llm_owned.get();
-        impl_->embedder_owned = std::make_unique<LoggingEmbedder>(std::move(impl_->embedder_owned), impl_->loggers);
+        impl_->embedder_owned = std::make_unique<LoggingEmbedder>(
+            std::move(impl_->embedder_owned), impl_->loggers, impl_->config.embedder.model);
         impl_->embedder = impl_->embedder_owned.get();
     }
 }

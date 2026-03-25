@@ -112,6 +112,7 @@ VoidResult KuzuWriterClient::connect() {
             auto response = json::parse(msg->str, nullptr, false);
             if (response.is_discarded() || !response.contains("id")) return;
 
+            if (response["id"].is_null()) return;
             auto id = response["id"].get<std::string>();
             std::lock_guard lock(impl_->pending_mu);
             if (auto it = impl_->pending.find(id); it != impl_->pending.end()) {

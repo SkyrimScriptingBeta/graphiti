@@ -4,6 +4,8 @@
 #include "prompts/prompts.h"
 #include "utils/uuid.h"
 
+#include <graphiti/log.h>
+
 #include <format>
 
 namespace graphiti::pipeline {
@@ -110,7 +112,8 @@ VoidResult extract_entity_attributes(
     const TypeDefinitions& type_defs,
     std::string_view episode_content
 ) {
-    for (auto& node : nodes) {
+    for (size_t ai = 0; ai < nodes.size(); ++ai) {
+        auto& node = nodes[ai];
         // Find the custom type label (the non-"Entity" label)
         std::string custom_type;
         for (auto& label : node.labels) {
@@ -135,6 +138,9 @@ VoidResult extract_entity_attributes(
             }
         }
         if (!has_fields) continue;
+
+        log_trace("[graphiti]   extract attributes for \"%s\" (type: %s)\n",
+                  node.name.c_str(), custom_type.c_str());
 
         // Build prompt for attribute extraction
         std::string sys = "You are an AI assistant that extracts entity attributes from text. "

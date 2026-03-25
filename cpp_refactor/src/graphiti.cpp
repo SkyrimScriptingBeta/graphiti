@@ -175,8 +175,8 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         step_start = std::chrono::steady_clock::now();
     };
 
-    log_debug("[graphiti] add_episode: body=%zu chars, group=%s\n",
-              opts.body.size(), gid.c_str());
+    log_debug("[graphiti] add_episode: body=%zu chars, group=%s, name=%s\n",
+              opts.body.size(), gid.c_str(), opts.name.c_str());
 
     // 1. Retrieve previous episodes for context
     auto prev_result = impl_->driver.retrieve_episodes(gid, opts.reference_time, 10, opts.source);
@@ -638,17 +638,20 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
             auto& dst = nodes_by_episode[i];
 
             auto ep_index = i;
+            auto ep_name = episodes[i].name;
             futures.push_back(std::async(std::launch::async,
                 [&sem, &llm_config, &dst, input = std::move(input),
-                 ep_aid, ep_sid, ep_sctx, ep_pids, ep_index]() mutable {
+                 ep_aid, ep_sid, ep_sctx, ep_pids, ep_index, ep_name]() mutable {
                     sem.acquire();
-                    log_trace("[graphiti]   node extraction %zu started\n", ep_index);
+                    log_trace("[graphiti]   node extraction %zu \"%s\" started\n",
+                              ep_index, ep_name.c_str());
                     auto t0 = std::chrono::steady_clock::now();
                     OpenAIClient llm(llm_config);
                     auto result = pipeline::extract_nodes(llm, input);
                     auto t1 = std::chrono::steady_clock::now();
                     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-                    log_trace("[graphiti]   node extraction %zu done (%lldms)\n", ep_index, ms);
+                    log_trace("[graphiti]   node extraction %zu done (%lldms, %zu nodes)\n",
+                              ep_index, ms, result.has_value() ? result->size() : 0);
                     sem.release();
 
                     if (result.has_value()) {
@@ -814,17 +817,20 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
             auto& dst = edges_by_episode[i];
 
             auto ep_index = i;
+            auto ep_name2 = episodes[i].name;
             futures.push_back(std::async(std::launch::async,
                 [&sem, &llm_config, &dst, input = std::move(input),
-                 ep_aid, ep_sid, ep_sctx, ep_pids, ep_uuid, ep_index]() mutable {
+                 ep_aid, ep_sid, ep_sctx, ep_pids, ep_uuid, ep_index, ep_name2]() mutable {
                     sem.acquire();
-                    log_trace("[graphiti]   edge extraction %zu started\n", ep_index);
+                    log_trace("[graphiti]   edge extraction %zu \"%s\" started\n",
+                              ep_index, ep_name2.c_str());
                     auto t0 = std::chrono::steady_clock::now();
                     OpenAIClient llm(llm_config);
                     auto result = pipeline::extract_edges(llm, input);
                     auto t1 = std::chrono::steady_clock::now();
                     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-                    log_trace("[graphiti]   edge extraction %zu done (%lldms)\n", ep_index, ms);
+                    log_trace("[graphiti]   edge extraction %zu done (%lldms, %zu edges)\n",
+                              ep_index, ms, result.has_value() ? result->size() : 0);
                     sem.release();
 
                     if (result.has_value()) {

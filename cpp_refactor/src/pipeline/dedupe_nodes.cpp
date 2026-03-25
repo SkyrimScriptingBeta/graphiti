@@ -5,6 +5,7 @@
 #include "prompts/prompts.h"
 
 #include <graphiti/embedder.h>
+#include <graphiti/log.h>
 
 #include <format>
 
@@ -28,10 +29,13 @@ Result<DedupeNodesResult> dedupe_nodes(
     for (size_t i = 0; i < result.nodes.size(); ++i) {
         auto& node = result.nodes[i];
 
+        log_trace("[graphiti]   dedupe node %zu/%zu: \"%s\"\n",
+                  i + 1, result.nodes.size(), node.name.c_str());
+
         // Search existing nodes by name (BM25)
         auto search_result = driver.search_entity_nodes_bm25(node.name, group_id, 10);
         if (!search_result.has_value() || search_result.value().empty()) {
-            // No candidates found, node is new
+            log_trace("[graphiti]     → no candidates, keeping as new\n");
             continue;
         }
 

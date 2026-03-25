@@ -3,6 +3,8 @@
 #include "llm/response_models.h"
 #include "prompts/prompts.h"
 
+#include <graphiti/log.h>
+
 #include <format>
 
 namespace graphiti::pipeline {
@@ -14,6 +16,10 @@ VoidResult enrich_node_summaries(
     std::string_view episode_content
 ) {
     if (nodes.empty()) return {};
+
+    log_trace("[graphiti]   enriching summaries for %zu nodes:", nodes.size());
+    for (auto& n : nodes) log_trace(" \"%s\"", n.name.c_str());
+    log_trace("\n");
 
     // Build entities JSON for batch summary extraction
     nlohmann::json entities_json = nlohmann::json::array();

@@ -5,6 +5,8 @@
 #include "prompts/prompts.h"
 #include "utils/datetime.h"
 
+#include <graphiti/log.h>
+
 #include <format>
 #include <set>
 
@@ -18,14 +20,18 @@ Result<DedupeEdgesResult> dedupe_edges(
     DedupeEdgesResult result;
     std::set<std::string> invalidated_set;
 
-    for (auto& new_edge : extracted_edges) {
+    for (size_t ei = 0; ei < extracted_edges.size(); ++ei) {
+        auto& new_edge = extracted_edges[ei];
+        log_trace("[graphiti]   dedupe edge %zu/%zu: \"%s\"\n",
+                  ei + 1, extracted_edges.size(), new_edge.fact.c_str());
+
         // Find existing edges between the same source and target nodes
         auto existing_result = driver.get_edges_between_nodes(
             new_edge.source_node_uuid, new_edge.target_node_uuid
         );
 
         if (!existing_result.has_value() || existing_result.value().empty()) {
-            // No existing edges, this is new
+            log_trace("[graphiti]     → no existing edges, keeping as new\n");
             result.new_edges.push_back(new_edge);
             continue;
         }

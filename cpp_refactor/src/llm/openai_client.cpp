@@ -188,15 +188,23 @@ Result<nlohmann::json> OpenAIClient::generate_response(
 
         auto& err = result.error();
 
-        // Don't retry non-retryable HTTP errors
-        if (err.code == ErrorCode::http_error) {
-            return result;
+        // Retry HTTP errors (connection failures, timeouts) with exponential backoff
+        if (err.code == ErrorCode::http_error || err.code == ErrorCode::llm_rate_limit) {
+            if (attempt >= MAX_RETRIES) return result;
+            int delay_ms = 1000 * (1 << attempt);  // 1s, 2s, 4s, 8s, 16s
+            fprintf(stderr, "  [graphiti] LLM call failed (%s), retrying in %dms (attempt %d/%d)\n",
+                    err.code == ErrorCode::http_error ? "connection error" : "rate limit",
+                    delay_ms, attempt + 1, MAX_RETRIES);
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+            continue;
         }
 
-        // Retry rate limits with exponential backoff
-        if (err.code == ErrorCode::llm_rate_limit) {
+        // Retry other LLM errors (500s, etc.) with exponential backoff
+        if (err.code == ErrorCode::llm_error) {
             if (attempt >= MAX_RETRIES) return result;
-            int delay_ms = 1000 * (1 << attempt);  // 1s, 2s, 4s
+            int delay_ms = 1000 * (1 << attempt);
+            fprintf(stderr, "  [graphiti] LLM error: %s, retrying in %dms (attempt %d/%d)\n",
+                    err.message.c_str(), delay_ms, attempt + 1, MAX_RETRIES);
             std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
             continue;
         }

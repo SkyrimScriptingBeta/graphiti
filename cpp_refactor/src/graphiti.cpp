@@ -179,6 +179,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
               opts.body.size(), gid.c_str(), opts.name.c_str());
 
     // 1. Retrieve previous episodes for context
+    log_trace("[graphiti] → Step 1: retrieve_episodes\n");
     auto prev_result = impl_->driver.retrieve_episodes(gid, opts.reference_time, 10, opts.source);
     nlohmann::json previous_episodes = nlohmann::json::array();
     if (prev_result.has_value()) {
@@ -216,6 +217,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     log_step("Step 1-2 (episode context + save)");
 
     // 3. Extract entities via LLM
+    log_trace("[graphiti] → Step 3: extract_nodes (LLM)\n");
     pipeline::ExtractNodesInput extract_input;
     extract_input.episode_content = episode_body;
     extract_input.episode_type = opts.source;
@@ -278,6 +280,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     log_debug("[graphiti]   → %zu nodes after dedup, %zu mappings\n", nodes.size(), uuid_map.size());
 
     // 5. Extract edges via LLM
+    log_trace("[graphiti] → Step 5: extract_edges (LLM)\n");
     pipeline::ExtractEdgesInput edge_input;
     edge_input.episode_content = episode_body;
     edge_input.previous_episodes = previous_episodes;

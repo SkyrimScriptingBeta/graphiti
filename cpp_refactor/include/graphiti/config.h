@@ -12,7 +12,7 @@ struct LLMConfig {
     std::string small_model = "gpt-4.1-nano";  // used for dedup + resolution (cheaper/faster)
     std::string base_url = "https://api.openai.com";
     float temperature = 0.0f;  // deterministic — extraction needs precision, not creativity
-    int max_tokens = 2048;  // caps generation — prevents infinite loops on local models
+    int max_tokens = 6144;  // caps generation — prevents infinite loops on local models (2K too small for legit edge extraction)
 };
 
 struct EmbedderConfig {
@@ -105,6 +105,11 @@ struct GraphitiConfig {
         auto group_id = env("GRAPHITI_GROUP_ID");
         if (!group_id.empty()) {
             config.default_group_id = group_id;
+        }
+
+        auto max_tokens = env("GRAPHITI_MAX_TOKENS");
+        if (!max_tokens.empty()) {
+            config.llm.max_tokens = std::max(256, std::stoi(max_tokens));
         }
 
         auto max_parallel = env("GRAPHITI_MAX_PARALLEL");

@@ -5,8 +5,10 @@
 #include <graphiti/log.h>
 
 #include <chrono>
+#include <cstdlib>
 #include <format>
 #include <thread>
+#include <unordered_map>
 
 namespace graphiti {
 
@@ -133,10 +135,58 @@ struct OpenAIClient::Impl {
         if (config.stream) {
             auto stream_body = request_body;
             stream_body["stream"] = true;
+
+            // Loop detection: track "name": "X" patterns in streaming JSON output.
+            // If the same value appears K+ times, the model is looping — abort the stream
+            // and use the truncated JSON repair to salvage the good data.
+            int loop_threshold = 0;
+            {
+                auto* env = std::getenv("GRAPHITI_STREAM_LOOP_THRESHOLD");
+                loop_threshold = env ? std::atoi(env) : 5;
+            }
+            bool stream_aborted = false;
+            std::string stream_accumulator;
+            std::unordered_map<std::string, int> name_value_counts;
+            size_t last_scan_pos = 0;
+
             result = http().post_json_streaming(
                 config.base_url, "/v1/chat/completions", headers, stream_body.dump(),
-                [](const std::string& token) {
+                [&](const std::string& token) -> bool {
                     log_trace("%s", token.c_str());
+
+                    if (loop_threshold <= 0) return true;  // disabled
+
+                    stream_accumulator += token;
+
+                    // Periodically scan for "name": "VALUE" patterns
+                    // Only scan new content since last check
+                    const std::string needle = "\"name\":";
+                    while (true) {
+                        auto pos = stream_accumulator.find(needle, last_scan_pos);
+                        if (pos == std::string::npos) break;
+
+                        // Find the opening quote of the value
+                        auto val_start = stream_accumulator.find('"', pos + needle.size());
+                        if (val_start == std::string::npos) break;  // incomplete — wait for more tokens
+
+                        // Find the closing quote
+                        auto val_end = stream_accumulator.find('"', val_start + 1);
+                        if (val_end == std::string::npos) break;  // incomplete — wait for more tokens
+
+                        auto name_value = stream_accumulator.substr(val_start + 1, val_end - val_start - 1);
+                        name_value_counts[name_value]++;
+
+                        if (name_value_counts[name_value] >= loop_threshold) {
+                            log_trace("\n[graphiti-llm] ⚡ Loop detected: \"%s\" appeared %d times — aborting stream\n",
+                                      name_value.c_str(), name_value_counts[name_value]);
+                            stream_aborted = true;
+                            return false;
+                        }
+
+                        last_scan_pos = val_end + 1;
+                    }
+
+                    return true;
                 }
             );
             // Newline after streaming tokens

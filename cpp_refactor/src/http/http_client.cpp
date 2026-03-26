@@ -3,6 +3,7 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include <httplib.h>
 
+#include <graphiti/log.h>
 #include <nlohmann/json.hpp>
 
 #include <format>
@@ -171,7 +172,10 @@ Result<HttpResponse> HttpClient::post_json_streaming(
                         if (delta.contains("content") && !delta["content"].is_null()) {
                             auto token = delta["content"].get<std::string>();
                             accumulated_content += token;
-                            if (on_token) on_token(token);
+                            if (on_token && !on_token(token)) {
+                                log_trace("[graphiti-llm] ⚡ Stream aborted by callback\n");
+                                return false;  // abort the HTTP connection
+                            }
                         }
                     }
                 }

@@ -33,7 +33,8 @@ public:
 
     // Same as post_json but with SSE streaming. Calls on_token for each content delta.
     // Accumulates the full response body and returns it as a non-streaming HttpResponse.
-    using TokenCallback = std::function<void(const std::string& token)>;
+    // TokenCallback returns true to continue, false to abort the stream early.
+    using TokenCallback = std::function<bool(const std::string& token)>;
     Result<HttpResponse> post_json_streaming(
         const std::string& host,
         const std::string& path,

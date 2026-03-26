@@ -1646,6 +1646,12 @@ void Graphiti::add_logger(std::unique_ptr<GraphitiLogger> logger) {
     }
 }
 
+Result<std::vector<EntityNode>> Graphiti::search_entity_nodes_bm25(
+    std::string_view query, std::string_view group_id, int limit,
+    const SearchFilters* filters) {
+    return impl_->driver.search_entity_nodes_bm25(query, group_id, limit, filters);
+}
+
 kuzu::main::Database& Graphiti::database() const {
     return *impl_->driver.database();
 }

@@ -204,6 +204,12 @@ public:
     void add_logger(GraphitiLogger* logger);
     void add_logger(std::unique_ptr<GraphitiLogger> logger);
 
+    // BM25 full-text search for entity nodes by name/summary.
+    // This is the same search used internally for dedup candidate retrieval.
+    Result<std::vector<EntityNode>> search_entity_nodes_bm25(
+        std::string_view query, std::string_view group_id, int limit = 10,
+        const SearchFilters* filters = nullptr);
+
     // Access the underlying Kuzu Database instance.
     // Use this to create additional Connections for your own queries.
     kuzu::main::Database& database() const;

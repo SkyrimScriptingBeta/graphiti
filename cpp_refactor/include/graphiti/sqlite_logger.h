@@ -24,7 +24,8 @@ public:
     SqliteGraphitiLogger(const SqliteGraphitiLogger&) = delete;
     SqliteGraphitiLogger& operator=(const SqliteGraphitiLogger&) = delete;
 
-    void on_llm_call(const LLMCallInfo& info) override;
+    int64_t on_llm_call_start(const LLMCallInfo& info) override;
+    void on_llm_call_end(int64_t row_id, const LLMCallInfo& info) override;
     void on_embedding_call(const EmbeddingCallInfo& info) override;
     void on_pipeline_step(const PipelineStepInfo& info) override;
 

@@ -36,27 +36,32 @@ public:
             ? (small_model_name_.empty() ? "small" : small_model_name_)
             : (model_name_.empty() ? "medium" : model_name_);
 
-        // Track attempt number — incremented on each post-call
+        // Track attempt number and per-attempt row IDs for start/end logging
         int attempt_num = 0;
+        std::vector<int64_t> row_ids(loggers_.size(), 0);
 
         inner_->on_attempt = [&](const std::vector<Message>& msgs,
                                   const Result<nlohmann::json>& result,
                                   bool is_pre_call) {
-            if (is_pre_call) {
-                // Just bump the counter, don't log a row
-                attempt_num++;
-                return;
-            }
-
-            // Post-call: log the actual result
             GraphitiLogger::LLMCallInfo info;
             info.model = model;
             info.prompt_name = pname;
-            info.attempt = attempt_num;
-            info.started_at = format_now();
 
             for (auto& msg : msgs)
                 info.request_messages.push_back({msg.role, msg.content});
+
+            if (is_pre_call) {
+                attempt_num++;
+                info.attempt = attempt_num;
+                info.started_at = format_now();
+                // INSERT row with request — visible immediately for debugging
+                for (size_t i = 0; i < loggers_.size(); ++i)
+                    row_ids[i] = loggers_[i]->on_llm_call_start(info);
+                return;
+            }
+
+            // Post-call: UPDATE the row with response data
+            info.attempt = attempt_num;
 
             if (result.has_value()) {
                 info.success = true;
@@ -78,7 +83,8 @@ public:
                 }
             }
 
-            for (auto* l : loggers_) l->on_llm_call(info);
+            for (size_t i = 0; i < loggers_.size(); ++i)
+                loggers_[i]->on_llm_call_end(row_ids[i], info);
         };
 
         auto start = std::chrono::steady_clock::now();

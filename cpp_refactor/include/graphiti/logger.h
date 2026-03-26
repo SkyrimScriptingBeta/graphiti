@@ -40,7 +40,16 @@ public:
         std::vector<LogMessage> request_messages;  // the full prompt as sent to the LLM
         std::string response_body;                 // raw JSON response from the LLM
     };
-    virtual void on_llm_call(const LLMCallInfo& info) = 0;
+    // Called BEFORE an LLM call starts (request only, no response yet).
+    // Returns a row ID that on_llm_call_end uses to UPDATE the same row.
+    virtual int64_t on_llm_call_start(const LLMCallInfo& info) { (void)info; return 0; }
+
+    // Called AFTER an LLM call completes (fills in response, success, tokens, latency).
+    // row_id comes from on_llm_call_start. If 0, inserts a new row instead.
+    virtual void on_llm_call_end(int64_t row_id, const LLMCallInfo& info) = 0;
+
+    // Legacy: called after every LLM call. Default impl delegates to on_llm_call_end with row_id=0.
+    virtual void on_llm_call(const LLMCallInfo& info) { on_llm_call_end(0, info); }
 
     // Called after every embedding call (success or failure).
     struct EmbeddingCallInfo {

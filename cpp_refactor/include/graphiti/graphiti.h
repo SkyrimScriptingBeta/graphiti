@@ -216,6 +216,10 @@ public:
     };
     VoidResult initialize_self(const AgentIdentity& identity);
 
+    // Sweep orphan entities — find entities with zero edges and connect them.
+    // Makes one LLM call per orphan. Returns number of orphans connected.
+    Result<int> sweep_orphans(std::string_view group_id);
+
     // BM25 full-text search for entity nodes by name/summary.
     // This is the same search used internally for dedup candidate retrieval.
     Result<std::vector<EntityNode>> search_entity_nodes_bm25(

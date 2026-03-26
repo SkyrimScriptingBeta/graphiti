@@ -252,6 +252,143 @@ VoidResult Graphiti::initialize_self(const AgentIdentity& id) {
     return {};
 }
 
+Result<int> Graphiti::sweep_orphans(std::string_view group_id) {
+    std::lock_guard lock(impl_->mu);
+    std::string gid(group_id);
+
+    // Find all entities in this group
+    auto all_result = impl_->driver.search_entity_nodes_bm25("*", gid, 500);
+    if (!all_result) return 0;
+
+    // Find entities that appear in edges
+    auto edges_query = std::format(
+        R"(MATCH (a:Entity)-[:RELATES_TO]->(r:RelatesToNode_)-[:RELATES_TO]->(b:Entity)
+WHERE a.group_id = '{0}' OR b.group_id = '{0}'
+RETURN DISTINCT a.uuid AS uuid
+UNION ALL
+MATCH (a:Entity)-[:RELATES_TO]->(r:RelatesToNode_)-[:RELATES_TO]->(b:Entity)
+WHERE a.group_id = '{0}' OR b.group_id = '{0}'
+RETURN DISTINCT b.uuid AS uuid)", gid);
+
+    auto* db = impl_->driver.database();
+    auto conn = std::make_unique<kuzu::main::Connection>(db);
+    auto edge_result = conn->query(edges_query);
+
+    std::set<std::string> connected_uuids;
+    if (edge_result && edge_result->isSuccess()) {
+        while (edge_result->hasNext()) {
+            auto tuple = edge_result->getNext();
+            auto* val = tuple->getValue(0);
+            if (!val->isNull()) {
+                connected_uuids.insert(val->getValue<std::string>());
+            }
+        }
+    }
+
+    // Split into orphans and connected
+    std::vector<EntityNode> orphans, connected;
+    for (auto& node : *all_result) {
+        if (node.is_system) continue;
+        if (connected_uuids.count(node.uuid))
+            connected.push_back(node);
+        else
+            orphans.push_back(node);
+    }
+
+    if (orphans.empty()) return 0;
+
+    log_trace("[graphiti] sweep_orphans: %zu orphans, %zu connected\n", orphans.size(), connected.size());
+
+    // Build connected entity context
+    std::string connected_context;
+    for (auto& c : connected) {
+        if (connected_context.size() > 4000) break;
+        connected_context += "- " + c.name;
+        if (!c.summary.empty()) connected_context += ": \"" + c.summary.substr(0, 100) + "\"";
+        connected_context += "\n";
+    }
+
+    int total_connected = 0;
+
+    // One LLM call per orphan
+    for (size_t i = 0; i < orphans.size(); ++i) {
+        auto& orphan = orphans[i];
+        log_trace("[graphiti]   orphan %zu/%zu: \"%s\"\n", i + 1, orphans.size(), orphan.name.c_str());
+
+        std::string sys = "You are an expert at finding relationships between entities in a knowledge graph.\n"
+                          "Do not escape unicode characters.\n";
+
+        std::string user = std::format(
+            R"(Entity: {} ({})
+{}
+Connected entities in the graph (prefer these):
+{}
+What is the SINGLE most meaningful relationship from "{}" to one of the entities above?
+Use ONLY names from the list above. Do NOT invent new names.
+Respond with ONE edge:
+{{"edges": [{{"source_entity_name": "...", "target_entity_name": "...", "relation_type": "...", "fact": "...", "valid_at": null, "invalid_at": null}}]}}
+If there is genuinely no relationship, respond with {{"edges": []}})",
+            orphan.name,
+            orphan.labels.size() > 1 ? orphan.labels[1] : "Entity",
+            orphan.summary.empty() ? "" : "Summary: " + orphan.summary + "\n",
+            connected_context,
+            orphan.name);
+
+        std::vector<Message> msgs = {{"system", std::move(sys)}, {"user", std::move(user)}};
+        impl_->llm->prompt_name = "sweep_orphan";
+        auto llm_result = impl_->llm->generate_response(msgs, response_schemas::EXTRACTED_EDGES, ModelSize::small);
+
+        if (!llm_result) {
+            log_trace("[graphiti]     → LLM failed, skipping\n");
+            continue;
+        }
+
+        try {
+            auto edges = llm_result->get<ExtractedEdges>();
+            for (auto& se : edges.edges) {
+                // Resolve names to UUIDs
+                std::string src_uuid, tgt_uuid;
+                for (auto& node : *all_result) {
+                    if (node.name == se.source_entity_name) src_uuid = node.uuid;
+                    if (node.name == se.target_entity_name) tgt_uuid = node.uuid;
+                }
+
+                if (!src_uuid.empty() && !tgt_uuid.empty() && src_uuid != tgt_uuid) {
+                    EntityEdge edge;
+                    edge.uuid = uuid::generate();
+                    edge.source_node_uuid = src_uuid;
+                    edge.target_node_uuid = tgt_uuid;
+                    edge.name = se.relation_type;
+                    edge.fact = se.fact;
+                    edge.group_id = gid;
+                    edge.created_at = std::chrono::system_clock::now();
+
+                    if (impl_->has_writer())
+                        (void)impl_->writer_client->save_entity_edge(edge);
+                    else
+                        (void)impl_->driver.save_entity_edge(edge);
+
+                    log_trace("[graphiti]     → %s %s %s\n",
+                              se.source_entity_name.c_str(), se.relation_type.c_str(), se.target_entity_name.c_str());
+                    total_connected++;
+                } else {
+                    log_trace("[graphiti]     → name not found, skipping\n");
+                }
+            }
+        } catch (...) {
+            log_trace("[graphiti]     → parse failed, skipping\n");
+        }
+    }
+
+    // Rebuild FTS after new edges
+    if (impl_->has_writer())
+        (void)impl_->writer_client->build_fts_indices();
+    else
+        (void)impl_->driver.build_fts_indices();
+
+    return total_connected;
+}
+
 Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     std::lock_guard lock(impl_->mu);
     auto gid = impl_->resolve_group_id(opts.group_id);

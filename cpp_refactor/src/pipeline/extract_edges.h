@@ -20,6 +20,7 @@ struct ExtractEdgesInput {
     std::string group_id;
     nlohmann::json edge_types = nlohmann::json();
     std::string custom_instructions;
+    int shard_size = 0;  // 0 = no sharding; N = split entities into groups of N
 };
 
 // Extract relationship edges between entities via LLM.

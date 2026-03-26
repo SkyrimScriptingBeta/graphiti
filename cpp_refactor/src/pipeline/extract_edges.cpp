@@ -5,31 +5,29 @@
 #include "utils/datetime.h"
 #include "utils/uuid.h"
 
+#include <graphiti/log.h>
+
 #include <format>
 #include <unordered_map>
 
 namespace graphiti::pipeline {
 
-Result<std::vector<EntityEdge>> extract_edges(
+// Extract edges for a single set of entities (no sharding).
+static Result<ExtractedEdges> extract_edges_single(
     LLMClient& llm,
-    const ExtractEdgesInput& input
+    const nlohmann::json& previous_episodes,
+    const std::string& episode_content,
+    const nlohmann::json& nodes_json,
+    const std::string& reference_time,
+    const nlohmann::json& edge_types,
+    const std::string& custom_instructions
 ) {
-    // Build node name -> UUID lookup
-    std::unordered_map<std::string, std::string> name_to_uuid;
-    nlohmann::json nodes_json = nlohmann::json::array();
-    for (auto& node : input.nodes) {
-        name_to_uuid[node.name] = node.uuid;
-        nodes_json.push_back({{"name", node.name}});
-    }
-
-    // Build prompt
     auto messages = prompts::extract_edges(
-        input.previous_episodes, input.episode_content,
-        nodes_json, input.reference_time,
-        input.edge_types, input.custom_instructions
+        previous_episodes, episode_content,
+        nodes_json, reference_time,
+        edge_types, custom_instructions
     );
 
-    // Call LLM with retry on edge parse failures
     ExtractedEdges extracted;
     constexpr int MAX_EDGE_RETRIES = 2;
     llm.prompt_name = "extract_edges";
@@ -44,12 +42,11 @@ Result<std::vector<EntityEdge>> extract_edges(
         auto raw_json = llm_result.value();
         try {
             extracted = raw_json.get<ExtractedEdges>();
-            break;  // success
+            return extracted;
         } catch (const std::exception& e) {
             if (attempt < MAX_EDGE_RETRIES) {
                 fprintf(stderr, "  [graphiti] edge parse failed (attempt %d/%d), retrying: %s\n",
                         attempt + 1, MAX_EDGE_RETRIES + 1, e.what());
-                // Append error context so the LLM can self-correct
                 messages.push_back({
                     "user",
                     std::format(
@@ -68,13 +65,80 @@ Result<std::vector<EntityEdge>> extract_edges(
             });
         }
     }
+    return extracted;
+}
+
+Result<std::vector<EntityEdge>> extract_edges(
+    LLMClient& llm,
+    const ExtractEdgesInput& input
+) {
+    // Build node name -> UUID lookup
+    std::unordered_map<std::string, std::string> name_to_uuid;
+    for (auto& node : input.nodes) {
+        name_to_uuid[node.name] = node.uuid;
+    }
+
+    // Build shards — split entities into groups of shard_size
+    std::vector<nlohmann::json> shards;
+    if (input.shard_size > 0 && static_cast<int>(input.nodes.size()) > input.shard_size) {
+        nlohmann::json current_shard = nlohmann::json::array();
+        for (auto& node : input.nodes) {
+            current_shard.push_back({{"name", node.name}});
+            if (static_cast<int>(current_shard.size()) >= input.shard_size) {
+                shards.push_back(std::move(current_shard));
+                current_shard = nlohmann::json::array();
+            }
+        }
+        if (!current_shard.empty()) {
+            shards.push_back(std::move(current_shard));
+        }
+        log_debug("[graphiti] 🔀 edge extraction: sharding %zu entities into %zu groups of ~%d\n",
+                  input.nodes.size(), shards.size(), input.shard_size);
+    } else {
+        // No sharding — one group with all entities
+        nlohmann::json all_nodes = nlohmann::json::array();
+        for (auto& node : input.nodes) {
+            all_nodes.push_back({{"name", node.name}});
+        }
+        shards.push_back(std::move(all_nodes));
+    }
+
+    // Run edge extraction for each shard SERIALLY and merge results
+    ExtractedEdges all_extracted;
+    for (size_t i = 0; i < shards.size(); ++i) {
+        if (shards.size() > 1) {
+            log_debug("[graphiti]   shard %zu/%zu (%zu entities)\n",
+                      i + 1, shards.size(), shards[i].size());
+        }
+
+        auto result = extract_edges_single(
+            llm, input.previous_episodes, input.episode_content,
+            shards[i], input.reference_time,
+            input.edge_types, input.custom_instructions
+        );
+
+        if (!result.has_value()) {
+            // Log but continue — don't fail the whole extraction for one bad shard
+            fprintf(stderr, "  [graphiti] ⚠️ edge shard %zu/%zu failed: %s\n",
+                    i + 1, shards.size(), result.error().message.c_str());
+            continue;
+        }
+
+        for (auto& edge : result->edges) {
+            all_extracted.edges.push_back(std::move(edge));
+        }
+    }
+
+    if (shards.size() > 1) {
+        log_debug("[graphiti] 🔀 edge sharding complete: %zu total edges from %zu shards\n",
+                  all_extracted.edges.size(), shards.size());
+    }
 
     // Convert to EntityEdge objects
     auto now = std::chrono::system_clock::now();
     std::vector<EntityEdge> edges;
 
-    for (auto& ext : extracted.edges) {
-        // Resolve source and target to UUIDs
+    for (auto& ext : all_extracted.edges) {
         auto src_it = name_to_uuid.find(ext.source_entity_name);
         auto tgt_it = name_to_uuid.find(ext.target_entity_name);
 
@@ -92,7 +156,6 @@ Result<std::vector<EntityEdge>> extract_edges(
         edge.fact = std::move(ext.fact);
         edge.created_at = now;
 
-        // Parse optional timestamps
         if (ext.valid_at.has_value()) {
             edge.valid_at = datetime::from_iso8601(ext.valid_at.value());
         }

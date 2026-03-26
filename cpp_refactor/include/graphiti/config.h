@@ -16,6 +16,7 @@ struct LLMConfig {
     int max_tokens = 16384;            // base output token budget (GRAPHITI_MAX_TOKENS)
     int max_output_tokens = 32768;     // hard ceiling — nothing goes above this (GRAPHITI_MAX_OUTPUT_TOKENS)
     float truncation_multiplier = 1.5f; // on JSON truncation, multiply budget by this (GRAPHITI_TRUNCATION_MULTIPLIER)
+    int edge_shard_size = 0;            // 0 = no sharding; N = split entities into groups of N for edge extraction (GRAPHITI_EDGE_SHARD_SIZE)
     int extra_tokens_per_entity = 100;  // for edge extraction: add this many tokens per entity (GRAPHITI_EXTRA_TOKENS_PER_ENTITY)
     int entity_scaling_threshold = 20;  // start scaling after this many entities (GRAPHITI_ENTITY_SCALING_THRESHOLD)
 };
@@ -135,6 +136,11 @@ struct GraphitiConfig {
         auto trunc_mult = env("GRAPHITI_TRUNCATION_MULTIPLIER");
         if (!trunc_mult.empty()) {
             config.llm.truncation_multiplier = std::max(1.1f, std::stof(trunc_mult));
+        }
+
+        auto edge_shard = env("GRAPHITI_EDGE_SHARD_SIZE");
+        if (!edge_shard.empty()) {
+            config.llm.edge_shard_size = std::max(0, std::stoi(edge_shard));
         }
 
         auto extra_per_entity = env("GRAPHITI_EXTRA_TOKENS_PER_ENTITY");

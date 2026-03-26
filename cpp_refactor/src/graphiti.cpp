@@ -315,7 +315,21 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         edge_input.custom_instructions = opts.custom_instructions.value();
     }
 
+    // Scale edge extraction token budget based on entity count
+    {
+        int n = static_cast<int>(nodes.size());
+        int threshold = impl_->config.llm.entity_scaling_threshold;
+        int extra_per = impl_->config.llm.extra_tokens_per_entity;
+        if (n > threshold && extra_per > 0) {
+            int extra = ((n - threshold) / threshold + 1) * extra_per;
+            impl_->llm->max_tokens_override = impl_->config.llm.max_tokens + extra;
+            log_debug("[graphiti] 📏 edge extraction: %d entities, token budget %d → %d (+%d)\n",
+                      n, impl_->config.llm.max_tokens, impl_->llm->max_tokens_override, extra);
+        }
+    }
+
     auto edges_result = pipeline::extract_edges(*impl_->llm, edge_input);
+    impl_->llm->max_tokens_override = 0;  // reset after edge extraction
     log_trace("[graphiti] ✓ Step 5: extract_edges done (%s)\n",
               edges_result.has_value() ? std::to_string(edges_result->size()).c_str() : edges_result.error().message.c_str());
     if (!edges_result.has_value()) return std::unexpected(edges_result.error());
@@ -943,6 +957,15 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                             }
                             for (auto* l : *loggers_ptr2) l->on_llm_call(info);
                         };
+                    }
+                    // Scale token budget based on entity count
+                    {
+                        int n = static_cast<int>(input.nodes.size());
+                        int threshold = llm_config.entity_scaling_threshold;
+                        int extra_per = llm_config.extra_tokens_per_entity;
+                        if (n > threshold && extra_per > 0) {
+                            llm.max_tokens_override = llm_config.max_tokens + ((n - threshold) / threshold + 1) * extra_per;
+                        }
                     }
                     auto result = pipeline::extract_edges(llm, input);
                     auto t1 = std::chrono::steady_clock::now();

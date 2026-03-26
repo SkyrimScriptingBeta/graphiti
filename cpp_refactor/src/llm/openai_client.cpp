@@ -16,11 +16,17 @@ struct OpenAIClient::Impl {
     LLMConfig config;
     HttpClient* shared_http = nullptr;
     HttpClient owned_http;
+    int max_tokens_for_call = 0;  // set per-call by generate_response; 0 = use config.max_tokens
 
     HttpClient& http() { return shared_http ? *shared_http : owned_http; }
 
     std::string model_for_size(ModelSize size) const {
         return size == ModelSize::small ? config.small_model : config.model;
+    }
+
+    int effective_max_tokens() const {
+        int base = max_tokens_for_call > 0 ? max_tokens_for_call : config.max_tokens;
+        return std::min(base, config.max_output_tokens);
     }
 
     Result<nlohmann::json> call_completions(
@@ -52,7 +58,7 @@ struct OpenAIClient::Impl {
         nlohmann::json request_body = {
             {"model", model},
             {"messages", msgs_json},
-            {"max_tokens", config.max_tokens},
+            {"max_tokens", effective_max_tokens()},
             {"response_format", {{"type", "json_object"}}},
         };
 
@@ -64,8 +70,8 @@ struct OpenAIClient::Impl {
             {"Authorization", std::format("Bearer {}", config.api_key)},
         };
 
-        log_trace("[graphiti-llm] → POST %s /chat/completions (model=%s, msgs=%zu)\n",
-                  config.base_url.c_str(), model.c_str(), messages.size());
+        log_trace("[graphiti-llm] → POST %s /chat/completions (model=%s, msgs=%zu, max_tokens=%d)\n",
+                  config.base_url.c_str(), model.c_str(), messages.size(), effective_max_tokens());
         auto t0 = std::chrono::steady_clock::now();
         auto result = http().post_json(
             config.base_url, "/v1/chat/completions", headers, request_body.dump()
@@ -173,12 +179,27 @@ OpenAIClient::OpenAIClient(const LLMConfig& config, HttpClient& shared_http)
 
 OpenAIClient::~OpenAIClient() = default;
 
+// Detect if a JSON parse error looks like output truncation (ran out of tokens).
+static bool is_truncation_error(const std::string& msg) {
+    // nlohmann::json errors for truncated JSON:
+    //   "missing closing quote"
+    //   "unexpected end of input"
+    //   "missing '}'" / "missing ']'"
+    for (auto* pattern : {"missing closing", "unexpected end", "missing '}'", "missing ']'"}) {
+        if (msg.find(pattern) != std::string::npos) return true;
+    }
+    return false;
+}
+
 Result<nlohmann::json> OpenAIClient::generate_response(
     const std::vector<Message>& messages,
     std::optional<std::string_view> json_schema,
     ModelSize model_size
 ) {
     auto msgs = messages; // mutable copy for retry
+
+    // Set initial token budget from per-call override or config default
+    impl_->max_tokens_for_call = max_tokens_override > 0 ? max_tokens_override : impl_->config.max_tokens;
 
     int64_t total_input = 0;
     int64_t total_output = 0;
@@ -240,8 +261,22 @@ Result<nlohmann::json> OpenAIClient::generate_response(
             continue;
         }
 
-        // Retry on parse errors by appending error context
+        // Retry on parse errors
         if (attempt < MAX_RETRIES && err.code == ErrorCode::llm_parse_error) {
+            if (is_truncation_error(err.message)) {
+                // Output was truncated — bump token budget and retry with fresh messages
+                int old_budget = impl_->max_tokens_for_call;
+                impl_->max_tokens_for_call = static_cast<int>(old_budget * impl_->config.truncation_multiplier);
+                // Cap at hard ceiling
+                impl_->max_tokens_for_call = std::min(impl_->max_tokens_for_call, impl_->config.max_output_tokens);
+                log_debug("[graphiti] 📏 JSON truncated (tokens: %d → %d, multiplier: %.1fx, ceiling: %d), retrying\n",
+                        old_budget, impl_->max_tokens_for_call,
+                        impl_->config.truncation_multiplier, impl_->config.max_output_tokens);
+                // Don't append error context — just retry with more tokens and original messages
+                msgs = messages;
+                continue;
+            }
+            // Non-truncation parse error — append error context and retry
             msgs.push_back({
                 "user",
                 std::format(

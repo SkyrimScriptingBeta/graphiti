@@ -27,6 +27,8 @@ public:
         // Forward prompt_name from outer to inner so call sites can set it on either
         if (!prompt_name.empty())
             inner_->prompt_name = prompt_name;
+        if (max_tokens_override > 0)
+            inner_->max_tokens_override = max_tokens_override;
 
         std::string pname = inner_->prompt_name.empty() ? "unknown" : inner_->prompt_name;
 
@@ -84,10 +86,12 @@ public:
         auto elapsed = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - start).count();
 
-        // Clear callback and prompt_name
+        // Clear callback, prompt_name, and token override
         inner_->on_attempt = nullptr;
         inner_->prompt_name.clear();
+        inner_->max_tokens_override = 0;
         prompt_name.clear();
+        max_tokens_override = 0;
 
         // Forward token tracking
         token_tracker.merge(inner_->token_tracker);

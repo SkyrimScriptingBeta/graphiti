@@ -12,7 +12,11 @@ struct LLMConfig {
     std::string small_model = "gpt-4.1-nano";  // used for dedup + resolution (cheaper/faster)
     std::string base_url = "https://api.openai.com";
     float temperature = 0.0f;  // deterministic — extraction needs precision, not creativity
-    int max_tokens = 16384;  // override with GRAPHITI_MAX_TOKENS for local models (e.g. 6144)
+    int max_tokens = 16384;            // base output token budget (GRAPHITI_MAX_TOKENS)
+    int max_output_tokens = 32768;     // hard ceiling — nothing goes above this (GRAPHITI_MAX_OUTPUT_TOKENS)
+    float truncation_multiplier = 1.5f; // on JSON truncation, multiply budget by this (GRAPHITI_TRUNCATION_MULTIPLIER)
+    int extra_tokens_per_entity = 100;  // for edge extraction: add this many tokens per entity (GRAPHITI_EXTRA_TOKENS_PER_ENTITY)
+    int entity_scaling_threshold = 20;  // start scaling after this many entities (GRAPHITI_ENTITY_SCALING_THRESHOLD)
 };
 
 struct EmbedderConfig {
@@ -110,6 +114,26 @@ struct GraphitiConfig {
         auto max_tokens = env("GRAPHITI_MAX_TOKENS");
         if (!max_tokens.empty()) {
             config.llm.max_tokens = std::max(256, std::stoi(max_tokens));
+        }
+
+        auto max_output_tokens = env("GRAPHITI_MAX_OUTPUT_TOKENS");
+        if (!max_output_tokens.empty()) {
+            config.llm.max_output_tokens = std::max(config.llm.max_tokens, std::stoi(max_output_tokens));
+        }
+
+        auto trunc_mult = env("GRAPHITI_TRUNCATION_MULTIPLIER");
+        if (!trunc_mult.empty()) {
+            config.llm.truncation_multiplier = std::max(1.1f, std::stof(trunc_mult));
+        }
+
+        auto extra_per_entity = env("GRAPHITI_EXTRA_TOKENS_PER_ENTITY");
+        if (!extra_per_entity.empty()) {
+            config.llm.extra_tokens_per_entity = std::max(0, std::stoi(extra_per_entity));
+        }
+
+        auto entity_threshold = env("GRAPHITI_ENTITY_SCALING_THRESHOLD");
+        if (!entity_threshold.empty()) {
+            config.llm.entity_scaling_threshold = std::max(1, std::stoi(entity_threshold));
         }
 
         auto max_parallel = env("GRAPHITI_MAX_PARALLEL");

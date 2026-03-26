@@ -508,6 +508,12 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
 
     log_trace("[graphiti] ✓ Step 10: episodic edges done\n");
 
+    // 10b. Rebuild FTS indices so subsequent BM25 searches find newly persisted entities.
+    // Kuzu FTS indices are NOT incremental — they must be dropped and re-created after inserts.
+    log_trace("[graphiti] → Rebuilding FTS indices...\n");
+    (void)impl_->driver.build_fts_indices();
+    log_trace("[graphiti] ✓ FTS indices rebuilt\n");
+
     // 11. Saga processing (if saga name provided)
     log_trace("[graphiti] → Step 11: saga processing...\n");
     if (opts.saga.has_value() && !opts.saga.value().empty()) {
@@ -1189,6 +1195,14 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
             (void)pipeline::create_episodic_edges(impl_->driver, episodes[i], ep_unique_nodes);
         }
     }
+
+    // ========================================================================
+    // Step 12b: Rebuild FTS indices so subsequent BM25 searches find newly persisted entities.
+    // Kuzu FTS indices are NOT incremental — they must be dropped and re-created after inserts.
+    // ========================================================================
+    log_trace("[graphiti] → Rebuilding FTS indices...\n");
+    (void)impl_->driver.build_fts_indices();
+    log_trace("[graphiti] ✓ FTS indices rebuilt\n");
 
     // ========================================================================
     // Step 13: Saga processing (if saga name provided)

@@ -321,7 +321,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         int threshold = impl_->config.llm.entity_scaling_threshold;
         int extra_per = impl_->config.llm.extra_tokens_per_entity;
         if (n > threshold && extra_per > 0) {
-            int extra = ((n - threshold) / threshold + 1) * extra_per;
+            int extra = (n - threshold) * extra_per;
             impl_->llm->max_tokens_override = impl_->config.llm.max_tokens + extra;
             log_debug("[graphiti] 📏 edge extraction: %d entities, token budget %d → %d (+%d)\n",
                       n, impl_->config.llm.max_tokens, impl_->llm->max_tokens_override, extra);
@@ -964,7 +964,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                         int threshold = llm_config.entity_scaling_threshold;
                         int extra_per = llm_config.extra_tokens_per_entity;
                         if (n > threshold && extra_per > 0) {
-                            llm.max_tokens_override = llm_config.max_tokens + ((n - threshold) / threshold + 1) * extra_per;
+                            llm.max_tokens_override = llm_config.max_tokens + (n - threshold) * extra_per;
                         }
                     }
                     auto result = pipeline::extract_edges(llm, input);

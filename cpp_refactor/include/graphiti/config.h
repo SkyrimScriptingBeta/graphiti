@@ -12,6 +12,8 @@ struct LLMConfig {
     std::string small_model = "gpt-4.1-nano";  // used for dedup + resolution (cheaper/faster)
     std::string base_url = "https://api.openai.com";
     float temperature = 0.0f;  // deterministic — extraction needs precision, not creativity
+    float repetition_penalty = -1.0f;  // Ollama: repeat_penalty (GRAPHITI_REPETITION_PENALTY, default off)
+    float frequency_penalty = -1.0f;   // OpenAI: frequency_penalty (GRAPHITI_FREQUENCY_PENALTY, default off)
     bool stream = false;               // stream LLM responses to log_trace (GRAPHITI_STREAM=1)
     int max_tokens = 16384;            // base output token budget (GRAPHITI_MAX_TOKENS)
     int max_output_tokens = 32768;     // hard ceiling — nothing goes above this (GRAPHITI_MAX_OUTPUT_TOKENS)
@@ -117,6 +119,16 @@ struct GraphitiConfig {
         auto temperature = env("GRAPHITI_TEMPERATURE");
         if (!temperature.empty()) {
             config.llm.temperature = std::stof(temperature);
+        }
+
+        auto rep_penalty = env("GRAPHITI_REPETITION_PENALTY");
+        if (!rep_penalty.empty()) {
+            config.llm.repetition_penalty = std::stof(rep_penalty);
+        }
+
+        auto freq_penalty = env("GRAPHITI_FREQUENCY_PENALTY");
+        if (!freq_penalty.empty()) {
+            config.llm.frequency_penalty = std::stof(freq_penalty);
         }
 
         auto stream = env("GRAPHITI_STREAM");

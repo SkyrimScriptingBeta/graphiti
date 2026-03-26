@@ -121,6 +121,12 @@ struct OpenAIClient::Impl {
         if (config.temperature >= 0.0f) {
             request_body["temperature"] = config.temperature;
         }
+        if (config.repetition_penalty >= 0.0f) {
+            request_body["repeat_penalty"] = config.repetition_penalty;  // Ollama
+        }
+        if (config.frequency_penalty >= 0.0f) {
+            request_body["frequency_penalty"] = config.frequency_penalty;  // OpenAI-compatible
+        }
 
         auto headers = std::map<std::string, std::string>{
             {"Authorization", std::format("Bearer {}", config.api_key)},

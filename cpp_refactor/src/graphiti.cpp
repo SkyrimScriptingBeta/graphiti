@@ -14,6 +14,7 @@
 #include "pipeline/extract_edges.h"
 #include "pipeline/extract_nodes.h"
 #include "pipeline/node_enrichment.h"
+#include "llm/response_models.h"
 #include "llm/logging_llm_client.h"
 #include "embedder/logging_embedder.h"
 #include "search/search.h"
@@ -392,6 +393,122 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     log_step("dedupe_edges", true, static_cast<int>(extracted_edges.size()), static_cast<int>(new_edges.size()));
     log_debug("[graphiti]   → %zu new edges, %zu invalidated\n",
               new_edges.size(), edge_dedup.invalidated_uuids.size());
+
+    // 6b. Orphan sweep — find entities with no edges and connect them
+    {
+        // Find which entities appear in edges
+        std::set<std::string> entities_with_edges;
+        for (auto& edge : new_edges) {
+            entities_with_edges.insert(edge.source_node_uuid);
+            entities_with_edges.insert(edge.target_node_uuid);
+        }
+
+        // Collect orphans and connected entities
+        std::vector<const EntityNode*> orphans;
+        std::vector<const EntityNode*> connected;
+        for (auto& node : nodes) {
+            if (entities_with_edges.count(node.uuid))
+                connected.push_back(&node);
+            else
+                orphans.push_back(&node);
+        }
+
+        if (!orphans.empty() && !connected.empty()) {
+            log_trace("[graphiti] → Step 6b: orphan sweep (%zu orphans, %zu connected)...\n",
+                      orphans.size(), connected.size());
+
+            // Build the prompt
+            std::string orphan_list;
+            nlohmann::json orphan_names = nlohmann::json::array();
+            for (auto* node : orphans) {
+                std::string label = node->labels.size() > 1 ? node->labels[1] : "Entity";
+                orphan_list += std::format("- {} ({})\n", node->name, label);
+                orphan_names.push_back(node->name);
+            }
+
+            std::string connected_list;
+            for (auto* node : connected) {
+                std::string label = node->labels.size() > 1 ? node->labels[1] : "Entity";
+                // Find edges for this node
+                std::string edge_info;
+                for (auto& edge : new_edges) {
+                    if (edge.source_node_uuid == node->uuid || edge.target_node_uuid == node->uuid) {
+                        if (!edge_info.empty()) edge_info += ", ";
+                        edge_info += edge.name;
+                    }
+                }
+                connected_list += std::format("- {} ({}) [edges: {}]\n", node->name, label,
+                                               edge_info.empty() ? "none" : edge_info);
+            }
+
+            // Build LLM messages for orphan sweep
+            std::string sys = "You are an expert at finding relationships between entities in a knowledge graph. "
+                              "Extract fact triples connecting disconnected entities to the graph.\n"
+                              "Do not escape unicode characters.\n";
+
+            std::string user = std::format(
+                R"(These entities have NO relationships yet (orphans):
+{}
+These entities ARE connected to the graph:
+{}
+<EPISODE>
+{}
+</EPISODE>
+
+For each orphan entity, extract its SINGLE most meaningful relationship to one of the connected entities.
+Every orphan should get exactly ONE edge. Only create edges that are clearly supported by the episode text.
+If an orphan genuinely has no relationship to any connected entity, skip it.
+
+Return edges in this format:
+{{"edges": [{{"source_entity_name": "...", "target_entity_name": "...", "relation_type": "...", "fact": "...", "valid_at": null, "invalid_at": null}}]}})",
+                orphan_list, connected_list, episode_body);
+
+            std::vector<Message> sweep_messages = {{"system", std::move(sys)}, {"user", std::move(user)}};
+            impl_->llm->prompt_name = "orphan_sweep";
+            auto sweep_result = impl_->llm->generate_response(
+                sweep_messages, response_schemas::EXTRACTED_EDGES, ModelSize::small);
+
+            if (sweep_result.has_value()) {
+                try {
+                    auto sweep_edges = sweep_result->get<ExtractedEdges>();
+                    int connected_orphans = 0;
+
+                    for (auto& se : sweep_edges.edges) {
+                        // Resolve entity names to UUIDs
+                        std::string src_uuid, tgt_uuid;
+                        for (auto& node : nodes) {
+                            if (node.name == se.source_entity_name) src_uuid = node.uuid;
+                            if (node.name == se.target_entity_name) tgt_uuid = node.uuid;
+                        }
+
+                        if (!src_uuid.empty() && !tgt_uuid.empty() && src_uuid != tgt_uuid) {
+                            EntityEdge edge;
+                            edge.uuid = uuid::generate();
+                            edge.source_node_uuid = src_uuid;
+                            edge.target_node_uuid = tgt_uuid;
+                            edge.name = se.relation_type;
+                            edge.fact = se.fact;
+                            edge.group_id = gid;
+                            edge.created_at = std::chrono::system_clock::now();
+                            if (!aid.empty()) edge.agent_ids = {aid};
+                            if (!sid.empty()) edge.source_ids = {sid};
+                            if (!sctx.empty()) edge.source_contexts = {sctx};
+                            if (!pids.empty()) edge.participant_ids = pids;
+                            new_edges.push_back(std::move(edge));
+                            connected_orphans++;
+                        }
+                    }
+                    log_trace("[graphiti] ✓ Step 6b: orphan sweep connected %d/%zu orphans\n",
+                              connected_orphans, orphans.size());
+                } catch (const std::exception& e) {
+                    log_trace("[graphiti] ⚠️ Step 6b: orphan sweep parse failed: %s\n", e.what());
+                }
+            } else {
+                log_trace("[graphiti] ⚠️ Step 6b: orphan sweep LLM call failed\n");
+            }
+            log_step("orphan_sweep");
+        }
+    }
 
     // 7. Enrich node summaries via LLM
     log_trace("[graphiti] → Step 7: enrich_node_summaries...\n");

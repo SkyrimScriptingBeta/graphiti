@@ -451,7 +451,16 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
                 merge_id(ex.source_contexts, sctx);
                 merge_ids(ex.participant_ids, pids);
                 // Merge traits (UNION — accumulate over time)
+                auto old_trait_count = ex.traits.size();
                 merge_ids(ex.traits, node.traits);
+                if (ex.traits.size() > old_trait_count) {
+                    std::string trait_list;
+                    for (size_t i = 0; i < ex.traits.size(); ++i) {
+                        if (i > 0) trait_list += ", ";
+                        trait_list += ex.traits[i];
+                    }
+                    log_trace("[graphiti]     → merged traits for \"%s\": [%s]\n", ex.name.c_str(), trait_list.c_str());
+                }
 
                 if (changed) {
                     if (impl_->has_writer())
@@ -1159,7 +1168,16 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                 merge_ids(ex.source_contexts, node.source_contexts);
                 merge_ids(ex.participant_ids, node.participant_ids);
                 // Merge traits (UNION — accumulate over time)
+                auto old_trait_count = ex.traits.size();
                 merge_ids(ex.traits, node.traits);
+                if (ex.traits.size() > old_trait_count) {
+                    std::string trait_list;
+                    for (size_t i = 0; i < ex.traits.size(); ++i) {
+                        if (i > 0) trait_list += ", ";
+                        trait_list += ex.traits[i];
+                    }
+                    log_trace("[graphiti]     → merged traits for \"%s\": [%s]\n", ex.name.c_str(), trait_list.c_str());
+                }
 
                 if (changed) {
                     if (impl_->has_writer())

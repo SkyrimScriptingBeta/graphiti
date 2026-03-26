@@ -110,6 +110,14 @@ Result<std::vector<EntityNode>> extract_nodes(
         node.group_id = input.group_id;
         node.created_at = now;
         node.traits = std::move(entity.traits);
+        if (!node.traits.empty()) {
+            std::string trait_list;
+            for (size_t i = 0; i < node.traits.size(); ++i) {
+                if (i > 0) trait_list += ", ";
+                trait_list += node.traits[i];
+            }
+            log_trace("[graphiti]   → traits for \"%s\": [%s]\n", node.name.c_str(), trait_list.c_str());
+        }
 
         // Set labels from resolved type
         if (input.type_defs && !type_name.empty() && type_name != "Entity") {

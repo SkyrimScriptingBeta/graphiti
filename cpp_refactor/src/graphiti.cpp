@@ -357,6 +357,23 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         }
     }
 
+    // 5c. Deduplicate edges within this batch (same source+target+name = duplicate)
+    {
+        std::set<std::string> seen_edges;
+        std::vector<EntityEdge> unique_edges;
+        for (auto& edge : extracted_edges) {
+            auto key = edge.source_node_uuid + "|" + edge.target_node_uuid + "|" + edge.name;
+            if (seen_edges.insert(key).second)
+                unique_edges.push_back(std::move(edge));
+        }
+        if (unique_edges.size() < extracted_edges.size()) {
+            log_trace("[graphiti]   → batch edge dedup: %zu → %zu (dropped %zu duplicates)\n",
+                      extracted_edges.size(), unique_edges.size(),
+                      extracted_edges.size() - unique_edges.size());
+        }
+        extracted_edges = std::move(unique_edges);
+    }
+
     // 6. Deduplicate edges against existing graph
     log_trace("[graphiti] → Step 6: dedupe_edges vs graph...\n");
     auto edge_dedup_result = pipeline::dedupe_edges(
@@ -1033,6 +1050,23 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
         log_debug("[graphiti] Step 7 (remap edge pointers): %lldms\n", ms);
         step_start = std::chrono::steady_clock::now();
     }
+    // 7b. Deduplicate edges within this batch (same source+target+name = duplicate)
+    {
+        std::set<std::string> seen_edges;
+        std::vector<EntityEdge> unique_edges;
+        for (auto& edge : all_edges) {
+            auto key = edge.source_node_uuid + "|" + edge.target_node_uuid + "|" + edge.name;
+            if (seen_edges.insert(key).second)
+                unique_edges.push_back(std::move(edge));
+        }
+        if (unique_edges.size() < all_edges.size()) {
+            log_trace("[graphiti]   → batch edge dedup: %zu → %zu (dropped %zu duplicates)\n",
+                      all_edges.size(), unique_edges.size(),
+                      all_edges.size() - unique_edges.size());
+        }
+        all_edges = std::move(unique_edges);
+    }
+
     auto edge_dedup = pipeline::dedupe_edges(*impl_->llm, impl_->driver, all_edges);
     std::vector<EntityEdge> final_edges;
     if (edge_dedup.has_value()) {

@@ -12,6 +12,7 @@
 
 #include "driver/kuzu_driver.h"
 
+#include <main/kuzu.h>
 #include <CLI/CLI.hpp>
 #include <ixwebsocket/IXNetSystem.h>
 #include <ixwebsocket/IXWebSocket.h>
@@ -192,6 +193,12 @@ static json dispatch(KuzuDriver& driver, const std::string& method, const json& 
         if (r.value().has_value())
             return {{"result", {{"episode_uuid", r.value().value()}}}};
         return {{"result", {{"episode_uuid", nullptr}}}};
+    }
+
+    if (method == "build_fts_indices") {
+        auto r = driver.build_fts_indices();
+        if (!r) return {{"error", {{"code", -1}, {"message", r.error().message}}}};
+        return {{"result", true}};
     }
 
     return {{"error", {{"code", -32601}, {"message", "Unknown method: " + method}}}};

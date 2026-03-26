@@ -44,6 +44,8 @@ public:
                                       std::string_view target_episode_uuid, std::string_view group_id,
                                       TimePoint created_at);
 
+    VoidResult build_fts_indices();
+
     // --- Read methods (for operations that need the daemon's write-locked view) ---
 
     Result<EntityNode> get_entity_node(std::string_view uuid);

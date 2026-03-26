@@ -511,7 +511,10 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     // 10b. Rebuild FTS indices so subsequent BM25 searches find newly persisted entities.
     // Kuzu FTS indices are NOT incremental — they must be dropped and re-created after inserts.
     log_trace("[graphiti] → Rebuilding FTS indices...\n");
-    (void)impl_->driver.build_fts_indices();
+    if (impl_->has_writer())
+        (void)impl_->writer_client->build_fts_indices();
+    else
+        (void)impl_->driver.build_fts_indices();
     log_trace("[graphiti] ✓ FTS indices rebuilt\n");
 
     // 11. Saga processing (if saga name provided)
@@ -1201,7 +1204,10 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     // Kuzu FTS indices are NOT incremental — they must be dropped and re-created after inserts.
     // ========================================================================
     log_trace("[graphiti] → Rebuilding FTS indices...\n");
-    (void)impl_->driver.build_fts_indices();
+    if (impl_->has_writer())
+        (void)impl_->writer_client->build_fts_indices();
+    else
+        (void)impl_->driver.build_fts_indices();
     log_trace("[graphiti] ✓ FTS indices rebuilt\n");
 
     // ========================================================================

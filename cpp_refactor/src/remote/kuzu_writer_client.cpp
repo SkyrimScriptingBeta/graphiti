@@ -231,6 +231,10 @@ VoidResult KuzuWriterClient::save_next_episode_edge(
     });
 }
 
+VoidResult KuzuWriterClient::build_fts_indices() {
+    return impl_->write_call("build_fts_indices", {});
+}
+
 // --- Read methods (through daemon for write-locked consistency) ---
 
 Result<EntityNode> KuzuWriterClient::get_entity_node(std::string_view uuid) {

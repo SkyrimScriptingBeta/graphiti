@@ -48,11 +48,17 @@ Result<DedupeNodesResult> dedupe_nodes(
             });
         }
 
-        // Build extracted node JSON
+        // Build extracted node JSON — include summary, labels, and traits for context
         nlohmann::json node_json = {
             {"id", static_cast<int>(i)},
             {"name", node.name},
         };
+        if (!node.summary.empty())
+            node_json["summary"] = node.summary;
+        if (!node.labels.empty())
+            node_json["labels"] = node.labels;
+        if (!node.traits.empty())
+            node_json["traits"] = node.traits;
 
         // Call LLM for dedup decision
         auto messages = prompts::dedupe_node(

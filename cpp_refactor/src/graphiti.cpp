@@ -285,6 +285,13 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         extracted_nodes = std::move(unique_nodes);
     }
 
+    // 3d. Enrich node summaries BEFORE dedup — so the dedup LLM has context on both sides
+    log_trace("[graphiti] → Step 3d: enrich_node_summaries (pre-dedup)...\n");
+    (void)pipeline::enrich_node_summaries(*impl_->llm, extracted_nodes, previous_episodes, episode_body);
+    log_trace("[graphiti] ✓ Step 3d: enrich_node_summaries done\n");
+    log_step("enrich_node_summaries_pre_dedup", true,
+             static_cast<int>(extracted_nodes.size()), static_cast<int>(extracted_nodes.size()));
+
     // 4. Deduplicate nodes against existing graph
     log_trace("[graphiti] → Step 4: dedupe_nodes vs graph...\n");
     auto dedup_result = pipeline::dedupe_nodes(

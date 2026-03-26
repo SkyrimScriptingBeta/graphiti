@@ -60,6 +60,15 @@ target("graphiti-kuzu-writer-server")
     add_packages("nlohmann_json")
     add_packages("kuzu")
     add_packages("cli11")
+    after_build(function (target)
+        local home = os.getenv("HOME") or os.getenv("USERPROFILE")
+        if home then
+            local bin_dir = path.join(home, "bin")
+            os.mkdir(bin_dir)
+            os.cp(target:targetfile(), path.join(bin_dir, path.filename(target:targetfile())))
+            print("📦 Copied " .. path.filename(target:targetfile()) .. " to " .. bin_dir)
+        end
+    end)
 
 target("graphiti_unit_tests")
     set_kind("binary")

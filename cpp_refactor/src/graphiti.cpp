@@ -417,12 +417,15 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
             log_trace("[graphiti] → Step 6b: orphan sweep (%zu orphans, %zu connected)...\n",
                       orphans.size(), connected.size());
 
-            // Build the prompt
+            // Build the prompt — include summaries so the 7B knows WHAT each entity is
             std::string orphan_list;
             nlohmann::json orphan_names = nlohmann::json::array();
             for (auto* node : orphans) {
                 std::string label = node->labels.size() > 1 ? node->labels[1] : "Entity";
-                orphan_list += std::format("- {} ({})\n", node->name, label);
+                if (!node->summary.empty())
+                    orphan_list += std::format("- {} ({}): \"{}\"\n", node->name, label, node->summary);
+                else
+                    orphan_list += std::format("- {} ({})\n", node->name, label);
                 orphan_names.push_back(node->name);
             }
 
@@ -455,9 +458,10 @@ These entities ARE connected to the graph:
 {}
 </EPISODE>
 
-For each orphan entity, extract its SINGLE most meaningful relationship to one of the connected entities.
+For each orphan entity, extract its SINGLE most meaningful relationship to ANY other entity (orphan or connected).
+Prefer connecting orphans to already-connected entities, but connecting an orphan to another orphan is better than leaving it disconnected.
 Every orphan should get exactly ONE edge. Only create edges that are clearly supported by the episode text.
-If an orphan genuinely has no relationship to any connected entity, skip it.
+If an orphan genuinely has no relationship to any other entity, skip it.
 
 CRITICAL: You MUST use ONLY entity names from the orphan list or the connected list above.
 Do NOT invent new entity names. If the target entity is not in either list, do not create the edge.

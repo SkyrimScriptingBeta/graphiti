@@ -315,6 +315,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         edge_input.custom_instructions = opts.custom_instructions.value();
     }
     edge_input.shard_size = impl_->config.llm.edge_shard_size;
+    edge_input.max_edges = impl_->config.llm.max_edges;
 
     // Scale edge extraction token budget based on entity count
     {
@@ -913,6 +914,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                 input.custom_instructions = opts.custom_instructions.value();
             }
             input.shard_size = impl_->config.llm.edge_shard_size;
+            input.max_edges = impl_->config.llm.max_edges;
 
             auto ep_aid = aid;
             auto ep_sid = episodes[i].source_id;

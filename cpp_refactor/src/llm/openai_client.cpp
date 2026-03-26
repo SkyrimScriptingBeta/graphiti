@@ -12,6 +12,60 @@ namespace graphiti {
 
 static constexpr int MAX_RETRIES = 5;
 
+// Attempt to repair truncated JSON by finding the last complete object in an array
+// and closing all open brackets/braces. Returns empty string if repair fails.
+static std::string repair_truncated_json(const std::string& json) {
+    // Find the last complete "}" that's part of an array element
+    // Strategy: walk backwards from the end, find the last "},", or the last "}" before truncation
+    // Then close all remaining open brackets/braces
+
+    // Find the outermost opening brace
+    auto first_brace = json.find('{');
+    if (first_brace == std::string::npos) return "";
+
+    // Find the last complete object boundary: "}, " or "}," or just "}"
+    // We want the last "}" that ends a complete array element
+    size_t last_complete = std::string::npos;
+    int depth = 0;
+    bool in_string = false;
+    bool escape = false;
+
+    for (size_t i = 0; i < json.size(); ++i) {
+        char c = json[i];
+        if (escape) { escape = false; continue; }
+        if (c == '\\' && in_string) { escape = true; continue; }
+        if (c == '"') { in_string = !in_string; continue; }
+        if (in_string) continue;
+
+        if (c == '{' || c == '[') depth++;
+        if (c == '}' || c == ']') {
+            depth--;
+            if (depth == 1 && c == '}') {
+                // Closing a depth-2 object (array element inside the outer object)
+                last_complete = i;
+            }
+        }
+    }
+
+    if (last_complete == std::string::npos) return "";
+
+    // Take everything up to and including the last complete object
+    auto repaired = json.substr(0, last_complete + 1);
+
+    // Close remaining open structures
+    // We're at depth 1 (inside the outer object, inside the array)
+    // Need to close: "]}" to complete the array and outer object
+    repaired += "]}";
+
+    // Verify it parses
+    try {
+        nlohmann::json::parse(repaired);
+        return repaired;
+    } catch (...) {
+        return "";
+    }
+}
+
 struct OpenAIClient::Impl {
     LLMConfig config;
     HttpClient* shared_http = nullptr;
@@ -171,10 +225,20 @@ struct OpenAIClient::Impl {
         // Parse the content as JSON
         try {
             auto parsed = nlohmann::json::parse(content_str);
-            // Attach usage metadata so generate_response can record it
             parsed["__token_usage__"] = {{"input", input_tokens}, {"output", output_tokens}};
             return parsed;
         } catch (const nlohmann::json::exception& e) {
+            // Try to repair truncated JSON before giving up
+            auto repaired = repair_truncated_json(content_str);
+            if (!repaired.empty()) {
+                try {
+                    auto parsed = nlohmann::json::parse(repaired);
+                    parsed["__token_usage__"] = {{"input", input_tokens}, {"output", output_tokens}};
+                    log_debug("[graphiti-llm] 🔧 Repaired truncated JSON (kept %zu of %zu chars)\n",
+                              repaired.size(), content_str.size());
+                    return parsed;
+                } catch (...) {}
+            }
             return std::unexpected(GraphitiError{
                 ErrorCode::llm_parse_error,
                 std::format("Failed to parse LLM JSON output: {} — raw: {}", e.what(), content_str)

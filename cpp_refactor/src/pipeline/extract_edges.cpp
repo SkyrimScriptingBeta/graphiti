@@ -20,13 +20,27 @@ static Result<ExtractedEdges> extract_edges_single(
     const nlohmann::json& nodes_json,
     const std::string& reference_time,
     const nlohmann::json& edge_types,
-    const std::string& custom_instructions
+    const std::string& custom_instructions,
+    int max_edges
 ) {
     auto messages = prompts::extract_edges(
         previous_episodes, episode_content,
         nodes_json, reference_time,
         edge_types, custom_instructions
     );
+
+    // Inject max edges cap into the last user message
+    if (max_edges > 0 && !messages.empty()) {
+        for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
+            if (it->role == "user") {
+                it->content += std::format(
+                    "\n\n**IMPORTANT: Extract at most {} edges. After {}, close the JSON array and STOP.**",
+                    max_edges, max_edges
+                );
+                break;
+            }
+        }
+    }
 
     ExtractedEdges extracted;
     constexpr int MAX_EDGE_RETRIES = 2;
@@ -103,18 +117,29 @@ Result<std::vector<EntityEdge>> extract_edges(
         shards.push_back(std::move(all_nodes));
     }
 
+    // Compute max edges per shard
+    // If max_edges is set, use it. Otherwise auto = 1.5x entity count per shard.
+    auto compute_max_edges = [&](int entity_count) -> int {
+        if (input.max_edges > 0) return input.max_edges;
+        return static_cast<int>(entity_count * 1.5);
+    };
+
     // Run edge extraction for each shard SERIALLY and merge results
     ExtractedEdges all_extracted;
     for (size_t i = 0; i < shards.size(); ++i) {
+        int shard_entity_count = static_cast<int>(shards[i].size());
+        int max_edges = compute_max_edges(shard_entity_count);
+
         if (shards.size() > 1) {
-            log_debug("[graphiti]   shard %zu/%zu (%zu entities)\n",
-                      i + 1, shards.size(), shards[i].size());
+            log_debug("[graphiti]   shard %zu/%zu (%d entities, max %d edges)\n",
+                      i + 1, shards.size(), shard_entity_count, max_edges);
         }
 
         auto result = extract_edges_single(
             llm, input.previous_episodes, input.episode_content,
             shards[i], input.reference_time,
-            input.edge_types, input.custom_instructions
+            input.edge_types, input.custom_instructions,
+            max_edges
         );
 
         if (!result.has_value()) {

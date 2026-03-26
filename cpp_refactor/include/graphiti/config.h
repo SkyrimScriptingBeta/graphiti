@@ -112,6 +112,11 @@ struct GraphitiConfig {
             config.default_group_id = group_id;
         }
 
+        auto temperature = env("GRAPHITI_TEMPERATURE");
+        if (!temperature.empty()) {
+            config.llm.temperature = std::stof(temperature);
+        }
+
         auto stream = env("GRAPHITI_STREAM");
         if (stream == "1" || stream == "true") {
             config.llm.stream = true;

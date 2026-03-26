@@ -177,10 +177,11 @@ auto collect_entities(kuzu::main::QueryResult* result) -> std::vector<EntityNode
             .name_embedding = std::nullopt,
             .summary = get_str(tuple->getValue(5)),
             .attributes = get_json_attr(tuple->getValue(6)),
-            .agent_ids = get_string_list(tuple->getValue(7)),
-            .source_ids = get_string_list(tuple->getValue(8)),
-            .source_contexts = get_string_list(tuple->getValue(9)),
-            .participant_ids = get_string_list(tuple->getValue(10)),
+            .traits = get_string_list(tuple->getValue(7)),
+            .agent_ids = get_string_list(tuple->getValue(8)),
+            .source_ids = get_string_list(tuple->getValue(9)),
+            .source_contexts = get_string_list(tuple->getValue(10)),
+            .participant_ids = get_string_list(tuple->getValue(11)),
         });
     }
     return nodes;
@@ -291,6 +292,7 @@ constexpr std::string_view ENTITY_NODE_RETURN = R"(
     n.created_at AS created_at,
     n.summary AS summary,
     n.attributes AS attributes,
+    n.traits AS traits,
     n.agent_ids AS agent_ids,
     n.source_ids AS source_ids,
     n.source_contexts AS source_contexts,
@@ -483,6 +485,7 @@ SET
     n.name_embedding = $name_embedding,
     n.summary = $summary,
     n.attributes = $attributes,
+    n.traits = $traits,
     n.agent_ids = $agent_ids,
     n.source_ids = $source_ids,
     n.source_contexts = $source_contexts,
@@ -498,6 +501,7 @@ RETURN n.uuid AS uuid)");
     params["name_embedding"] = opt_float_list_val(node.name_embedding);
     params["summary"] = str_val(node.summary);
     params["attributes"] = str_val(node.attributes.dump());
+    params["traits"] = string_list_val(node.traits);
     params["agent_ids"] = string_list_val(node.agent_ids);
     params["source_ids"] = string_list_val(node.source_ids);
     params["source_contexts"] = string_list_val(node.source_contexts);

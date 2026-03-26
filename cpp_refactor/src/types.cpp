@@ -53,6 +53,7 @@ void to_json(nlohmann::json& j, const EntityNode& n) {
         {"created_at", timepoint_to_json(n.created_at)},
         {"summary", n.summary},
         {"attributes", n.attributes},
+        {"traits", n.traits},
         {"agent_ids", n.agent_ids},
         {"source_ids", n.source_ids},
         {"source_contexts", n.source_contexts},
@@ -76,6 +77,8 @@ void from_json(const nlohmann::json& j, EntityNode& n) {
         n.name_embedding = j.at("name_embedding").get<std::vector<float>>();
     else
         n.name_embedding = std::nullopt;
+    if (j.contains("traits"))
+        j.at("traits").get_to(n.traits);
     if (j.contains("agent_ids"))
         j.at("agent_ids").get_to(n.agent_ids);
     if (j.contains("source_ids"))

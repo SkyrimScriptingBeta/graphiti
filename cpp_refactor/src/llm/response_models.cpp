@@ -11,11 +11,17 @@ void from_json(const nlohmann::json& j, ExtractedEntity& v) {
         j["name"].get_to(v.name);
     if (j.contains("entity_type_id") && !j["entity_type_id"].is_null())
         j["entity_type_id"].get_to(v.entity_type_id);
+    if (j.contains("traits") && j["traits"].is_array()) {
+        for (auto& t : j["traits"]) {
+            if (t.is_string()) v.traits.push_back(t.get<std::string>());
+        }
+    }
     if (v.name.empty()) throw std::runtime_error("entity name is empty or null");
 }
 
 void to_json(nlohmann::json& j, const ExtractedEntity& v) {
     j = {{"name", v.name}, {"entity_type_id", v.entity_type_id}};
+    if (!v.traits.empty()) j["traits"] = v.traits;
 }
 
 // ============================================================================

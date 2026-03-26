@@ -38,6 +38,7 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         name_embedding FLOAT[],
         summary STRING,
         attributes STRING,
+        traits STRING[] DEFAULT [],
         agent_ids STRING[] DEFAULT [],
         source_ids STRING[] DEFAULT [],
         source_contexts STRING[] DEFAULT [],

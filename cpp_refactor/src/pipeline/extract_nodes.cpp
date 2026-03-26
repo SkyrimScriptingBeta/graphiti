@@ -6,7 +6,9 @@
 
 #include <graphiti/log.h>
 
+#include <algorithm>
 #include <format>
+#include <unordered_set>
 
 namespace graphiti::pipeline {
 
@@ -73,7 +75,24 @@ Result<std::vector<EntityNode>> extract_nodes(
     std::vector<EntityNode> nodes;
     nodes.reserve(extracted.extracted_entities.size());
 
+    // Pronouns and garbage words to filter out (case-insensitive)
+    static const std::unordered_set<std::string> BLOCKED_NAMES = {
+        "i", "you", "me", "we", "us", "he", "she", "they", "it",
+        "my", "your", "yours", "mine", "our", "his", "her", "their",
+        "this", "that", "these", "those",
+    };
+
     for (auto& entity : extracted.extracted_entities) {
+        // Filter pronouns and blocked words
+        {
+            std::string lower_name = entity.name;
+            std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
+            if (BLOCKED_NAMES.count(lower_name)) {
+                log_trace("[graphiti]   → filtered pronoun/blocked: \"%s\"\n", entity.name.c_str());
+                continue;
+            }
+        }
+
         // Resolve type name from entity_type_id when type_defs is available
         std::string type_name;
         if (input.type_defs) {
@@ -90,6 +109,7 @@ Result<std::vector<EntityNode>> extract_nodes(
         node.name = std::move(entity.name);
         node.group_id = input.group_id;
         node.created_at = now;
+        node.traits = std::move(entity.traits);
 
         // Set labels from resolved type
         if (input.type_defs && !type_name.empty() && type_name != "Entity") {

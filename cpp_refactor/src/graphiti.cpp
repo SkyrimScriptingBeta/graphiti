@@ -450,6 +450,8 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
                 merge_id(ex.source_ids, sid);
                 merge_id(ex.source_contexts, sctx);
                 merge_ids(ex.participant_ids, pids);
+                // Merge traits (UNION — accumulate over time)
+                merge_ids(ex.traits, node.traits);
 
                 if (changed) {
                     if (impl_->has_writer())
@@ -1156,6 +1158,8 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                 merge_ids(ex.source_ids, node.source_ids);
                 merge_ids(ex.source_contexts, node.source_contexts);
                 merge_ids(ex.participant_ids, node.participant_ids);
+                // Merge traits (UNION — accumulate over time)
+                merge_ids(ex.traits, node.traits);
 
                 if (changed) {
                     if (impl_->has_writer())

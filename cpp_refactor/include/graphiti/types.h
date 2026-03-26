@@ -26,6 +26,7 @@ struct EntityNode {
     std::optional<std::vector<float>> name_embedding;
     std::string summary;
     nlohmann::json attributes = nlohmann::json::object();
+    std::vector<std::string> traits;
     std::vector<std::string> agent_ids;
     std::vector<std::string> source_ids;
     std::vector<std::string> source_contexts;

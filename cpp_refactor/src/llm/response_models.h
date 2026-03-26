@@ -15,6 +15,7 @@ namespace graphiti {
 struct ExtractedEntity {
     std::string name;
     int entity_type_id = 0;
+    std::vector<std::string> traits;  // optional soft descriptors: ["fluffy", "reliable"]
 };
 
 struct ExtractedEntities {

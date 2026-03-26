@@ -160,6 +160,98 @@ VoidResult Graphiti::build_indices() {
     return impl_->driver.build_fts_indices();
 }
 
+VoidResult Graphiti::initialize_self(const AgentIdentity& id) {
+    std::lock_guard lock(impl_->mu);
+    auto now = std::chrono::system_clock::now();
+
+    // 1. Create Self node — the identity anchor
+    EntityNode self_node;
+    self_node.uuid = "self";
+    self_node.name = "Self";
+    self_node.group_id = id.group_id;
+    self_node.labels = {"Entity", "Identity"};
+    self_node.created_at = now;
+    self_node.summary = id.name + " — this is me. This node represents the owner of this graph.";
+    self_node.is_system = true;
+
+    if (impl_->has_writer())
+        (void)impl_->writer_client->save_entity_node(self_node);
+    else
+        (void)impl_->driver.save_entity_node(self_node);
+
+    // 2. Create Person entity for the agent
+    EntityNode person_node;
+    person_node.uuid = "person_" + id.name;
+    person_node.name = id.name;
+    person_node.group_id = id.group_id;
+    person_node.labels = {"Entity", "Person"};
+    person_node.created_at = now;
+    person_node.summary = id.name + " is the " + id.role + " on the " + id.team + " team.";
+    person_node.is_system = true;
+
+    if (impl_->has_writer())
+        (void)impl_->writer_client->save_entity_node(person_node);
+    else
+        (void)impl_->driver.save_entity_node(person_node);
+
+    // 3. Create Role entity
+    EntityNode role_node;
+    role_node.uuid = "role_" + id.role;
+    role_node.name = id.role;
+    role_node.group_id = id.group_id;
+    role_node.labels = {"Entity", "Role"};
+    role_node.created_at = now;
+    role_node.summary = id.role_description;
+    role_node.is_system = true;
+
+    if (impl_->has_writer())
+        (void)impl_->writer_client->save_entity_node(role_node);
+    else
+        (void)impl_->driver.save_entity_node(role_node);
+
+    // 4. Wire identity edges
+    auto create_identity_edge = [&](const std::string& src_uuid, const std::string& tgt_uuid,
+                                     const std::string& edge_name, const std::string& fact) {
+        EntityEdge edge;
+        edge.uuid = uuid::generate();
+        edge.group_id = id.group_id;
+        edge.source_node_uuid = src_uuid;
+        edge.target_node_uuid = tgt_uuid;
+        edge.name = edge_name;
+        edge.fact = fact;
+        edge.created_at = now;
+        edge.is_system = true;
+
+        if (impl_->has_writer())
+            (void)impl_->writer_client->save_entity_edge(edge);
+        else
+            (void)impl_->driver.save_entity_edge(edge);
+    };
+
+    // Self → SAME_AS → Person
+    create_identity_edge("self", person_node.uuid, "SAME_AS",
+        "Self is " + id.name + ". " + id.name + " is Self.");
+
+    // Self → HAS_ROLE → Role
+    create_identity_edge("self", role_node.uuid, "HAS_ROLE",
+        id.name + " is the " + id.role + ".");
+
+    // Person → HAS_ROLE → Role (so the person entity also connects to its role)
+    create_identity_edge(person_node.uuid, role_node.uuid, "HAS_ROLE",
+        id.name + " has the role of " + id.role + ".");
+
+    log_trace("[graphiti] ✅ Self node initialized: %s (%s) on team %s\n",
+              id.name.c_str(), id.role.c_str(), id.team.c_str());
+
+    // Rebuild FTS so dedup can find these entities
+    if (impl_->has_writer())
+        (void)impl_->writer_client->build_fts_indices();
+    else
+        (void)impl_->driver.build_fts_indices();
+
+    return {};
+}
+
 Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
     std::lock_guard lock(impl_->mu);
     auto gid = impl_->resolve_group_id(opts.group_id);

@@ -27,6 +27,7 @@ struct EntityNode {
     std::string summary;
     nlohmann::json attributes = nlohmann::json::object();
     std::vector<std::string> traits;
+    bool is_system = false;
     std::vector<std::string> agent_ids;
     std::vector<std::string> source_ids;
     std::vector<std::string> source_contexts;
@@ -85,6 +86,7 @@ struct EntityEdge {
     std::optional<TimePoint> valid_at;
     std::optional<TimePoint> invalid_at;
     nlohmann::json attributes = nlohmann::json::object();
+    bool is_system = false;
     std::vector<std::string> agent_ids;
     std::vector<std::string> source_ids;
     std::vector<std::string> source_contexts;

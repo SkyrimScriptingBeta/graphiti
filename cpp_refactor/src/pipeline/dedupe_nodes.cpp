@@ -32,6 +32,12 @@ Result<DedupeNodesResult> dedupe_nodes(
         log_trace("[graphiti]   dedupe node %zu/%zu: \"%s\"\n",
                   i + 1, result.nodes.size(), node.name.c_str());
 
+        // Skip system nodes — they're infrastructure, not content
+        if (node.is_system) {
+            log_trace("[graphiti]     → system node, skipping dedup\n");
+            continue;
+        }
+
         // Search existing nodes by name (BM25)
         auto search_result = driver.search_entity_nodes_bm25(node.name, group_id, 10);
         if (!search_result.has_value() || search_result.value().empty()) {

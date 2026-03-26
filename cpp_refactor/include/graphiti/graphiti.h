@@ -204,6 +204,18 @@ public:
     void add_logger(GraphitiLogger* logger);
     void add_logger(std::unique_ptr<GraphitiLogger> logger);
 
+    // Initialize the Self node — the identity anchor for this agent's graph.
+    // Creates the Self entity + identity edges (SAME_AS person, HAS_ROLE role).
+    // System-protected: never deduped, never invalidated, never LLM-summarized.
+    struct AgentIdentity {
+        std::string name;           // e.g. "Keel"
+        std::string role;           // e.g. "Architect"
+        std::string role_description; // e.g. "System design, PR review, kick_offs"
+        std::string team;           // e.g. "Collab"
+        std::string group_id;       // e.g. "agent-keel"
+    };
+    VoidResult initialize_self(const AgentIdentity& identity);
+
     // BM25 full-text search for entity nodes by name/summary.
     // This is the same search used internally for dedup candidate retrieval.
     Result<std::vector<EntityNode>> search_entity_nodes_bm25(

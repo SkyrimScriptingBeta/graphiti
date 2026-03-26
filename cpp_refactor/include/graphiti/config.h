@@ -12,6 +12,7 @@ struct LLMConfig {
     std::string small_model = "gpt-4.1-nano";  // used for dedup + resolution (cheaper/faster)
     std::string base_url = "https://api.openai.com";
     float temperature = 0.0f;  // deterministic — extraction needs precision, not creativity
+    bool stream = false;               // stream LLM responses to log_trace (GRAPHITI_STREAM=1)
     int max_tokens = 16384;            // base output token budget (GRAPHITI_MAX_TOKENS)
     int max_output_tokens = 32768;     // hard ceiling — nothing goes above this (GRAPHITI_MAX_OUTPUT_TOKENS)
     float truncation_multiplier = 1.5f; // on JSON truncation, multiply budget by this (GRAPHITI_TRUNCATION_MULTIPLIER)
@@ -109,6 +110,11 @@ struct GraphitiConfig {
         auto group_id = env("GRAPHITI_GROUP_ID");
         if (!group_id.empty()) {
             config.default_group_id = group_id;
+        }
+
+        auto stream = env("GRAPHITI_STREAM");
+        if (stream == "1" || stream == "true") {
+            config.llm.stream = true;
         }
 
         auto max_tokens = env("GRAPHITI_MAX_TOKENS");

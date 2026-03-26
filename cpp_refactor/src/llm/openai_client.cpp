@@ -70,12 +70,29 @@ struct OpenAIClient::Impl {
             {"Authorization", std::format("Bearer {}", config.api_key)},
         };
 
-        log_trace("[graphiti-llm] → POST %s /chat/completions (model=%s, msgs=%zu, max_tokens=%d)\n",
-                  config.base_url.c_str(), model.c_str(), messages.size(), effective_max_tokens());
+        log_trace("[graphiti-llm] → POST %s /chat/completions (model=%s, msgs=%zu, max_tokens=%d%s)\n",
+                  config.base_url.c_str(), model.c_str(), messages.size(), effective_max_tokens(),
+                  config.stream ? ", stream" : "");
         auto t0 = std::chrono::steady_clock::now();
-        auto result = http().post_json(
-            config.base_url, "/v1/chat/completions", headers, request_body.dump()
-        );
+
+        Result<HttpResponse> result;
+        if (config.stream) {
+            auto stream_body = request_body;
+            stream_body["stream"] = true;
+            result = http().post_json_streaming(
+                config.base_url, "/v1/chat/completions", headers, stream_body.dump(),
+                [](const std::string& token) {
+                    log_trace("%s", token.c_str());
+                }
+            );
+            // Newline after streaming tokens
+            log_trace("\n");
+        } else {
+            result = http().post_json(
+                config.base_url, "/v1/chat/completions", headers, request_body.dump()
+            );
+        }
+
         auto llm_ms = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - t0).count();
 

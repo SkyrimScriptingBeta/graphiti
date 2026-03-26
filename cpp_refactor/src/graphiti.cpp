@@ -459,6 +459,9 @@ For each orphan entity, extract its SINGLE most meaningful relationship to one o
 Every orphan should get exactly ONE edge. Only create edges that are clearly supported by the episode text.
 If an orphan genuinely has no relationship to any connected entity, skip it.
 
+CRITICAL: You MUST use ONLY entity names from the orphan list or the connected list above.
+Do NOT invent new entity names. If the target entity is not in either list, do not create the edge.
+
 Return edges in this format:
 {{"edges": [{{"source_entity_name": "...", "target_entity_name": "...", "relation_type": "...", "fact": "...", "valid_at": null, "invalid_at": null}}]}})",
                 orphan_list, connected_list, episode_body);

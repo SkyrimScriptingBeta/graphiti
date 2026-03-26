@@ -12,7 +12,7 @@ struct LLMConfig {
     std::string small_model = "gpt-4.1-nano";  // used for dedup + resolution (cheaper/faster)
     std::string base_url = "https://api.openai.com";
     float temperature = 0.0f;  // deterministic — extraction needs precision, not creativity
-    int max_tokens = 16384;
+    int max_tokens = 2048;  // caps generation — prevents infinite loops on local models
 };
 
 struct EmbedderConfig {

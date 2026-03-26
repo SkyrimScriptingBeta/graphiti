@@ -64,7 +64,7 @@ struct OpenAIClient::Impl {
             {"Authorization", std::format("Bearer {}", config.api_key)},
         };
 
-        log_trace("[graphiti-llm] → POST %s/v1/chat/completions (model=%s, msgs=%zu)\n",
+        log_trace("[graphiti-llm] → POST %s /chat/completions (model=%s, msgs=%zu)\n",
                   config.base_url.c_str(), model.c_str(), messages.size());
         auto t0 = std::chrono::steady_clock::now();
         auto result = http().post_json(

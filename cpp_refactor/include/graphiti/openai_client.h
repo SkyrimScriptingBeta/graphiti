@@ -24,6 +24,13 @@ public:
         ModelSize model_size = ModelSize::medium
     ) override;
 
+    // Raw text completion — no JSON mode, no schema injection, no parse retries.
+    // Returns the content string directly. One call, one response.
+    Result<std::string> generate_text(
+        const std::vector<Message>& messages,
+        ModelSize model_size = ModelSize::medium
+    );
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

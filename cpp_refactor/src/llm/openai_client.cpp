@@ -88,12 +88,13 @@ struct OpenAIClient::Impl {
     Result<nlohmann::json> call_completions(
         std::vector<Message> messages,
         std::optional<std::string_view> json_schema,
-        ModelSize model_size
+        ModelSize model_size,
+        bool json_mode = true
     ) {
         auto model = model_for_size(model_size);
 
         // If a schema is provided, append it to the last user message
-        if (json_schema.has_value()) {
+        if (json_mode && json_schema.has_value()) {
             for (auto it = messages.rbegin(); it != messages.rend(); ++it) {
                 if (it->role == "user") {
                     it->content += std::format(
@@ -115,8 +116,12 @@ struct OpenAIClient::Impl {
             {"model", model},
             {"messages", msgs_json},
             {"max_tokens", effective_max_tokens()},
-            {"response_format", {{"type", "json_object"}}},
         };
+
+        // Only request JSON response format when in json_mode
+        if (json_mode) {
+            request_body["response_format"] = {{"type", "json_object"}};
+        }
 
         if (config.temperature >= 0.0f) {
             request_body["temperature"] = config.temperature;
@@ -261,6 +266,14 @@ struct OpenAIClient::Impl {
             });
         }
         auto content_str = content_val.get<std::string>();
+
+        // In text mode, return raw content without JSON parsing
+        if (!json_mode) {
+            nlohmann::json text_result;
+            text_result["content"] = content_str;
+            text_result["__token_usage__"] = {{"input", input_tokens}, {"output", output_tokens}};
+            return text_result;
+        }
 
         // Strip markdown JSON fences (```json ... ```) that some models wrap around their output
         if (content_str.size() >= 7 && content_str[0] == '`') {
@@ -432,6 +445,28 @@ Result<nlohmann::json> OpenAIClient::generate_response(
         ErrorCode::llm_error,
         std::format("Max retries ({}) exceeded", MAX_RETRIES)
     });
+}
+
+Result<std::string> OpenAIClient::generate_text(
+    const std::vector<Message>& messages,
+    ModelSize model_size
+) {
+    impl_->max_tokens_for_call = max_tokens_override > 0 ? max_tokens_override : impl_->config.max_tokens;
+
+    // One call, no retries for parse errors, no JSON mode
+    auto result = impl_->call_completions(messages, std::nullopt, model_size, /*json_mode=*/false);
+
+    if (!result)
+        return std::unexpected(result.error());
+
+    auto& val = *result;
+    if (val.contains("__token_usage__")) {
+        auto input = val["__token_usage__"]["input"].get<int64_t>();
+        auto output = val["__token_usage__"]["output"].get<int64_t>();
+        token_tracker.record("generate_text", input, output);
+    }
+
+    return val.value("content", "");
 }
 
 } // namespace graphiti

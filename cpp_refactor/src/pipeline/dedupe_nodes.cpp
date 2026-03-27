@@ -91,13 +91,26 @@ Result<DedupeNodesResult> dedupe_nodes(
 
                     if (!res.duplicate_name.empty()) {
                         // Find the existing node UUID by name
+                        bool found = false;
                         for (auto& existing : search_result.value()) {
                             if (existing.name == res.duplicate_name) {
                                 // Map new UUID to existing UUID
+                                log_trace("[graphiti]     → dedup match: \"%s\" → \"%s\" (uuid: %s → %s)\n",
+                                          node.name.c_str(), existing.name.c_str(),
+                                          node.uuid.c_str(), existing.uuid.c_str());
                                 result.uuid_map[node.uuid] = existing.uuid;
                                 node.uuid = existing.uuid;
+                                found = true;
                                 break;
                             }
+                        }
+                        if (!found) {
+                            log_trace("[graphiti]     ⚠️ LLM said duplicate_name=\"%s\" but no BM25 candidate matched! Candidates: ",
+                                      res.duplicate_name.c_str());
+                            for (auto& existing : search_result.value()) {
+                                log_trace("\"%s\" ", existing.name.c_str());
+                            }
+                            log_trace("\n");
                         }
                     }
                 }

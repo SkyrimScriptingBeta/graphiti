@@ -1069,8 +1069,16 @@ RETURN {}
 ORDER BY score DESC
 LIMIT {})", limit, extra_where, ENTITY_NODE_RETURN, limit);
 
+    // Sanitize FTS query — strip special characters that break FTS syntax
+    // Colons (:), quotes ("), asterisks (*), parentheses can crash the FTS parser
+    std::string sanitized_query(query);
+    for (auto& c : sanitized_query) {
+        if (c == ':' || c == '"' || c == '*' || c == '(' || c == ')' || c == '~' || c == '^')
+            c = ' ';
+    }
+
     ParamMap params;
-    params["query"] = str_val(query);
+    params["query"] = str_val(sanitized_query);
     params["group_id"] = str_val(group_id);
 
     auto result = impl_->query_params(cypher, std::move(params));
@@ -1129,8 +1137,15 @@ RETURN {}
 ORDER BY score DESC
 LIMIT {})", limit, extra_where, ENTITY_EDGE_RETURN, limit);
 
+    // Sanitize FTS query — strip special characters that break FTS syntax
+    std::string sanitized_query(query);
+    for (auto& c : sanitized_query) {
+        if (c == ':' || c == '"' || c == '*' || c == '(' || c == ')' || c == '~' || c == '^')
+            c = ' ';
+    }
+
     ParamMap params;
-    params["query"] = str_val(query);
+    params["query"] = str_val(sanitized_query);
     params["group_id"] = str_val(group_id);
 
     auto result = impl_->query_params(cypher, std::move(params));

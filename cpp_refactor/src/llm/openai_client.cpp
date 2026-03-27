@@ -140,6 +140,19 @@ struct OpenAIClient::Impl {
         log_trace("[graphiti-llm] → POST %s /chat/completions (model=%s, msgs=%zu, max_tokens=%d%s)\n",
                   config.base_url.c_str(), model.c_str(), messages.size(), effective_max_tokens(),
                   config.stream ? ", stream" : "");
+
+        // GRAPHITI_LOG_REQUESTS=1 — dump full request JSON for debugging
+        {
+            static int log_requests = -1;
+            if (log_requests < 0) {
+                auto* env = std::getenv("GRAPHITI_LOG_REQUESTS");
+                log_requests = (env && env[0] == '1') ? 1 : 0;
+            }
+            if (log_requests) {
+                log_trace("[graphiti-llm] 📤 REQUEST:\n%s\n", request_body.dump(2).c_str());
+            }
+        }
+
         auto t0 = std::chrono::steady_clock::now();
 
         Result<HttpResponse> result;

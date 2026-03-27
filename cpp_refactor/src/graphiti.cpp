@@ -416,8 +416,17 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         step_start = std::chrono::steady_clock::now();
     };
 
-    log_debug("[graphiti] add_episode: body=%zu chars, group=%s, name=%s\n",
-              opts.body.size(), gid.c_str(), opts.name.c_str());
+    // Estimate tokens: use word count × 1.3 heuristic (same as CollabLite chunker)
+    int est_words = 0;
+    { bool in_w = false;
+      for (char c : opts.body) {
+          if (c == ' ' || c == '\t' || c == '\n' || c == '\r') in_w = false;
+          else if (!in_w) { in_w = true; ++est_words; }
+      }
+    }
+    int est_tokens = static_cast<int>(est_words * 1.3f + 0.5f);
+    log_debug("[graphiti] add_episode: body=%zu chars (~%d tokens), group=%s, name=%s\n",
+              opts.body.size(), est_tokens, gid.c_str(), opts.name.c_str());
 
     // 1. Retrieve previous episodes for context
     log_trace("[graphiti] → Step 1: retrieve_episodes...\n");

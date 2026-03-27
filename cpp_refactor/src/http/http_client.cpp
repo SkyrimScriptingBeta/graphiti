@@ -163,15 +163,19 @@ Result<HttpResponse> HttpClient::post_json_streaming(
             if (!payload.empty() && payload.back() == '\r') payload.pop_back();
             if (payload == "[DONE]") continue;
 
-            // 🔍 DEBUG: Log raw SSE payload to see full JSON structure (thinking tokens, etc.)
-            log_trace("[SSE] %s\n", payload.c_str());
-
             try {
                 auto j = nlohmann::json::parse(payload);
                 if (j.contains("choices") && !j["choices"].empty()) {
                     auto& choice = j["choices"][0];
                     if (choice.contains("delta")) {
                         auto& delta = choice["delta"];
+                        // Stream reasoning tokens (e.g. Qwen3.5 "reasoning" field)
+                        if (delta.contains("reasoning") && delta["reasoning"].is_string()) {
+                            auto reasoning = delta["reasoning"].get<std::string>();
+                            if (!reasoning.empty()) {
+                                log_trace("%s", reasoning.c_str());
+                            }
+                        }
                         if (delta.contains("content") && !delta["content"].is_null()) {
                             auto token = delta["content"].get<std::string>();
                             accumulated_content += token;

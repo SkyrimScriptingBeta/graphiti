@@ -45,6 +45,36 @@ Result<DedupeNodesResult> dedupe_nodes(
             continue;
         }
 
+        // GRAPHITI_AUTO_MERGE_MATCHING_NODES_BY_NAME=1 — skip LLM for exact name matches
+        {
+            static int auto_merge = -1;
+            if (auto_merge < 0) {
+                auto* env = std::getenv("GRAPHITI_AUTO_MERGE_MATCHING_NODES_BY_NAME");
+                auto_merge = (env && env[0] == '1') ? 1 : 0;
+            }
+            if (auto_merge) {
+                // Case-insensitive exact name match — merge without LLM
+                auto lower = [](std::string s) {
+                    for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                    return s;
+                };
+                auto node_lower = lower(node.name);
+                bool found = false;
+                for (auto& existing : search_result.value()) {
+                    if (lower(existing.name) == node_lower) {
+                        log_trace("[graphiti]     → auto-merge (exact name): \"%s\" → \"%s\" (uuid: %s)\n",
+                                  node.name.c_str(), existing.name.c_str(), existing.uuid.c_str());
+                        result.uuid_map[node.uuid] = existing.uuid;
+                        node.uuid = existing.uuid;
+                        node.name = existing.name;  // keep the existing name's casing
+                        found = true;
+                        break;
+                    }
+                }
+                if (found) continue;
+            }
+        }
+
         // Build existing nodes JSON for the LLM
         nlohmann::json existing_json = nlohmann::json::array();
         for (auto& existing : search_result.value()) {

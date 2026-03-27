@@ -118,6 +118,10 @@ struct OpenAIClient::Impl {
             {"response_format", {{"type", "json_object"}}},
         };
 
+        if (config.think.has_value()) {
+            request_body["think"] = config.think.value();
+        }
+
         if (config.temperature >= 0.0f) {
             request_body["temperature"] = config.temperature;
         }

@@ -163,6 +163,9 @@ Result<HttpResponse> HttpClient::post_json_streaming(
             if (!payload.empty() && payload.back() == '\r') payload.pop_back();
             if (payload == "[DONE]") continue;
 
+            // 🔍 DEBUG: Log raw SSE payload to see full JSON structure (thinking tokens, etc.)
+            log_trace("[SSE] %s\n", payload.c_str());
+
             try {
                 auto j = nlohmann::json::parse(payload);
                 if (j.contains("choices") && !j["choices"].empty()) {

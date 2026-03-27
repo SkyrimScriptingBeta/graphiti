@@ -15,8 +15,6 @@ struct LLMConfig {
     float repetition_penalty = -1.0f;  // Ollama: repeat_penalty (GRAPHITI_REPETITION_PENALTY, default off)
     float frequency_penalty = -1.0f;   // OpenAI: frequency_penalty (GRAPHITI_FREQUENCY_PENALTY, default off)
     bool stream = false;               // stream LLM responses to log_trace (GRAPHITI_STREAM=1)
-    std::optional<bool> think;          // if set, sends "think": true/false in request body (GRAPHITI_THINK=0 or 1)
-    bool no_think = false;              // if true, prepends /no_think to first user message (GRAPHITI_NO_THINK=1)
     int max_tokens = 16384;            // base output token budget (GRAPHITI_MAX_TOKENS)
     int max_output_tokens = 32768;     // hard ceiling — nothing goes above this (GRAPHITI_MAX_OUTPUT_TOKENS)
     float truncation_multiplier = 1.5f; // on JSON truncation, multiply budget by this (GRAPHITI_TRUNCATION_MULTIPLIER)
@@ -136,18 +134,6 @@ struct GraphitiConfig {
         auto stream = env("GRAPHITI_STREAM");
         if (stream == "1" || stream == "true") {
             config.llm.stream = true;
-        }
-
-        auto no_think = env("GRAPHITI_NO_THINK");
-        if (no_think == "1" || no_think == "true") {
-            config.llm.no_think = true;
-        }
-
-        auto think = env("GRAPHITI_THINK");
-        if (think == "1" || think == "true") {
-            config.llm.think = true;
-        } else if (think == "0" || think == "false") {
-            config.llm.think = false;
         }
 
         auto max_tokens = env("GRAPHITI_MAX_TOKENS");

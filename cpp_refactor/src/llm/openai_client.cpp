@@ -61,7 +61,7 @@ static std::string repair_truncated_json(const std::string& json) {
 
     // Verify it parses
     try {
-        nlohmann::json::parse(repaired);
+        (void)nlohmann::json::parse(repaired);
         return repaired;
     } catch (...) {
         return "";

@@ -92,6 +92,16 @@ struct OpenAIClient::Impl {
     ) {
         auto model = model_for_size(model_size);
 
+        // Prepend /no_think to the first user message (Qwen 3 chat template token)
+        if (config.no_think) {
+            for (auto& m : messages) {
+                if (m.role == "user") {
+                    m.content = "/no_think\n" + m.content;
+                    break;
+                }
+            }
+        }
+
         // If a schema is provided, append it to the last user message
         if (json_schema.has_value()) {
             for (auto it = messages.rbegin(); it != messages.rend(); ++it) {

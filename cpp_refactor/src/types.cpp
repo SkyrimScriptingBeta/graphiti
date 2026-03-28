@@ -54,6 +54,8 @@ void to_json(nlohmann::json& j, const EntityNode& n) {
         {"summary", n.summary},
         {"attributes", n.attributes},
         {"traits", n.traits},
+        {"is_system", n.is_system},
+        {"is_identity", n.is_identity},
         {"agent_ids", n.agent_ids},
         {"source_ids", n.source_ids},
         {"source_contexts", n.source_contexts},
@@ -79,6 +81,10 @@ void from_json(const nlohmann::json& j, EntityNode& n) {
         n.name_embedding = std::nullopt;
     if (j.contains("traits"))
         j.at("traits").get_to(n.traits);
+    if (j.contains("is_system"))
+        j.at("is_system").get_to(n.is_system);
+    if (j.contains("is_identity"))
+        j.at("is_identity").get_to(n.is_identity);
     if (j.contains("agent_ids"))
         j.at("agent_ids").get_to(n.agent_ids);
     if (j.contains("source_ids"))
@@ -203,6 +209,7 @@ void to_json(nlohmann::json& j, const EntityEdge& e) {
         {"valid_at", optional_timepoint_to_json(e.valid_at)},
         {"invalid_at", optional_timepoint_to_json(e.invalid_at)},
         {"attributes", e.attributes},
+        {"is_system", e.is_system},
         {"agent_ids", e.agent_ids},
         {"source_ids", e.source_ids},
         {"source_contexts", e.source_contexts},
@@ -227,6 +234,8 @@ void from_json(const nlohmann::json& j, EntityEdge& e) {
     e.valid_at = optional_timepoint_from_json(j.at("valid_at"));
     e.invalid_at = optional_timepoint_from_json(j.at("invalid_at"));
     j.at("attributes").get_to(e.attributes);
+    if (j.contains("is_system"))
+        j.at("is_system").get_to(e.is_system);
     if (j.contains("fact_embedding") && !j.at("fact_embedding").is_null())
         e.fact_embedding = j.at("fact_embedding").get<std::vector<float>>();
     else

@@ -173,14 +173,36 @@ struct OpenAIClient::Impl {
             std::unordered_map<std::string, int> name_value_counts;
             size_t last_scan_pos = 0;
 
+            // JSON completeness tracking — stop stream when the top-level object closes
+            int json_depth = 0;
+            bool json_started = false;
+            bool in_json_string = false;
+            bool json_escape = false;
+
             result = http().post_json_streaming(
                 config.base_url, "/v1/chat/completions", headers, stream_body.dump(),
                 [&](const std::string& token) -> bool {
                     log_trace("%s", token.c_str());
 
-                    if (loop_threshold <= 0) return true;  // disabled
-
                     stream_accumulator += token;
+
+                    // Track JSON depth char-by-char — when depth returns to 0, JSON is complete
+                    for (char c : token) {
+                        if (json_escape) { json_escape = false; continue; }
+                        if (c == '\\' && in_json_string) { json_escape = true; continue; }
+                        if (c == '"') { in_json_string = !in_json_string; continue; }
+                        if (in_json_string) continue;
+
+                        if (c == '{' || c == '[') { json_depth++; json_started = true; }
+                        if (c == '}' || c == ']') { json_depth--; }
+
+                        if (json_started && json_depth == 0) {
+                            log_trace("\n[graphiti-llm] ✅ JSON complete — stopping stream\n");
+                            return false;  // JSON fully closed, take it and bail
+                        }
+                    }
+
+                    if (loop_threshold <= 0) return true;  // loop detection disabled
 
                     // Periodically scan for "name": "VALUE" patterns
                     // Only scan new content since last check

@@ -28,6 +28,7 @@ struct EntityNode {
     nlohmann::json attributes = nlohmann::json::object();
     std::vector<std::string> traits;
     bool is_system = false;
+    bool is_identity = false;  // true for the Person node that Self → SAME_AS points to
     std::vector<std::string> agent_ids;
     std::vector<std::string> source_ids;
     std::vector<std::string> source_contexts;

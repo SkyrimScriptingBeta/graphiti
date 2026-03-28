@@ -179,15 +179,20 @@ VoidResult Graphiti::initialize_self(const AgentIdentity& id) {
     else
         (void)impl_->driver.save_entity_node(self_node);
 
-    // 2. Create Person entity for the agent
+    // 2. Create Person entity for the agent — UUID is just the lowercase name
+    //    so extraction naturally dedupes into it (extraction produces "keel" → merges with this node)
+    auto person_uuid = id.name;
+    for (auto& c : person_uuid) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
     EntityNode person_node;
-    person_node.uuid = "person_" + id.name;
+    person_node.uuid = person_uuid;
     person_node.name = id.name;
     person_node.group_id = id.group_id;
     person_node.labels = {"Entity", "Person"};
     person_node.created_at = now;
     person_node.summary = id.name + " is the " + id.role + " on the " + id.team + " team.";
     person_node.is_system = true;
+    person_node.is_identity = true;
 
     if (impl_->has_writer())
         (void)impl_->writer_client->save_entity_node(person_node);
@@ -851,6 +856,9 @@ Return edges in this format:
                 (void)impl_->driver.save_entity_node_embedding(node.uuid, node.name_embedding.value());
         }
     }
+
+    // TODO: Filter edges that duplicate system edges (same source+target+type).
+    // Needs a lightweight query method — deferred until driver supports targeted system edge lookup.
 
     for (auto& edge : new_edges) {
         edge.episodes.push_back(episode.uuid);

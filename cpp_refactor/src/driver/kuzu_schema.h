@@ -40,6 +40,7 @@ constexpr std::string_view SCHEMA_QUERIES[] = {
         attributes STRING,
         traits STRING[] DEFAULT [],
         is_system BOOLEAN DEFAULT false,
+        is_identity BOOLEAN DEFAULT false,
         agent_ids STRING[] DEFAULT [],
         source_ids STRING[] DEFAULT [],
         source_contexts STRING[] DEFAULT [],

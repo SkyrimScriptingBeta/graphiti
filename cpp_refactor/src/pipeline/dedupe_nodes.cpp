@@ -7,6 +7,7 @@
 #include <graphiti/embedder.h>
 #include <graphiti/log.h>
 
+#include <algorithm>
 #include <format>
 
 namespace graphiti::pipeline {
@@ -38,8 +39,16 @@ Result<DedupeNodesResult> dedupe_nodes(
             continue;
         }
 
-        // Search existing nodes by name (BM25)
+        // Search existing nodes by name (BM25), then filter out system nodes
+        // so the LLM never sees Self or other infrastructure nodes as merge candidates
         auto search_result = driver.search_entity_nodes_bm25(node.name, group_id, 10);
+        if (search_result.has_value()) {
+            auto& candidates = search_result.value();
+            candidates.erase(
+                std::remove_if(candidates.begin(), candidates.end(),
+                    [](const EntityNode& n) { return n.is_system; }),
+                candidates.end());
+        }
         if (!search_result.has_value() || search_result.value().empty()) {
             log_trace("[graphiti]     → no candidates, keeping as new\n");
             continue;

@@ -486,6 +486,8 @@ SET
     n.summary = $summary,
     n.attributes = $attributes,
     n.traits = $traits,
+    n.is_system = $is_system,
+    n.is_identity = $is_identity,
     n.agent_ids = $agent_ids,
     n.source_ids = $source_ids,
     n.source_contexts = $source_contexts,
@@ -502,6 +504,8 @@ RETURN n.uuid AS uuid)");
     params["summary"] = str_val(node.summary);
     params["attributes"] = str_val(node.attributes.dump());
     params["traits"] = string_list_val(node.traits);
+    params["is_system"] = std::make_unique<kuzu::common::Value>(node.is_system);
+    params["is_identity"] = std::make_unique<kuzu::common::Value>(node.is_identity);
     params["agent_ids"] = string_list_val(node.agent_ids);
     params["source_ids"] = string_list_val(node.source_ids);
     params["source_contexts"] = string_list_val(node.source_contexts);

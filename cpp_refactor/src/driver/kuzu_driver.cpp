@@ -1073,7 +1073,7 @@ LIMIT {})", limit, extra_where, ENTITY_NODE_RETURN, limit);
     // Colons (:), quotes ("), asterisks (*), parentheses can crash the FTS parser
     std::string sanitized_query(query);
     for (auto& c : sanitized_query) {
-        if (c == ':' || c == '"' || c == '*' || c == '(' || c == ')' || c == '~' || c == '^')
+        if (c == ':' || c == '"' || c == '\'' || c == '*' || c == '(' || c == ')' || c == '~' || c == '^' || c == '\\')
             c = ' ';
     }
 
@@ -1140,7 +1140,7 @@ LIMIT {})", limit, extra_where, ENTITY_EDGE_RETURN, limit);
     // Sanitize FTS query — strip special characters that break FTS syntax
     std::string sanitized_query(query);
     for (auto& c : sanitized_query) {
-        if (c == ':' || c == '"' || c == '*' || c == '(' || c == ')' || c == '~' || c == '^')
+        if (c == ':' || c == '"' || c == '\'' || c == '*' || c == '(' || c == ')' || c == '~' || c == '^' || c == '\\')
             c = ' ';
     }
 

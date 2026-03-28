@@ -1,5 +1,6 @@
 #include "kuzu_writer_client.h"
 
+#include <graphiti/log.h>
 #include <ixwebsocket/IXNetSystem.h>
 #include <ixwebsocket/IXWebSocket.h>
 #include <nlohmann/json.hpp>
@@ -162,8 +163,8 @@ VoidResult KuzuWriterClient::connect() {
         }
     }
 
-    fprintf(stderr, "[kuzu-writer-client] Connected to %s (target_db=%s)\n",
-            impl_->uri.c_str(), impl_->target_db.c_str());
+    log_debug("[kuzu-writer-client] Connected to %s (target_db=%s)\n",
+              impl_->uri.c_str(), impl_->target_db.c_str());
     return {};
 }
 

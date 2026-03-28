@@ -12,7 +12,15 @@
 
 namespace graphiti {
 
-static constexpr int MAX_RETRIES = 5;
+static int get_max_retries() {
+    auto* env = std::getenv("GRAPHITI_RETRY_COUNT");
+    return (env && env[0]) ? std::max(0, std::atoi(env)) : 5;
+}
+
+static bool get_accept_last_retry() {
+    auto* env = std::getenv("GRAPHITI_ACCEPT_LAST_FAILED_RETRY");
+    return (env && env[0] == '1');
+}
 
 // Attempt to repair truncated JSON by finding the last complete object in an array
 // and closing all open brackets/braces. Returns empty string if repair fails.
@@ -388,8 +396,11 @@ Result<nlohmann::json> OpenAIClient::generate_response(
 
     int64_t total_input = 0;
     int64_t total_output = 0;
+    const int max_retries = get_max_retries();
+    const bool accept_last = get_accept_last_retry();
+    std::string last_raw_content;  // keep the last failed content for salvage
 
-    for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt) {
+    for (int attempt = 0; attempt <= max_retries; ++attempt) {
         // Pre-call logging
         if (on_attempt) {
             Result<nlohmann::json> empty = std::unexpected(GraphitiError{ErrorCode::ok, ""});
@@ -427,27 +438,27 @@ Result<nlohmann::json> OpenAIClient::generate_response(
 
         // Retry HTTP errors (connection failures, timeouts) with exponential backoff
         if (err.code == ErrorCode::http_error || err.code == ErrorCode::llm_rate_limit) {
-            if (attempt >= MAX_RETRIES) return result;
+            if (attempt >= max_retries) return result;
             int delay_ms = 1000 * (1 << attempt);  // 1s, 2s, 4s, 8s, 16s
             fprintf(stderr, "  [graphiti] LLM call failed (%s), retrying in %dms (attempt %d/%d)\n",
                     err.code == ErrorCode::http_error ? "connection error" : "rate limit",
-                    delay_ms, attempt + 1, MAX_RETRIES);
+                    delay_ms, attempt + 1, max_retries);
             std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
             continue;
         }
 
         // Retry other LLM errors (500s, etc.) with exponential backoff
         if (err.code == ErrorCode::llm_error) {
-            if (attempt >= MAX_RETRIES) return result;
+            if (attempt >= max_retries) return result;
             int delay_ms = 1000 * (1 << attempt);
             fprintf(stderr, "  [graphiti] LLM error: %s, retrying in %dms (attempt %d/%d)\n",
-                    err.message.c_str(), delay_ms, attempt + 1, MAX_RETRIES);
+                    err.message.c_str(), delay_ms, attempt + 1, max_retries);
             std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
             continue;
         }
 
         // Retry on parse errors
-        if (attempt < MAX_RETRIES && err.code == ErrorCode::llm_parse_error) {
+        if (attempt < max_retries && err.code == ErrorCode::llm_parse_error) {
             if (is_truncation_error(err.message)) {
                 // Output was truncated — bump token budget and retry with fresh messages
                 int old_budget = impl_->max_tokens_for_call;
@@ -473,12 +484,43 @@ Result<nlohmann::json> OpenAIClient::generate_response(
             continue;
         }
 
+        // Stash raw content from parse errors for last-retry salvage
+        if (err.code == ErrorCode::llm_parse_error && err.message.find("raw: ") != std::string::npos) {
+            auto raw_pos = err.message.find("raw: ");
+            last_raw_content = err.message.substr(raw_pos + 5);
+        }
+
         return result;
+    }
+
+    // GRAPHITI_ACCEPT_LAST_FAILED_RETRY=1 — try to salvage the last failed response
+    if (accept_last && !last_raw_content.empty()) {
+        auto repaired = repair_truncated_json(last_raw_content);
+        if (!repaired.empty()) {
+            try {
+                auto parsed = nlohmann::json::parse(repaired);
+                log_debug("[graphiti-llm] 🛟 Last retry salvaged via repair (%zu of %zu chars)\n",
+                          repaired.size(), last_raw_content.size());
+                // Record usage
+                std::string prompt_name = "unknown";
+                if (json_schema.has_value()) {
+                    try {
+                        auto schema_json = nlohmann::json::parse(*json_schema);
+                        if (schema_json.contains("title"))
+                            prompt_name = schema_json["title"].get<std::string>();
+                    } catch (...) {}
+                }
+                token_tracker.record(prompt_name, total_input, total_output);
+                return parsed;
+            } catch (...) {
+                log_debug("[graphiti-llm] 💀 Last retry salvage failed — repair didn't parse\n");
+            }
+        }
     }
 
     return std::unexpected(GraphitiError{
         ErrorCode::llm_error,
-        std::format("Max retries ({}) exceeded", MAX_RETRIES)
+        std::format("Max retries ({}) exceeded", max_retries)
     });
 }
 

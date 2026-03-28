@@ -164,6 +164,9 @@ struct OpenAIClient::Impl {
         auto t0 = std::chrono::steady_clock::now();
 
         Result<HttpResponse> result;
+        bool json_complete_flag = false;
+        std::string stream_content;
+
         if (config.stream) {
             auto stream_body = request_body;
             stream_body["stream"] = true;
@@ -177,7 +180,7 @@ struct OpenAIClient::Impl {
                 loop_threshold = env ? std::atoi(env) : 5;
             }
             bool stream_aborted = false;
-            std::string stream_accumulator;
+            auto& stream_accumulator = stream_content;  // alias for outer scope access
             std::unordered_map<std::string, int> name_value_counts;
             size_t last_scan_pos = 0;
 
@@ -186,6 +189,7 @@ struct OpenAIClient::Impl {
             bool json_started = false;
             bool in_json_string = false;
             bool json_escape = false;
+            bool json_complete = false;
 
             result = http().post_json_streaming(
                 config.base_url, "/v1/chat/completions", headers, stream_body.dump(),
@@ -206,6 +210,8 @@ struct OpenAIClient::Impl {
 
                         if (json_started && json_depth == 0) {
                             log_trace("\n[graphiti-llm] ✅ JSON complete — stopping stream\n");
+                            json_complete = true;
+                            json_complete_flag = true;
                             return false;  // JSON fully closed, take it and bail
                         }
                     }
@@ -253,6 +259,18 @@ struct OpenAIClient::Impl {
 
         auto llm_ms = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - t0).count();
+
+        // If JSON completeness killed the stream, the HTTP client reports an error.
+        // But we have valid JSON in stream_accumulator — synthesize a success.
+        if (!result.has_value() && json_complete_flag && !stream_content.empty()) {
+            log_trace("[graphiti-llm] ✓ JSON complete (stream killed intentionally) after %.0fms (%zu chars)\n",
+                      llm_ms, stream_content.size());
+            nlohmann::json fake_resp = {
+                {"choices", {{{"message", {{"content", stream_content}}}}}},
+                {"usage", {{"prompt_tokens", 0}, {"completion_tokens", 0}}}
+            };
+            result = HttpResponse{200, fake_resp.dump()};
+        }
 
         if (!result.has_value()) {
             log_trace("[graphiti-llm] ✗ HTTP failed after %.0fms: %s\n",

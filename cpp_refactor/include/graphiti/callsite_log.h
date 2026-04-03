@@ -52,7 +52,21 @@ inline void callsite_log_close() {
 
 inline void log_callsite(const char* callsite_id) {
     auto* f = callsite_log_file();
-    if (!f) return;
+    if (!f) {
+        // Lazy init from env vars: GRAPHITI_CALLSITE_DIR + GRAPHITI_CALLSITE_NAME
+        static thread_local bool tried = false;
+        if (!tried) {
+            tried = true;
+            auto* dir = std::getenv("GRAPHITI_CALLSITE_DIR");
+            auto* name = std::getenv("GRAPHITI_CALLSITE_NAME");
+            if (dir && dir[0] && name && name[0]) {
+                callsite_log_set_dir(dir);
+                callsite_log_open(name);
+                f = callsite_log_file();
+            }
+        }
+        if (!f) return;
+    }
 
     auto now = std::chrono::system_clock::now();
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();

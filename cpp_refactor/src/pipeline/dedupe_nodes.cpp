@@ -6,6 +6,7 @@
 
 #include <graphiti/embedder.h>
 #include <graphiti/log.h>
+#include <graphiti/callsite_log.h>
 
 #include <algorithm>
 #include <format>
@@ -41,6 +42,7 @@ Result<DedupeNodesResult> dedupe_nodes(
 
         // Search existing nodes by name (BM25), then filter out system nodes
         // so the LLM never sees Self or other infrastructure nodes as merge candidates
+        graphiti::log_callsite("dedupe-nodes-find-candidates");
         auto search_result = driver.search_entity_nodes_bm25(node.name, group_id, 10);
         if (search_result.has_value()) {
             auto& candidates = search_result.value();

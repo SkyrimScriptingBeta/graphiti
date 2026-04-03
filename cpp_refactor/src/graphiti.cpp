@@ -22,6 +22,7 @@
 #include "utils/uuid.h"
 
 #include <graphiti/log.h>
+#include <graphiti/callsite_log.h>
 
 #include <algorithm>
 #include <format>
@@ -155,8 +156,10 @@ Graphiti& Graphiti::operator=(Graphiti&&) noexcept = default;
 
 VoidResult Graphiti::build_indices() {
     std::lock_guard lock(impl_->mu);
+    graphiti::log_callsite("build-indices-setup-schema");
     auto r = impl_->driver.setup_schema();
     if (!r.has_value()) return r;
+    graphiti::log_callsite("build-indices-fts");
     return impl_->driver.build_fts_indices();
 }
 
@@ -174,6 +177,7 @@ VoidResult Graphiti::initialize_self(const AgentIdentity& id) {
     self_node.summary = id.name + " — this is me. This node represents the owner of this graph.";
     self_node.is_system = true;
 
+    graphiti::log_callsite("init-self-save-self-node");
     if (impl_->has_writer())
         (void)impl_->writer_client->save_entity_node(self_node);
     else
@@ -194,6 +198,7 @@ VoidResult Graphiti::initialize_self(const AgentIdentity& id) {
     person_node.is_system = true;
     person_node.is_identity = true;
 
+    graphiti::log_callsite("init-self-save-person-node");
     if (impl_->has_writer())
         (void)impl_->writer_client->save_entity_node(person_node);
     else
@@ -209,6 +214,7 @@ VoidResult Graphiti::initialize_self(const AgentIdentity& id) {
     role_node.summary = id.role_description;
     role_node.is_system = true;
 
+    graphiti::log_callsite("init-self-save-role-node");
     if (impl_->has_writer())
         (void)impl_->writer_client->save_entity_node(role_node);
     else
@@ -227,6 +233,7 @@ VoidResult Graphiti::initialize_self(const AgentIdentity& id) {
         edge.created_at = now;
         edge.is_system = true;
 
+        graphiti::log_callsite("init-self-save-identity-edges");
         if (impl_->has_writer())
             (void)impl_->writer_client->save_entity_edge(edge);
         else
@@ -249,6 +256,7 @@ VoidResult Graphiti::initialize_self(const AgentIdentity& id) {
               id.name.c_str(), id.role.c_str(), id.team.c_str());
 
     // Rebuild FTS so dedup can find these entities
+    graphiti::log_callsite("init-self-rebuild-fts");
     if (impl_->has_writer())
         (void)impl_->writer_client->build_fts_indices();
     else
@@ -262,6 +270,7 @@ Result<int> Graphiti::sweep_orphans(std::string_view group_id) {
     std::string gid(group_id);
 
     // Find all entities in this group
+    graphiti::log_callsite("sweep-orphans-find-all-entities");
     auto all_result = impl_->driver.search_entity_nodes_bm25("*", gid, 500);
     if (!all_result) return 0;
 
@@ -435,6 +444,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
 
     // 1. Retrieve previous episodes for context
     log_trace("[graphiti] → Step 1: retrieve_episodes...\n");
+    graphiti::log_callsite("episode-retrieve-prior-episodes");
     auto prev_result = impl_->driver.retrieve_episodes(gid, opts.reference_time, 10, opts.source);
     log_trace("[graphiti] ✓ Step 1: retrieve_episodes done (%s)\n",
               prev_result.has_value() ? std::to_string(prev_result->size()).c_str() : "failed");
@@ -468,6 +478,7 @@ Result<AddEpisodeResult> Graphiti::add_episode(AddEpisodeOptions opts) {
         episode.content.clear();
     }
 
+    graphiti::log_callsite("episode-save-episodic-node");
     auto save_ep = impl_->has_writer()
         ? impl_->writer_client->save_episodic_node(episode)
         : impl_->driver.save_episodic_node(episode);
@@ -803,6 +814,7 @@ Return edges in this format:
         }
         if (is_existing) {
             // Merge attribution ids into the existing node
+            graphiti::log_callsite("episode-fetch-existing-for-merge");
             auto existing = impl_->has_writer()
                 ? impl_->writer_client->get_entity_node(node.uuid)
                 : impl_->driver.get_entity_node(node.uuid);
@@ -837,6 +849,7 @@ Return edges in this format:
                 }
 
                 if (changed) {
+                    graphiti::log_callsite("episode-save-merged-entity");
                     if (impl_->has_writer())
                         (void)impl_->writer_client->save_entity_node(ex);
                     else
@@ -844,12 +857,14 @@ Return edges in this format:
                 }
             }
         } else {
+            graphiti::log_callsite("episode-save-new-entity");
             if (impl_->has_writer())
                 (void)impl_->writer_client->save_entity_node(node);
             else
                 (void)impl_->driver.save_entity_node(node);
         }
         if (node.name_embedding.has_value()) {
+            graphiti::log_callsite("episode-save-entity-embedding");
             if (impl_->has_writer())
                 (void)impl_->writer_client->save_entity_node_embedding(node.uuid, node.name_embedding.value());
             else
@@ -862,11 +877,13 @@ Return edges in this format:
 
     for (auto& edge : new_edges) {
         edge.episodes.push_back(episode.uuid);
+        graphiti::log_callsite("episode-save-entity-edge");
         if (impl_->has_writer())
             (void)impl_->writer_client->save_entity_edge(edge);
         else
             (void)impl_->driver.save_entity_edge(edge);
         if (edge.fact_embedding.has_value()) {
+            graphiti::log_callsite("episode-save-edge-embedding");
             if (impl_->has_writer())
                 (void)impl_->writer_client->save_entity_edge_embedding(edge.uuid, edge.fact_embedding.value());
             else
@@ -876,11 +893,13 @@ Return edges in this format:
 
     // Invalidate contradicted edges
     for (auto& uuid : edge_dedup.invalidated_uuids) {
+        graphiti::log_callsite("episode-fetch-contradicted-edge");
         auto edge_result = impl_->driver.get_entity_edge(uuid);
         if (edge_result.has_value()) {
             auto& edge = edge_result.value();
             edge.expired_at = now;
             edge.invalid_at = now;
+            graphiti::log_callsite("episode-invalidate-contradicted-edge");
             if (impl_->has_writer())
                 (void)impl_->writer_client->save_entity_edge(edge);
             else
@@ -905,6 +924,7 @@ Return edges in this format:
             ee.source_id = episode.source_id;
             ee.source_context = episode.source_context;
             ee.participant_ids = episode.participant_ids;
+            graphiti::log_callsite("episode-save-mentions-edge");
             (void)impl_->writer_client->save_episodic_edge(ee);
         }
     } else {
@@ -916,6 +936,7 @@ Return edges in this format:
     // 10b. Rebuild FTS indices so subsequent BM25 searches find newly persisted entities.
     // Kuzu FTS indices are NOT incremental — they must be dropped and re-created after inserts.
     log_trace("[graphiti] → Rebuilding FTS indices...\n");
+    graphiti::log_callsite("episode-rebuild-fts-after-persist");
     if (impl_->has_writer())
         (void)impl_->writer_client->build_fts_indices();
     else
@@ -926,6 +947,7 @@ Return edges in this format:
     log_trace("[graphiti] → Step 11: saga processing...\n");
     if (opts.saga.has_value() && !opts.saga.value().empty()) {
         // Get or create saga node
+        graphiti::log_callsite("episode-find-saga");
         auto existing = impl_->has_writer()
             ? impl_->writer_client->get_saga_by_name(opts.saga.value(), gid)
             : impl_->driver.get_saga_by_name(opts.saga.value(), gid);
@@ -937,6 +959,7 @@ Return edges in this format:
             saga_node.name = opts.saga.value();
             saga_node.group_id = gid;
             saga_node.created_at = now;
+            graphiti::log_callsite("episode-save-saga-node");
             if (impl_->has_writer())
                 (void)impl_->writer_client->save_saga_node(saga_node);
             else
@@ -948,6 +971,7 @@ Return edges in this format:
         if (opts.saga_previous_episode_uuid.has_value() && !opts.saga_previous_episode_uuid.value().empty()) {
             prev_ep_uuid = opts.saga_previous_episode_uuid.value();
         } else {
+            graphiti::log_callsite("episode-find-last-in-saga");
             auto last = impl_->has_writer()
                 ? impl_->writer_client->get_last_episode_in_saga(saga_node.uuid, episode.uuid)
                 : impl_->driver.get_last_episode_in_saga(saga_node.uuid, episode.uuid);
@@ -958,6 +982,7 @@ Return edges in this format:
 
         // Create NEXT_EPISODE edge (prev -> current)
         if (!prev_ep_uuid.empty()) {
+            graphiti::log_callsite("episode-save-next-episode-edge");
             if (impl_->has_writer())
                 (void)impl_->writer_client->save_next_episode_edge(
                     uuid::generate(), prev_ep_uuid, episode.uuid, gid, now);
@@ -967,6 +992,7 @@ Return edges in this format:
         }
 
         // Create HAS_EPISODE edge (saga -> current episode)
+        graphiti::log_callsite("episode-save-has-episode-edge");
         if (impl_->has_writer())
             (void)impl_->writer_client->save_has_episode_edge(
                 uuid::generate(), saga_node.uuid, episode.uuid, gid, now);
@@ -989,6 +1015,7 @@ Return edges in this format:
     // Discard raw episode content from DB if configured
     if (!impl_->config.store_raw_episode_content) {
         episode.content.clear();
+        graphiti::log_callsite("episode-resave-cleared-content");
         if (impl_->has_writer())
             (void)impl_->writer_client->save_episodic_node(episode);
         else
@@ -1051,6 +1078,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     }
 
     for (auto& ep : episodes) {
+        graphiti::log_callsite("bulk-save-episodic-node");
         auto r = impl_->has_writer()
             ? impl_->writer_client->save_episodic_node(ep)
             : impl_->driver.save_episodic_node(ep);
@@ -1070,6 +1098,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     episode_contexts.reserve(episodes.size());
 
     for (auto& ep : episodes) {
+        graphiti::log_callsite("bulk-retrieve-prior-episodes");
         auto prev = impl_->driver.retrieve_episodes(gid, ep.valid_at, 10, ep.source);
         nlohmann::json ctx = nlohmann::json::array();
         if (prev.has_value()) {
@@ -1522,6 +1551,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
         }
         if (is_existing) {
             // Merge attribution ids into the existing node
+            graphiti::log_callsite("bulk-fetch-existing-for-merge");
             auto existing = impl_->has_writer()
                 ? impl_->writer_client->get_entity_node(node.uuid)
                 : impl_->driver.get_entity_node(node.uuid);
@@ -1557,6 +1587,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                 }
 
                 if (changed) {
+                    graphiti::log_callsite("bulk-save-merged-entity");
                     if (impl_->has_writer())
                         (void)impl_->writer_client->save_entity_node(ex);
                     else
@@ -1564,12 +1595,14 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                 }
             }
         } else {
+            graphiti::log_callsite("bulk-save-new-entity");
             if (impl_->has_writer())
                 (void)impl_->writer_client->save_entity_node(node);
             else
                 (void)impl_->driver.save_entity_node(node);
         }
         if (node.name_embedding.has_value()) {
+            graphiti::log_callsite("bulk-save-entity-embedding");
             if (impl_->has_writer())
                 (void)impl_->writer_client->save_entity_node_embedding(node.uuid, node.name_embedding.value());
             else
@@ -1578,11 +1611,13 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     }
 
     for (auto& edge : final_edges) {
+        graphiti::log_callsite("bulk-save-entity-edge");
         if (impl_->has_writer())
             (void)impl_->writer_client->save_entity_edge(edge);
         else
             (void)impl_->driver.save_entity_edge(edge);
         if (edge.fact_embedding.has_value()) {
+            graphiti::log_callsite("bulk-save-edge-embedding");
             if (impl_->has_writer())
                 (void)impl_->writer_client->save_entity_edge_embedding(edge.uuid, edge.fact_embedding.value());
             else
@@ -1625,6 +1660,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                 edge.source_id = episodes[i].source_id;
                 edge.source_context = episodes[i].source_context;
                 edge.participant_ids = episodes[i].participant_ids;
+                graphiti::log_callsite("bulk-save-mentions-edge");
                 (void)impl_->writer_client->save_episodic_edge(edge);
             }
         } else {
@@ -1637,6 +1673,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     // Kuzu FTS indices are NOT incremental — they must be dropped and re-created after inserts.
     // ========================================================================
     log_trace("[graphiti] → Rebuilding FTS indices...\n");
+    graphiti::log_callsite("bulk-rebuild-fts-after-persist");
     if (impl_->has_writer())
         (void)impl_->writer_client->build_fts_indices();
     else
@@ -1647,6 +1684,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     // Step 13: Saga processing (if saga name provided)
     // ========================================================================
     if (opts.saga.has_value() && !opts.saga.value().empty()) {
+        graphiti::log_callsite("bulk-find-saga");
         auto existing = impl_->has_writer()
             ? impl_->writer_client->get_saga_by_name(opts.saga.value(), gid)
             : impl_->driver.get_saga_by_name(opts.saga.value(), gid);
@@ -1658,6 +1696,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
             saga_node.name = opts.saga.value();
             saga_node.group_id = gid;
             saga_node.created_at = now;
+            graphiti::log_callsite("bulk-save-saga-node");
             if (impl_->has_writer())
                 (void)impl_->writer_client->save_saga_node(saga_node);
             else
@@ -1672,6 +1711,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
 
         // Find previous episode already in saga
         std::string prev_ep_uuid;
+        graphiti::log_callsite("bulk-find-last-in-saga");
         auto last = impl_->has_writer()
             ? impl_->writer_client->get_last_episode_in_saga(saga_node.uuid)
             : impl_->driver.get_last_episode_in_saga(saga_node.uuid);
@@ -1683,6 +1723,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
             auto& ep = episodes[idx];
 
             if (!prev_ep_uuid.empty()) {
+                graphiti::log_callsite("bulk-save-next-episode-edge");
                 if (impl_->has_writer())
                     (void)impl_->writer_client->save_next_episode_edge(
                         uuid::generate(), prev_ep_uuid, ep.uuid, gid, now);
@@ -1691,6 +1732,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                         uuid::generate(), prev_ep_uuid, ep.uuid, gid, now);
             }
 
+            graphiti::log_callsite("bulk-save-has-episode-edge");
             if (impl_->has_writer())
                 (void)impl_->writer_client->save_has_episode_edge(
                     uuid::generate(), saga_node.uuid, ep.uuid, gid, now);
@@ -1707,6 +1749,7 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
     if (!impl_->config.store_raw_episode_content) {
         for (auto& ep : episodes) {
             ep.content.clear();
+            graphiti::log_callsite("bulk-resave-cleared-content");
             if (impl_->has_writer())
                 (void)impl_->writer_client->save_episodic_node(ep);
             else
@@ -1772,6 +1815,7 @@ Graphiti::build_communities(const std::vector<std::string>& group_ids) {
 
 VoidResult Graphiti::delete_group(std::string_view group_id) {
     std::lock_guard lock(impl_->mu);
+    graphiti::log_callsite("delete-group-clear-data");
     return impl_->driver.clear_data({std::string(group_id)});
 }
 
@@ -1790,11 +1834,13 @@ Result<std::vector<EpisodicNode>> Graphiti::retrieve_episodes(
     auto gid = impl_->resolve_group_id(group_id);
 
     if (saga.has_value() && !saga.value().empty()) {
+        graphiti::log_callsite("retrieve-episodes-by-saga");
         return impl_->driver.retrieve_episodes_by_saga(
             saga.value(), gid, reference_time, last_n
         );
     }
 
+    graphiti::log_callsite("retrieve-episodes-by-time");
     return impl_->driver.retrieve_episodes(gid, reference_time, last_n, source);
 }
 
@@ -1811,14 +1857,17 @@ Result<SearchResults> Graphiti::get_nodes_and_edges_by_episode(
 
     for (auto& ep_uuid : episode_uuids) {
         // Get the episode itself
+        graphiti::log_callsite("get-by-episode-fetch-episode");
         auto ep = impl_->driver.get_episodic_node(ep_uuid);
         if (ep.has_value()) {
             results.episodes.push_back(std::move(ep.value()));
         }
 
         // Get entity edges that reference this episode
+        graphiti::log_callsite("get-by-episode-edge-uuids");
         auto edge_uuids = impl_->driver.get_edge_uuids_by_episode(ep_uuid);
         if (edge_uuids.has_value()) {
+            graphiti::log_callsite("get-by-episode-fetch-edges");
             auto edges = impl_->driver.get_entity_edges(edge_uuids.value());
             if (edges.has_value()) {
                 for (auto& edge : edges.value()) {
@@ -1828,8 +1877,10 @@ Result<SearchResults> Graphiti::get_nodes_and_edges_by_episode(
         }
 
         // Get mentioned entity nodes
+        graphiti::log_callsite("get-by-episode-mentioned-uuids");
         auto node_uuids = impl_->driver.get_mentioned_entity_uuids(ep_uuid);
         if (node_uuids.has_value()) {
+            graphiti::log_callsite("get-by-episode-fetch-nodes");
             auto nodes = impl_->driver.get_entity_nodes(node_uuids.value());
             if (nodes.has_value()) {
                 for (auto& node : nodes.value()) {
@@ -1850,14 +1901,17 @@ VoidResult Graphiti::remove_episode(std::string_view episode_uuid) {
     std::lock_guard lock(impl_->mu);
 
     // Get edges that reference this episode
+    graphiti::log_callsite("remove-episode-get-edge-uuids");
     auto edge_uuids = impl_->driver.get_edge_uuids_by_episode(episode_uuid);
     if (edge_uuids.has_value()) {
         for (auto& edge_uuid : edge_uuids.value()) {
+            graphiti::log_callsite("remove-episode-check-edge-origin");
             auto edge = impl_->driver.get_entity_edge(edge_uuid);
             if (edge.has_value()) {
                 // Only delete edges first created by this episode
                 if (!edge.value().episodes.empty() &&
                     edge.value().episodes[0] == std::string(episode_uuid)) {
+                    graphiti::log_callsite("remove-episode-delete-edge");
                     (void)impl_->driver.delete_entity_edge(edge_uuid);
                 }
             }
@@ -1865,17 +1919,20 @@ VoidResult Graphiti::remove_episode(std::string_view episode_uuid) {
     }
 
     // Get mentioned entities and delete those only referenced by this episode
+    graphiti::log_callsite("remove-episode-get-mentioned-uuids");
     auto node_uuids = impl_->driver.get_mentioned_entity_uuids(episode_uuid);
     if (node_uuids.has_value()) {
         for (auto& node_uuid : node_uuids.value()) {
             auto count = impl_->driver.count_episode_mentions(node_uuid);
             if (count.has_value() && count.value() <= 1) {
+                graphiti::log_callsite("remove-episode-delete-orphan-node");
                 (void)impl_->driver.delete_entity_node(node_uuid);
             }
         }
     }
 
     // Delete the episode itself (DETACH DELETE removes MENTIONS edges too)
+    graphiti::log_callsite("remove-episode-delete-episode");
     return impl_->driver.delete_episodic_node(episode_uuid);
 }
 
@@ -1915,6 +1972,7 @@ Result<Graphiti::AddTripletResult> Graphiti::add_triplet(
     // Try to find existing nodes by name (simple name-based dedup)
     auto resolve_node = [&](EntityNode& node) {
         if (!node.name_embedding.has_value()) return;
+        graphiti::log_callsite("triplet-dedup-cosine-search");
         auto results = impl_->driver.search_entity_nodes_cosine(
             node.name_embedding.value(), node.group_id, 0.9f, 1
         );
@@ -1936,11 +1994,13 @@ Result<Graphiti::AddTripletResult> Graphiti::add_triplet(
     edge.target_node_uuid = target_node.uuid;
 
     // Save nodes
+    graphiti::log_callsite("triplet-save-source-node");
     if (impl_->has_writer())
         (void)impl_->writer_client->save_entity_node(source_node);
     else
         (void)impl_->driver.save_entity_node(source_node);
     if (source_node.name_embedding.has_value()) {
+        graphiti::log_callsite("triplet-save-source-embedding");
         if (impl_->has_writer())
             (void)impl_->writer_client->save_entity_node_embedding(
                 source_node.uuid, source_node.name_embedding.value());
@@ -1949,11 +2009,13 @@ Result<Graphiti::AddTripletResult> Graphiti::add_triplet(
                 source_node.uuid, source_node.name_embedding.value());
     }
 
+    graphiti::log_callsite("triplet-save-target-node");
     if (impl_->has_writer())
         (void)impl_->writer_client->save_entity_node(target_node);
     else
         (void)impl_->driver.save_entity_node(target_node);
     if (target_node.name_embedding.has_value()) {
+        graphiti::log_callsite("triplet-save-target-embedding");
         if (impl_->has_writer())
             (void)impl_->writer_client->save_entity_node_embedding(
                 target_node.uuid, target_node.name_embedding.value());
@@ -1963,11 +2025,13 @@ Result<Graphiti::AddTripletResult> Graphiti::add_triplet(
     }
 
     // Save edge
+    graphiti::log_callsite("triplet-save-edge");
     if (impl_->has_writer())
         (void)impl_->writer_client->save_entity_edge(edge);
     else
         (void)impl_->driver.save_entity_edge(edge);
     if (edge.fact_embedding.has_value()) {
+        graphiti::log_callsite("triplet-save-edge-embedding");
         if (impl_->has_writer())
             (void)impl_->writer_client->save_entity_edge_embedding(edge.uuid, edge.fact_embedding.value());
         else
@@ -1989,6 +2053,7 @@ Result<SearchResults> Graphiti::get_graph_overview(std::string_view group_id, in
     auto gid = impl_->resolve_group_id(group_id);
 
     // Step 1: Lightweight fetch — only uuid, name, labels per node
+    graphiti::log_callsite("overview-get-node-summaries");
     auto summaries_result = impl_->driver.get_node_summaries_by_group(gid);
     if (!summaries_result) return std::unexpected(summaries_result.error());
     auto& summaries = *summaries_result;
@@ -1998,6 +2063,7 @@ Result<SearchResults> Graphiti::get_graph_overview(std::string_view group_id, in
     std::set<std::string> all_uuids;
     for (auto& s : summaries) all_uuids.insert(s.uuid);
 
+    graphiti::log_callsite("overview-get-edge-summaries");
     auto edges_result = impl_->driver.get_edge_summaries_by_nodes(all_uuids, gid);
     if (!edges_result) return std::unexpected(edges_result.error());
     auto& edge_summaries = *edges_result;
@@ -2102,6 +2168,7 @@ void Graphiti::add_logger(std::unique_ptr<GraphitiLogger> logger) {
 Result<std::vector<EntityNode>> Graphiti::search_entity_nodes_bm25(
     std::string_view query, std::string_view group_id, int limit,
     const SearchFilters* filters) {
+    graphiti::log_callsite("public-bm25-node-search");
     return impl_->driver.search_entity_nodes_bm25(query, group_id, limit, filters);
 }
 

@@ -7,6 +7,7 @@
 
 #include <graphiti/embedder.h>
 #include <graphiti/llm_client.h>
+#include <graphiti/callsite_log.h>
 
 #include <format>
 #include <unordered_map>
@@ -41,7 +42,9 @@ Result<SearchResult> hybrid_edge_search(
     }
 
     // Run BM25 and cosine searches
+    graphiti::log_callsite("hybrid-edge-bm25");
     auto bm25_result = driver.search_entity_edges_bm25(query, group_id, limit, filters);
+    graphiti::log_callsite("hybrid-edge-cosine");
     auto cosine_result = driver.search_entity_edges_cosine(query_embedding, group_id, 0.0f, limit, filters);
 
     // Collect all edges by UUID for final assembly
@@ -142,7 +145,9 @@ Result<NodeSearchResult> hybrid_node_search(
     }
 
     // Run BM25 and cosine searches
+    graphiti::log_callsite("hybrid-node-bm25");
     auto bm25_result = driver.search_entity_nodes_bm25(query, group_id, limit, filters);
+    graphiti::log_callsite("hybrid-node-cosine");
     auto cosine_result = driver.search_entity_nodes_cosine(query_embedding, group_id, 0.0f, limit, filters);
 
     // Collect all nodes by UUID for final assembly
@@ -208,6 +213,7 @@ Result<EpisodeSearchResult> episode_search(
     std::string_view group_id,
     int limit
 ) {
+    graphiti::log_callsite("episode-search-bm25");
     auto bm25_result = driver.search_episodes_bm25(query, group_id, limit);
     if (!bm25_result.has_value()) return std::unexpected(bm25_result.error());
 
@@ -272,6 +278,7 @@ Result<SearchResults> search_orchestrator(
         std::vector<std::string> bm25_uuids, cosine_uuids, bfs_uuids;
 
         if (do_bm25) {
+            graphiti::log_callsite("orch-edge-bm25");
             auto r = driver.search_entity_edges_bm25(query, group_id, limit, filters);
             if (r.has_value()) {
                 for (auto& edge : r.value()) {
@@ -282,6 +289,7 @@ Result<SearchResults> search_orchestrator(
         }
 
         if (do_cosine) {
+            graphiti::log_callsite("orch-edge-cosine");
             auto r = driver.search_entity_edges_cosine(
                 query_embedding, group_id, ec.sim_min_score, limit, filters);
             if (r.has_value()) {
@@ -346,6 +354,7 @@ Result<SearchResults> search_orchestrator(
                 // Build candidate embeddings map
                 std::unordered_map<std::string, std::vector<float>> candidates;
                 for (auto& uuid : rrf_uuids) {
+                    graphiti::log_callsite("orch-edge-load-embedding-mmr");
                     auto emb = driver.load_entity_edge_embedding(uuid);
                     if (emb.has_value() && emb.value().has_value()) {
                         candidates[uuid] = std::move(emb.value().value());
@@ -434,6 +443,7 @@ Result<SearchResults> search_orchestrator(
         std::vector<std::string> bm25_uuids, cosine_uuids, bfs_uuids;
 
         if (do_bm25) {
+            graphiti::log_callsite("orch-node-bm25");
             auto r = driver.search_entity_nodes_bm25(query, group_id, limit, filters);
             if (r.has_value()) {
                 for (auto& node : r.value()) {
@@ -444,6 +454,7 @@ Result<SearchResults> search_orchestrator(
         }
 
         if (do_cosine) {
+            graphiti::log_callsite("orch-node-cosine");
             auto r = driver.search_entity_nodes_cosine(
                 query_embedding, group_id, nc.sim_min_score, limit, filters);
             if (r.has_value()) {
@@ -506,6 +517,7 @@ Result<SearchResults> search_orchestrator(
                 auto [rrf_uuids, _] = rrf({bm25_uuids, cosine_uuids, bfs_uuids});
                 std::unordered_map<std::string, std::vector<float>> candidates;
                 for (auto& uuid : rrf_uuids) {
+                    graphiti::log_callsite("orch-node-load-embedding-mmr");
                     auto emb = driver.load_entity_node_embedding(uuid);
                     if (emb.has_value() && emb.value().has_value()) {
                         candidates[uuid] = std::move(emb.value().value());
@@ -595,6 +607,7 @@ Result<SearchResults> search_orchestrator(
         std::vector<std::string> bm25_uuids, cosine_uuids;
 
         if (do_bm25) {
+            graphiti::log_callsite("orch-community-bm25");
             auto r = driver.search_communities_bm25(query, group_id, limit);
             if (r.has_value()) {
                 for (auto& c : r.value()) {
@@ -605,6 +618,7 @@ Result<SearchResults> search_orchestrator(
         }
 
         if (do_cosine && !query_embedding.empty()) {
+            graphiti::log_callsite("orch-community-cosine");
             auto r = driver.search_communities_cosine(
                 query_embedding, group_id, cc.sim_min_score, limit);
             if (r.has_value()) {
@@ -648,6 +662,7 @@ Result<SearchResults> search_orchestrator(
         }
 
         if (!missing_uuids.empty()) {
+            graphiti::log_callsite("orch-resolve-missing-nodes");
             auto fetched = driver.get_entity_nodes(missing_uuids);
             if (fetched.has_value()) {
                 for (auto& n : fetched.value()) {

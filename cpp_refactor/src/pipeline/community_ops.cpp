@@ -6,6 +6,7 @@
 
 #include <graphiti/embedder.h>
 #include <graphiti/llm_client.h>
+#include <graphiti/callsite_log.h>
 
 #include <algorithm>
 #include <chrono>
@@ -192,6 +193,7 @@ Result<std::vector<std::vector<EntityNode>>> get_community_clusters(
     // Resolve group_ids: if empty, query all distinct group_ids
     std::vector<std::string> resolved_groups = group_ids;
     if (resolved_groups.empty()) {
+        graphiti::log_callsite("community-get-all-groups");
         auto all_groups = driver.get_all_group_ids();
         if (!all_groups.has_value()) return std::unexpected(all_groups.error());
         resolved_groups = std::move(all_groups.value());
@@ -201,6 +203,7 @@ Result<std::vector<std::vector<EntityNode>>> get_community_clusters(
 
     for (auto& gid : resolved_groups) {
         // Get all entities in this group
+        graphiti::log_callsite("community-get-entities-for-clustering");
         auto nodes_result = driver.get_entity_nodes_by_group(gid);
         if (!nodes_result.has_value()) return std::unexpected(nodes_result.error());
         auto& nodes = nodes_result.value();
@@ -211,6 +214,7 @@ Result<std::vector<std::vector<EntityNode>>> get_community_clusters(
         std::unordered_map<std::string, std::vector<Neighbor>> projection;
 
         for (auto& node : nodes) {
+            graphiti::log_callsite("community-get-entity-neighbors");
             auto neighbors_result = driver.get_entity_neighbors(node.uuid, gid);
             if (!neighbors_result.has_value()) return std::unexpected(neighbors_result.error());
 
@@ -226,6 +230,7 @@ Result<std::vector<std::vector<EntityNode>>> get_community_clusters(
 
         // Resolve UUID clusters back to EntityNode objects
         for (auto& uuid_cluster : cluster_uuids) {
+            graphiti::log_callsite("community-resolve-cluster-nodes");
             auto entity_result = driver.get_entity_nodes(uuid_cluster);
             if (!entity_result.has_value()) return std::unexpected(entity_result.error());
             if (!entity_result.value().empty()) {
@@ -242,6 +247,7 @@ Result<std::vector<std::vector<EntityNode>>> get_community_clusters(
 // ============================================================================
 
 VoidResult remove_communities(KuzuDriver& driver) {
+    graphiti::log_callsite("community-remove-all");
     return driver.remove_all_communities();
 }
 
@@ -365,14 +371,17 @@ Result<std::pair<std::vector<CommunityNode>, std::vector<CommunityEdge>>> build_
         auto& [node, edges] = community_result.value();
 
         // Step 4: Persist community node and edges
+        graphiti::log_callsite("community-save-node");
         auto save_node = driver.save_community_node(node);
         if (!save_node.has_value()) continue;
 
         if (node.name_embedding.has_value()) {
+            graphiti::log_callsite("community-save-node-embedding");
             (void)driver.save_community_node_embedding(node.uuid, node.name_embedding.value());
         }
 
         for (auto& edge : edges) {
+            graphiti::log_callsite("community-save-member-edge");
             (void)driver.save_community_edge(edge);
         }
 
@@ -394,6 +403,7 @@ Result<std::optional<std::pair<CommunityNode, bool>>> determine_entity_community
     std::string_view entity_uuid
 ) {
     // Check if entity already has a community
+    graphiti::log_callsite("community-check-existing-membership");
     auto existing = driver.get_entity_community(entity_uuid);
     if (!existing.has_value()) return std::unexpected(existing.error());
 
@@ -402,6 +412,7 @@ Result<std::optional<std::pair<CommunityNode, bool>>> determine_entity_community
     }
 
     // Find the mode community among neighbors
+    graphiti::log_callsite("community-find-neighbor-communities");
     auto neighbors = driver.get_neighbor_communities(entity_uuid);
     if (!neighbors.has_value()) return std::unexpected(neighbors.error());
 
@@ -475,6 +486,7 @@ Result<std::pair<std::vector<CommunityNode>, std::vector<CommunityEdge>>> update
             .target_node_uuid = entity.uuid,
             .created_at = now,
         };
+        graphiti::log_callsite("community-update-add-member-edge");
         auto save_edge = driver.save_community_edge(edge);
         if (!save_edge.has_value()) return std::unexpected(save_edge.error());
         result_edges.push_back(std::move(edge));
@@ -488,10 +500,12 @@ Result<std::pair<std::vector<CommunityNode>, std::vector<CommunityEdge>>> update
     community.name_embedding = std::move(name_embedding);
 
     // Save updated community
+    graphiti::log_callsite("community-update-save-node");
     auto save_node = driver.save_community_node(community);
     if (!save_node.has_value()) return std::unexpected(save_node.error());
 
     if (community.name_embedding.has_value()) {
+        graphiti::log_callsite("community-update-save-embedding");
         (void)driver.save_community_node_embedding(community.uuid, community.name_embedding.value());
     }
 

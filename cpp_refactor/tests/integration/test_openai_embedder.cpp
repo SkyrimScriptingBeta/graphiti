@@ -1,5 +1,7 @@
 #include <catch2/catch_all.hpp>
 
+#include <graphiti/config.h>
+
 #include "embedder/openai_embedder.h"
 
 #include <cmath>
@@ -13,9 +15,8 @@ static EmbedderConfig make_config() {
     if (!key || std::string(key).empty()) {
         SKIP("OPENAI_API_KEY not set");
     }
-    EmbedderConfig config;
-    config.api_key = key;
-    return config;
+    auto full = GraphitiConfig::from_env();
+    return full.embedder;
 }
 
 TEST_CASE("OpenAI Embedder: single embedding", "[integration][embedder]") {

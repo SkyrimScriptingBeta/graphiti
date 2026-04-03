@@ -14,10 +14,8 @@ static GraphitiConfig make_config() {
     if (!key || std::string(key).empty()) {
         SKIP("OPENAI_API_KEY not set");
     }
-    GraphitiConfig config;
+    auto config = GraphitiConfig::from_env();
     config.db_path = ":memory:";
-    config.llm.api_key = key;
-    config.embedder.api_key = key;
     return config;
 }
 

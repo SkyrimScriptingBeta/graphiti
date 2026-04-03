@@ -1,6 +1,8 @@
 #include <catch2/catch_all.hpp>
 #include <nlohmann/json.hpp>
 
+#include <graphiti/config.h>
+
 #include "llm/openai_client.h"
 #include "llm/response_models.h"
 
@@ -15,9 +17,8 @@ static LLMConfig make_config() {
     if (!key || std::string(key).empty()) {
         SKIP("OPENAI_API_KEY not set");
     }
-    LLMConfig config;
-    config.api_key = key;
-    return config;
+    auto full = GraphitiConfig::from_env();
+    return full.llm;
 }
 
 TEST_CASE("OpenAI LLM: simple JSON response", "[integration][llm]") {

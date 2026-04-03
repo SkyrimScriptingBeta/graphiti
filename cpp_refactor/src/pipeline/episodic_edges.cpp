@@ -3,6 +3,8 @@
 #include "driver/kuzu_driver.h"
 #include "utils/uuid.h"
 
+#include <graphiti/callsite_log.h>
+
 namespace graphiti::pipeline {
 
 VoidResult create_episodic_edges(
@@ -24,6 +26,7 @@ VoidResult create_episodic_edges(
         edge.source_context = episode.source_context;
         edge.participant_ids = episode.participant_ids;
 
+        graphiti::log_callsite("episodic-edges-save-mentions");
         auto result = driver.save_episodic_edge(edge);
         if (!result.has_value()) {
             return result;

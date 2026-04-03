@@ -6,6 +6,7 @@
 #include "utils/datetime.h"
 
 #include <graphiti/log.h>
+#include <graphiti/callsite_log.h>
 
 #include <format>
 #include <set>
@@ -26,6 +27,7 @@ Result<DedupeEdgesResult> dedupe_edges(
                   ei + 1, extracted_edges.size(), new_edge.fact.c_str());
 
         // Find existing edges between the same source and target nodes
+        graphiti::log_callsite("dedupe-edges-find-existing");
         auto existing_result = driver.get_edges_between_nodes(
             new_edge.source_node_uuid, new_edge.target_node_uuid
         );

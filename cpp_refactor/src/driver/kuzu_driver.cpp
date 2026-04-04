@@ -145,7 +145,7 @@ auto get_json_attr(kuzu::common::Value* v) -> nlohmann::json {
 // ============================================================================
 
 // Columns: uuid(0), name(1), group_id(2), labels(3), created_at(4), summary(5), attributes(6),
-//          agent_ids(7), source_ids(8), source_contexts(9), participant_ids(10)
+//          traits(7), agent_ids(8), source_ids(9), source_contexts(10), participant_ids(11)
 auto entity_from_row(kuzu::main::QueryResult* result) -> EntityNode {
     auto tuple = result->getNext();
     return EntityNode{
@@ -157,10 +157,11 @@ auto entity_from_row(kuzu::main::QueryResult* result) -> EntityNode {
         .name_embedding = std::nullopt,
         .summary = get_str(tuple->getValue(5)),
         .attributes = get_json_attr(tuple->getValue(6)),
-        .agent_ids = get_string_list(tuple->getValue(7)),
-        .source_ids = get_string_list(tuple->getValue(8)),
-        .source_contexts = get_string_list(tuple->getValue(9)),
-        .participant_ids = get_string_list(tuple->getValue(10)),
+        .traits = get_string_list(tuple->getValue(7)),
+        .agent_ids = get_string_list(tuple->getValue(8)),
+        .source_ids = get_string_list(tuple->getValue(9)),
+        .source_contexts = get_string_list(tuple->getValue(10)),
+        .participant_ids = get_string_list(tuple->getValue(11)),
     };
 }
 

@@ -298,13 +298,17 @@ TEST_CASE("Response models handle missing required fields", "[response_models][e
         CHECK_THROWS(j.get<ExtractedEntity>());
     }
 
-    SECTION("ExtractedEdge missing fact") {
+    SECTION("ExtractedEdge missing fact defaults to empty string") {
         auto j = json::parse(R"({
             "source_entity_name": "A",
             "target_entity_name": "B",
             "relation_type": "KNOWS"
         })");
-        CHECK_THROWS(j.get<ExtractedEdge>());
+        // fact is optional — missing fact → empty string, not an exception
+        auto edge = j.get<ExtractedEdge>();
+        CHECK(edge.fact.empty());
+        CHECK(edge.source_entity_name == "A");
+        CHECK(edge.target_entity_name == "B");
     }
 
     SECTION("EdgeDuplicate missing contradicted_facts") {

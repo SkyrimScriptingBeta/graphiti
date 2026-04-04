@@ -1,18 +1,17 @@
-// 🏴‍☠️ KuzuGraphStore — Kuzu implementation of the GraphStore interface
+// KuzuGraphStore — Kuzu implementation of the GraphStore interface
 //
-// Delegates to KuzuDriver for now. The Kuzu-specific query logic lives in
-// kuzu_driver.cpp and will eventually move here as the driver gets absorbed.
+// Self-contained: owns the database connection and all query logic directly.
 
 #pragma once
 
 #include <graphiti/graph_store.h>
-#include "kuzu_driver.h"
 
 #include <memory>
 #include <string>
 
 namespace kuzu::main {
 class Database;
+class Connection;
 } // namespace kuzu::main
 
 namespace graphiti {
@@ -132,7 +131,8 @@ public:
     kuzu::main::Connection* connection() const;
 
 private:
-    KuzuDriver driver_;
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 } // namespace graphiti

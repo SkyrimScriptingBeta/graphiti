@@ -4,7 +4,7 @@
 
 #include <graphiti/graph_store.h>
 #include "driver/kuzu_graph_store.h"
-#include "driver/kuzu_driver.h"
+// OLD_KUZU: was #include "driver/kuzu_driver.h" — absorbed into kuzu_graph_store
 #include "remote/kuzu_writer_client.h"
 #include "embedder/openai_embedder.h"
 #include "llm/openai_client.h"

@@ -25,6 +25,7 @@ add_requires("ixwebsocket")
 add_requires("cli11")
 
 -- Library targets
+includes("lib/graphiti-core/xmake.lua")
 includes("lib/graphiti/xmake.lua")
 
 target("graphiti-sqlite-logger")

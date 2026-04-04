@@ -10,7 +10,7 @@
 
 namespace graphiti {
 
-class KuzuDriver;
+class GraphStore;
 class EmbedderClient;
 class LLMClient;
 
@@ -31,7 +31,7 @@ struct EpisodeSearchResult {
 
 // Hybrid edge search: BM25 + cosine + optional BFS, merged with RRF.
 Result<SearchResult> hybrid_edge_search(
-    KuzuDriver& driver,
+    GraphStore& store,
     EmbedderClient& embedder,
     std::string_view query,
     std::string_view group_id,
@@ -44,7 +44,7 @@ Result<SearchResult> hybrid_edge_search(
 
 // Episode search: BM25 fulltext on episode content.
 Result<EpisodeSearchResult> episode_search(
-    KuzuDriver& driver,
+    GraphStore& store,
     std::string_view query,
     std::string_view group_id,
     int limit = 10
@@ -53,7 +53,7 @@ Result<EpisodeSearchResult> episode_search(
 // Full advanced search orchestrator: runs edge, node, and episode searches
 // based on config, then applies rerankers.
 Result<SearchResults> search_orchestrator(
-    KuzuDriver& driver,
+    GraphStore& store,
     EmbedderClient& embedder,
     LLMClient& llm,
     std::string_view query,

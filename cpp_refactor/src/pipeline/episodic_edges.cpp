@@ -1,6 +1,6 @@
 #include "episodic_edges.h"
 
-#include "driver/kuzu_driver.h"
+#include <graphiti/graph_store.h>
 #include "utils/uuid.h"
 
 #include <graphiti/callsite_log.h>
@@ -8,7 +8,7 @@
 namespace graphiti::pipeline {
 
 VoidResult create_episodic_edges(
-    KuzuDriver& driver,
+    GraphStore& store,
     const EpisodicNode& episode,
     const std::vector<EntityNode>& nodes
 ) {
@@ -27,7 +27,7 @@ VoidResult create_episodic_edges(
         edge.participant_ids = episode.participant_ids;
 
         graphiti::log_callsite("episodic-edges-save-mentions");
-        auto result = driver.save_episodic_edge(edge);
+        auto result = store.persist_mention(edge);
         if (!result.has_value()) {
             return result;
         }

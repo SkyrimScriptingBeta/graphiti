@@ -11,7 +11,7 @@
 #include <vector>
 
 namespace graphiti {
-class KuzuDriver;
+class GraphStore;
 class EmbedderClient;
 } // namespace graphiti
 
@@ -27,7 +27,7 @@ struct DedupeNodesResult {
 // Returns deduplicated nodes and a UUID mapping for updating edge references.
 Result<DedupeNodesResult> dedupe_nodes(
     LLMClient& llm,
-    KuzuDriver& driver,
+    GraphStore& store,
     EmbedderClient& embedder,
     const std::vector<EntityNode>& extracted_nodes,
     const nlohmann::json& previous_episodes,

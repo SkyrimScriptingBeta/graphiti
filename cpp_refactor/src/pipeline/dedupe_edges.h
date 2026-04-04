@@ -8,7 +8,7 @@
 #include <vector>
 
 namespace graphiti {
-class KuzuDriver;
+class GraphStore;
 } // namespace graphiti
 
 namespace graphiti::pipeline {
@@ -23,7 +23,7 @@ struct DedupeEdgesResult {
 // Returns non-duplicate edges and a list of edges to invalidate.
 Result<DedupeEdgesResult> dedupe_edges(
     LLMClient& llm,
-    KuzuDriver& driver,
+    GraphStore& store,
     const std::vector<EntityEdge>& extracted_edges
 );
 

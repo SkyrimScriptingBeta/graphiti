@@ -1,6 +1,6 @@
 #include "search.h"
 
-#include "driver/kuzu_driver.h"
+#include <graphiti/graph_store.h>
 #include "search/bfs_search.h"
 #include "search/rerankers.h"
 #include "search/search_utils.h"
@@ -20,7 +20,7 @@ namespace graphiti {
 // ============================================================================
 
 Result<SearchResult> hybrid_edge_search(
-    KuzuDriver& driver,
+    GraphStore& store,
     EmbedderClient& embedder,
     std::string_view query,
     std::string_view group_id,
@@ -43,9 +43,9 @@ Result<SearchResult> hybrid_edge_search(
 
     // Run BM25 and cosine searches
     graphiti::log_callsite("hybrid-edge-bm25");
-    auto bm25_result = driver.search_entity_edges_bm25(query, group_id, limit, filters);
+    auto bm25_result = store.search_edges_bm25(query, group_id, limit, filters);
     graphiti::log_callsite("hybrid-edge-cosine");
-    auto cosine_result = driver.search_entity_edges_cosine(query_embedding, group_id, 0.0f, limit, filters);
+    auto cosine_result = store.search_edges_cosine(query_embedding, group_id, 0.0f, limit, filters);
 
     // Collect all edges by UUID for final assembly
     std::unordered_map<std::string, EntityEdge> edge_map;
@@ -90,7 +90,7 @@ Result<SearchResult> hybrid_edge_search(
 
     if (origins && !origins->empty()) {
         auto bfs_result = edge_bfs_search(
-            driver, *origins, bfs_max_depth, filters, group_id, 2 * limit
+            store, *origins, bfs_max_depth, filters, group_id, 2 * limit
         );
         if (bfs_result.has_value()) {
             for (auto& edge : bfs_result.value()) {
@@ -130,13 +130,13 @@ Result<SearchResult> hybrid_edge_search(
 // ============================================================================
 
 Result<EpisodeSearchResult> episode_search(
-    KuzuDriver& driver,
+    GraphStore& store,
     std::string_view query,
     std::string_view group_id,
     int limit
 ) {
     graphiti::log_callsite("episode-search-bm25");
-    auto bm25_result = driver.search_episodes_bm25(query, group_id, limit);
+    auto bm25_result = store.search_episodes_bm25(query, group_id, limit);
     if (!bm25_result.has_value()) return std::unexpected(bm25_result.error());
 
     EpisodeSearchResult result;
@@ -154,7 +154,7 @@ Result<EpisodeSearchResult> episode_search(
 // ============================================================================
 
 Result<SearchResults> search_orchestrator(
-    KuzuDriver& driver,
+    GraphStore& store,
     EmbedderClient& embedder,
     LLMClient& llm,
     std::string_view query,
@@ -201,7 +201,7 @@ Result<SearchResults> search_orchestrator(
 
         if (do_bm25) {
             graphiti::log_callsite("orch-edge-bm25");
-            auto r = driver.search_entity_edges_bm25(query, group_id, limit, filters);
+            auto r = store.search_edges_bm25(query, group_id, limit, filters);
             if (r.has_value()) {
                 for (auto& edge : r.value()) {
                     bm25_uuids.push_back(edge.uuid);
@@ -212,7 +212,7 @@ Result<SearchResults> search_orchestrator(
 
         if (do_cosine) {
             graphiti::log_callsite("orch-edge-cosine");
-            auto r = driver.search_entity_edges_cosine(
+            auto r = store.search_edges_cosine(
                 query_embedding, group_id, ec.sim_min_score, limit, filters);
             if (r.has_value()) {
                 for (auto& edge : r.value()) {
@@ -225,7 +225,7 @@ Result<SearchResults> search_orchestrator(
 
         if (do_bfs && bfs_origin_node_uuids && !bfs_origin_node_uuids->empty()) {
             auto r = edge_bfs_search(
-                driver, *bfs_origin_node_uuids, ec.bfs_max_depth, filters, group_id, 2 * limit);
+                store, *bfs_origin_node_uuids, ec.bfs_max_depth, filters, group_id, 2 * limit);
             if (r.has_value()) {
                 for (auto& edge : r.value()) {
                     bfs_uuids.push_back(edge.uuid);
@@ -248,7 +248,7 @@ Result<SearchResults> search_orchestrator(
             }
             case Reranker::episode_mentions: {
                 auto r = episode_mentions_reranker(
-                    driver, {bm25_uuids, cosine_uuids, bfs_uuids}, reranker_min);
+                    store, {bm25_uuids, cosine_uuids, bfs_uuids}, reranker_min);
                 if (r.has_value()) {
                     ranked_uuids = std::move(r.value().first);
                     ranked_scores = std::move(r.value().second);
@@ -260,7 +260,7 @@ Result<SearchResults> search_orchestrator(
                 auto [rrf_uuids, _] = rrf({bm25_uuids, cosine_uuids, bfs_uuids});
                 if (center_node_uuid) {
                     auto r = node_distance_reranker(
-                        driver, rrf_uuids, *center_node_uuid, reranker_min);
+                        store, rrf_uuids, *center_node_uuid, reranker_min);
                     if (r.has_value()) {
                         ranked_uuids = std::move(r.value().first);
                         ranked_scores = std::move(r.value().second);
@@ -277,7 +277,7 @@ Result<SearchResults> search_orchestrator(
                 std::unordered_map<std::string, std::vector<float>> candidates;
                 for (auto& uuid : rrf_uuids) {
                     graphiti::log_callsite("orch-edge-load-embedding-mmr");
-                    auto emb = driver.load_entity_edge_embedding(uuid);
+                    auto emb = store.load_edge_embedding(uuid);
                     if (emb.has_value() && emb.value().has_value()) {
                         candidates[uuid] = std::move(emb.value().value());
                     }
@@ -366,7 +366,7 @@ Result<SearchResults> search_orchestrator(
 
         if (do_bm25) {
             graphiti::log_callsite("orch-node-bm25");
-            auto r = driver.search_entity_nodes_bm25(query, group_id, limit, filters);
+            auto r = store.search_entities_bm25(query, group_id, limit, filters);
             if (r.has_value()) {
                 for (auto& node : r.value()) {
                     bm25_uuids.push_back(node.uuid);
@@ -377,7 +377,7 @@ Result<SearchResults> search_orchestrator(
 
         if (do_cosine) {
             graphiti::log_callsite("orch-node-cosine");
-            auto r = driver.search_entity_nodes_cosine(
+            auto r = store.search_entities_cosine(
                 query_embedding, group_id, nc.sim_min_score, limit, filters);
             if (r.has_value()) {
                 for (auto& node : r.value()) {
@@ -390,7 +390,7 @@ Result<SearchResults> search_orchestrator(
 
         if (do_bfs && bfs_origin_node_uuids && !bfs_origin_node_uuids->empty()) {
             auto r = node_bfs_search(
-                driver, *bfs_origin_node_uuids, nc.bfs_max_depth, filters, group_id, 2 * limit);
+                store, *bfs_origin_node_uuids, nc.bfs_max_depth, filters, group_id, 2 * limit);
             if (r.has_value()) {
                 for (auto& node : r.value()) {
                     bfs_uuids.push_back(node.uuid);
@@ -413,7 +413,7 @@ Result<SearchResults> search_orchestrator(
             }
             case Reranker::episode_mentions: {
                 auto r = episode_mentions_reranker(
-                    driver, {bm25_uuids, cosine_uuids, bfs_uuids}, reranker_min);
+                    store, {bm25_uuids, cosine_uuids, bfs_uuids}, reranker_min);
                 if (r.has_value()) {
                     ranked_uuids = std::move(r.value().first);
                     ranked_scores = std::move(r.value().second);
@@ -424,7 +424,7 @@ Result<SearchResults> search_orchestrator(
                 auto [rrf_uuids, _] = rrf({bm25_uuids, cosine_uuids, bfs_uuids});
                 if (center_node_uuid) {
                     auto r = node_distance_reranker(
-                        driver, rrf_uuids, *center_node_uuid, reranker_min);
+                        store, rrf_uuids, *center_node_uuid, reranker_min);
                     if (r.has_value()) {
                         ranked_uuids = std::move(r.value().first);
                         ranked_scores = std::move(r.value().second);
@@ -440,7 +440,7 @@ Result<SearchResults> search_orchestrator(
                 std::unordered_map<std::string, std::vector<float>> candidates;
                 for (auto& uuid : rrf_uuids) {
                     graphiti::log_callsite("orch-node-load-embedding-mmr");
-                    auto emb = driver.load_entity_node_embedding(uuid);
+                    auto emb = store.load_entity_embedding(uuid);
                     if (emb.has_value() && emb.value().has_value()) {
                         candidates[uuid] = std::move(emb.value().value());
                     }
@@ -499,7 +499,7 @@ Result<SearchResults> search_orchestrator(
 
     // --- Episode search ---
     if (config.episode_config.has_value()) {
-        auto ep_result = episode_search(driver, query, group_id, limit);
+        auto ep_result = episode_search(store, query, group_id, limit);
         if (ep_result.has_value()) {
             results.episodes = std::move(ep_result.value().episodes);
             results.episode_scores = std::move(ep_result.value().scores);
@@ -530,7 +530,7 @@ Result<SearchResults> search_orchestrator(
 
         if (do_bm25) {
             graphiti::log_callsite("orch-community-bm25");
-            auto r = driver.search_communities_bm25(query, group_id, limit);
+            auto r = store.search_communities_bm25(query, group_id, limit);
             if (r.has_value()) {
                 for (auto& c : r.value()) {
                     bm25_uuids.push_back(c.uuid);
@@ -541,7 +541,7 @@ Result<SearchResults> search_orchestrator(
 
         if (do_cosine && !query_embedding.empty()) {
             graphiti::log_callsite("orch-community-cosine");
-            auto r = driver.search_communities_cosine(
+            auto r = store.search_communities_cosine(
                 query_embedding, group_id, cc.sim_min_score, limit);
             if (r.has_value()) {
                 for (auto& c : r.value()) {
@@ -585,7 +585,7 @@ Result<SearchResults> search_orchestrator(
 
         if (!missing_uuids.empty()) {
             graphiti::log_callsite("orch-resolve-missing-nodes");
-            auto fetched = driver.get_entity_nodes(missing_uuids);
+            auto fetched = store.get_entities(missing_uuids);
             if (fetched.has_value()) {
                 for (auto& n : fetched.value()) {
                     results.nodes.push_back(std::move(n));

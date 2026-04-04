@@ -1,6 +1,6 @@
 #include "dedupe_nodes.h"
 
-#include "driver/kuzu_driver.h"
+#include <graphiti/graph_store.h>
 #include "llm/response_models.h"
 #include "prompts/prompts.h"
 
@@ -15,7 +15,7 @@ namespace graphiti::pipeline {
 
 Result<DedupeNodesResult> dedupe_nodes(
     LLMClient& llm,
-    KuzuDriver& driver,
+    GraphStore& store,
     EmbedderClient& embedder,
     const std::vector<EntityNode>& extracted_nodes,
     const nlohmann::json& previous_episodes,
@@ -43,7 +43,7 @@ Result<DedupeNodesResult> dedupe_nodes(
         // Search existing nodes by name (BM25), then filter out system nodes
         // so the LLM never sees Self or other infrastructure nodes as merge candidates
         graphiti::log_callsite("dedupe-nodes-find-candidates");
-        auto search_result = driver.search_entity_nodes_bm25(node.name, group_id, 10);
+        auto search_result = store.search_entities_bm25(node.name, group_id, 10);
         if (search_result.has_value()) {
             auto& candidates = search_result.value();
             candidates.erase(

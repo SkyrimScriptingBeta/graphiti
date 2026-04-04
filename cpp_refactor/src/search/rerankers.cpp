@@ -1,6 +1,6 @@
 #include "rerankers.h"
 
-#include "driver/kuzu_driver.h"
+#include <graphiti/graph_store.h>
 #include "search/search_utils.h"
 
 #include <graphiti/llm_client.h>
@@ -19,7 +19,7 @@ namespace graphiti {
 // ============================================================================
 
 Result<std::pair<std::vector<std::string>, std::vector<float>>> episode_mentions_reranker(
-    KuzuDriver& driver,
+    GraphStore& store,
     const std::vector<std::vector<std::string>>& node_uuid_lists,
     float min_score
 ) {
@@ -30,7 +30,7 @@ Result<std::pair<std::vector<std::string>, std::vector<float>>> episode_mentions
     std::unordered_map<std::string, float> scores;
     for (auto& uuid : sorted_uuids) {
         graphiti::log_callsite("rerank-episode-mention-count");
-        auto count_result = driver.count_episode_mentions(uuid);
+        auto count_result = store.count_episode_mentions(uuid);
         scores[uuid] = count_result.has_value() ? static_cast<float>(count_result.value()) : 0.0f;
     }
 
@@ -59,7 +59,7 @@ Result<std::pair<std::vector<std::string>, std::vector<float>>> episode_mentions
 // ============================================================================
 
 Result<std::pair<std::vector<std::string>, std::vector<float>>> node_distance_reranker(
-    KuzuDriver& driver,
+    GraphStore& store,
     const std::vector<std::string>& node_uuids,
     std::string_view center_node_uuid,
     float min_score
@@ -79,7 +79,7 @@ Result<std::pair<std::vector<std::string>, std::vector<float>>> node_distance_re
     std::unordered_map<std::string, float> raw_scores;
     for (auto& uuid : filtered) {
         graphiti::log_callsite("rerank-node-adjacency-check");
-        auto adj_result = driver.check_node_adjacency(center_node_uuid, uuid);
+        auto adj_result = store.check_node_adjacency(center_node_uuid, uuid);
         if (adj_result.has_value() && adj_result.value()) {
             raw_scores[uuid] = 1.0f;  // 1-hop connected
         } else {

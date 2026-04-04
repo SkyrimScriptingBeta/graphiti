@@ -9,13 +9,13 @@
 
 namespace graphiti {
 
-class KuzuDriver;
+class GraphStore;
 class LLMClient;
 
 // Episode mentions reranker: scores nodes by how many episodes mention them.
 // Nodes mentioned in more episodes rank higher.
 Result<std::pair<std::vector<std::string>, std::vector<float>>> episode_mentions_reranker(
-    KuzuDriver& driver,
+    GraphStore& store,
     const std::vector<std::vector<std::string>>& node_uuid_lists,
     float min_score = 0.0f
 );
@@ -23,7 +23,7 @@ Result<std::pair<std::vector<std::string>, std::vector<float>>> episode_mentions
 // Node distance reranker: scores nodes by 1-hop adjacency to a center node.
 // Connected = score 1.0, center = 10.0, unconnected = 0.0.
 Result<std::pair<std::vector<std::string>, std::vector<float>>> node_distance_reranker(
-    KuzuDriver& driver,
+    GraphStore& store,
     const std::vector<std::string>& node_uuids,
     std::string_view center_node_uuid,
     float min_score = 0.0f

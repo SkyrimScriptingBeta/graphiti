@@ -1,6 +1,6 @@
 #include "dedupe_edges.h"
 
-#include "driver/kuzu_driver.h"
+#include <graphiti/graph_store.h>
 #include "llm/response_models.h"
 #include "prompts/prompts.h"
 #include "utils/datetime.h"
@@ -15,7 +15,7 @@ namespace graphiti::pipeline {
 
 Result<DedupeEdgesResult> dedupe_edges(
     LLMClient& llm,
-    KuzuDriver& driver,
+    GraphStore& store,
     const std::vector<EntityEdge>& extracted_edges
 ) {
     DedupeEdgesResult result;
@@ -28,7 +28,7 @@ Result<DedupeEdgesResult> dedupe_edges(
 
         // Find existing edges between the same source and target nodes
         graphiti::log_callsite("dedupe-edges-find-existing");
-        auto existing_result = driver.get_edges_between_nodes(
+        auto existing_result = store.get_edges_between(
             new_edge.source_node_uuid, new_edge.target_node_uuid
         );
 

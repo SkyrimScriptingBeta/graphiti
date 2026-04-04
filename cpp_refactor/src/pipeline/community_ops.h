@@ -9,7 +9,7 @@
 
 namespace graphiti {
 
-class KuzuDriver;
+class GraphStore;
 class LLMClient;
 class EmbedderClient;
 
@@ -33,12 +33,12 @@ std::vector<std::vector<std::string>> label_propagation(
 // If group_ids is empty, queries all distinct group_ids from the graph.
 // Returns clusters of EntityNodes ready for community building.
 Result<std::vector<std::vector<EntityNode>>> get_community_clusters(
-    KuzuDriver& driver,
+    GraphStore& store,
     const std::vector<std::string>& group_ids
 );
 
 // Remove all community nodes and their edges from the graph.
-VoidResult remove_communities(KuzuDriver& driver);
+VoidResult remove_communities(GraphStore& store);
 
 // Build a single community from a cluster of entity nodes using LLM.
 // Uses tree-based pairwise summarization for quality on large clusters.
@@ -54,7 +54,7 @@ Result<std::pair<CommunityNode, std::vector<CommunityEdge>>> build_community(
 // build new communities via LLM, persist everything.
 // Returns all created community nodes and edges.
 Result<std::pair<std::vector<CommunityNode>, std::vector<CommunityEdge>>> build_communities(
-    KuzuDriver& driver,
+    GraphStore& store,
     LLMClient& llm,
     EmbedderClient& embedder,
     const std::vector<std::string>& group_ids
@@ -64,7 +64,7 @@ Result<std::pair<std::vector<CommunityNode>, std::vector<CommunityEdge>>> build_
 // Returns (community_node, is_new_community).
 // Returns nullopt if entity has no neighbors in any community.
 Result<std::optional<std::pair<CommunityNode, bool>>> determine_entity_community(
-    KuzuDriver& driver,
+    GraphStore& store,
     std::string_view entity_uuid
 );
 
@@ -72,7 +72,7 @@ Result<std::optional<std::pair<CommunityNode, bool>>> determine_entity_community
 // Creates new community or adds entity to existing neighbor community.
 // Also updates the community summary by merging with entity summary via LLM.
 Result<std::pair<std::vector<CommunityNode>, std::vector<CommunityEdge>>> update_community(
-    KuzuDriver& driver,
+    GraphStore& store,
     LLMClient& llm,
     EmbedderClient& embedder,
     const EntityNode& entity

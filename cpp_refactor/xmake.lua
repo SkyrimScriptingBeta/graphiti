@@ -89,6 +89,7 @@ target("graphiti_integration_tests")
     add_packages("catch2")
     add_packages("nlohmann_json")
     add_packages("kuzu")
+    add_defines("GRAPHITI_SOURCE_DIR=\"" .. os.scriptdir():gsub("\\", "\\\\") .. "\"")
 
 -- Agent attribution example programs (run in order: 1, 2, 3)
 for _, name in ipairs({

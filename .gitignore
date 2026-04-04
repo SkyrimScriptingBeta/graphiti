@@ -2,6 +2,9 @@
 compile_commands
 build
 
+# C++ refactor uses lib/ for library targets — don't ignore it
+!cpp_refactor/lib/
+
 ### Python template
 # Byte-compiled / optimized / DLL files
 __pycache__/

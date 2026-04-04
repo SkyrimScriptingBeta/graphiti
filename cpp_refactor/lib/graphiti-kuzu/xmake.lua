@@ -1,0 +1,7 @@
+target("graphiti-kuzu")
+    set_kind("static")
+    add_files("src/**.cpp")
+    add_includedirs("src", {public = true})
+    add_deps("graphiti-core")
+    add_packages("kuzu", {public = true})
+    add_packages("nlohmann_json")

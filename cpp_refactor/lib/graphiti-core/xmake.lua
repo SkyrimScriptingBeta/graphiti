@@ -1,0 +1,7 @@
+target("graphiti-core")
+    set_kind("static")
+    add_files("src/**.cpp")
+    add_includedirs("include", {public = true})
+    add_includedirs("src", {public = true})
+    add_headerfiles("include/(**.h)")
+    add_packages("nlohmann_json", {public = true})

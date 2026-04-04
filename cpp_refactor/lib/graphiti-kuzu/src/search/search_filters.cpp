@@ -1,0 +1,250 @@
+#include "search_filters.h"
+
+#include "utils/datetime.h"
+
+#include <format>
+
+namespace graphiti {
+
+// comparison_op_to_cypher() is in graphiti-core/src/search_filters.cpp
+
+// Build a date filter expression for a single temporal field.
+// The DateFilterClause is OR-of-ANDs: [[a AND b], [c AND d]] => (a AND b) OR (c AND d)
+static std::string build_date_filter_expr(
+    const std::string& field_name,
+    const DateFilterClause& clause,
+    int& param_counter
+) {
+    std::vector<std::string> or_parts;
+
+    for (auto& and_group : clause) {
+        std::vector<std::string> and_parts;
+        for (auto& filter : and_group) {
+            auto op = comparison_op_to_cypher(filter.op);
+            if (filter.op == ComparisonOp::is_null || filter.op == ComparisonOp::is_not_null) {
+                and_parts.push_back(std::format("{} {}", field_name, op));
+            } else if (filter.date.has_value()) {
+                auto ts = datetime::to_iso8601(filter.date.value());
+                and_parts.push_back(std::format(
+                    "{} {} timestamp('{}')", field_name, op, ts
+                ));
+                ++param_counter;
+            }
+        }
+        if (!and_parts.empty()) {
+            std::string combined;
+            for (size_t i = 0; i < and_parts.size(); ++i) {
+                if (i > 0) combined += " AND ";
+                combined += and_parts[i];
+            }
+            or_parts.push_back(std::format("({})", combined));
+        }
+    }
+
+    if (or_parts.empty()) return {};
+
+    std::string result;
+    for (size_t i = 0; i < or_parts.size(); ++i) {
+        if (i > 0) result += " OR ";
+        result += or_parts[i];
+    }
+    if (or_parts.size() > 1) {
+        result = std::format("({})", result);
+    }
+    return result;
+}
+
+FilterQueryResult build_edge_filter_clauses(const SearchFilters& filters) {
+    FilterQueryResult result;
+    int param_counter = 0;
+
+    // Edge type filter
+    if (!filters.edge_types.empty()) {
+        std::string types_list;
+        for (size_t i = 0; i < filters.edge_types.size(); ++i) {
+            if (i > 0) types_list += ", ";
+            types_list += std::format("'{}'", filters.edge_types[i]);
+        }
+        result.clauses.push_back(std::format("e.name IN [{}]", types_list));
+    }
+
+    // Edge UUID filter
+    if (!filters.edge_uuids.empty()) {
+        std::string uuids_list;
+        for (size_t i = 0; i < filters.edge_uuids.size(); ++i) {
+            if (i > 0) uuids_list += ", ";
+            uuids_list += std::format("'{}'", filters.edge_uuids[i]);
+        }
+        result.clauses.push_back(std::format("e.uuid IN [{}]", uuids_list));
+    }
+
+    // Node label filter (on both endpoints)
+    if (!filters.node_labels.empty()) {
+        std::string labels_list;
+        for (size_t i = 0; i < filters.node_labels.size(); ++i) {
+            if (i > 0) labels_list += ", ";
+            labels_list += std::format("'{}'", filters.node_labels[i]);
+        }
+        result.clauses.push_back(std::format("list_has_all(n.labels, [{}])", labels_list));
+        result.clauses.push_back(std::format("list_has_all(m.labels, [{}])", labels_list));
+    }
+
+    // Agent attribution filter
+    if (!filters.agent_ids.empty()) {
+        std::string agents_list;
+        for (size_t i = 0; i < filters.agent_ids.size(); ++i) {
+            if (i > 0) agents_list += ", ";
+            agents_list += std::format("'{}'", filters.agent_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(aid IN e.agent_ids WHERE list_contains([{}], aid))", agents_list));
+    }
+
+    // Source attribution filter
+    if (!filters.source_ids.empty()) {
+        std::string sources_list;
+        for (size_t i = 0; i < filters.source_ids.size(); ++i) {
+            if (i > 0) sources_list += ", ";
+            sources_list += std::format("'{}'", filters.source_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(sid IN e.source_ids WHERE list_contains([{}], sid))", sources_list));
+    }
+
+    // Source context filter
+    if (!filters.source_contexts.empty()) {
+        std::string contexts_list;
+        for (size_t i = 0; i < filters.source_contexts.size(); ++i) {
+            if (i > 0) contexts_list += ", ";
+            contexts_list += std::format("'{}'", filters.source_contexts[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(sc IN e.source_contexts WHERE list_contains([{}], sc))", contexts_list));
+    }
+
+    // Participant filter
+    if (!filters.participant_ids.empty()) {
+        std::string parts_list;
+        for (size_t i = 0; i < filters.participant_ids.size(); ++i) {
+            if (i > 0) parts_list += ", ";
+            parts_list += std::format("'{}'", filters.participant_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(pid IN e.participant_ids WHERE list_contains([{}], pid))", parts_list));
+    }
+
+    // Exclude participant filter
+    if (!filters.exclude_participant_ids.empty()) {
+        std::string exclude_list;
+        for (size_t i = 0; i < filters.exclude_participant_ids.size(); ++i) {
+            if (i > 0) exclude_list += ", ";
+            exclude_list += std::format("'{}'", filters.exclude_participant_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "NOT any(pid IN e.participant_ids WHERE list_contains([{}], pid))", exclude_list));
+    }
+
+    // Temporal filters
+    if (filters.valid_at.has_value()) {
+        auto expr = build_date_filter_expr("e.valid_at", filters.valid_at.value(), param_counter);
+        if (!expr.empty()) result.clauses.push_back(std::move(expr));
+    }
+    if (filters.invalid_at.has_value()) {
+        auto expr = build_date_filter_expr("e.invalid_at", filters.invalid_at.value(), param_counter);
+        if (!expr.empty()) result.clauses.push_back(std::move(expr));
+    }
+    if (filters.created_at.has_value()) {
+        auto expr = build_date_filter_expr("e.created_at", filters.created_at.value(), param_counter);
+        if (!expr.empty()) result.clauses.push_back(std::move(expr));
+    }
+    if (filters.expired_at.has_value()) {
+        auto expr = build_date_filter_expr("e.expired_at", filters.expired_at.value(), param_counter);
+        if (!expr.empty()) result.clauses.push_back(std::move(expr));
+    }
+
+    return result;
+}
+
+FilterQueryResult build_node_filter_clauses(const SearchFilters& filters) {
+    FilterQueryResult result;
+
+    // Node label filter
+    if (!filters.node_labels.empty()) {
+        std::string labels_list;
+        for (size_t i = 0; i < filters.node_labels.size(); ++i) {
+            if (i > 0) labels_list += ", ";
+            labels_list += std::format("'{}'", filters.node_labels[i]);
+        }
+        result.clauses.push_back(std::format("list_has_all(n.labels, [{}])", labels_list));
+    }
+
+    // Agent attribution filter
+    if (!filters.agent_ids.empty()) {
+        std::string agents_list;
+        for (size_t i = 0; i < filters.agent_ids.size(); ++i) {
+            if (i > 0) agents_list += ", ";
+            agents_list += std::format("'{}'", filters.agent_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(aid IN n.agent_ids WHERE list_contains([{}], aid))", agents_list));
+    }
+
+    // Source attribution filter
+    if (!filters.source_ids.empty()) {
+        std::string sources_list;
+        for (size_t i = 0; i < filters.source_ids.size(); ++i) {
+            if (i > 0) sources_list += ", ";
+            sources_list += std::format("'{}'", filters.source_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(sid IN n.source_ids WHERE list_contains([{}], sid))", sources_list));
+    }
+
+    // Source context filter
+    if (!filters.source_contexts.empty()) {
+        std::string contexts_list;
+        for (size_t i = 0; i < filters.source_contexts.size(); ++i) {
+            if (i > 0) contexts_list += ", ";
+            contexts_list += std::format("'{}'", filters.source_contexts[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(sc IN n.source_contexts WHERE list_contains([{}], sc))", contexts_list));
+    }
+
+    // Participant filter
+    if (!filters.participant_ids.empty()) {
+        std::string parts_list;
+        for (size_t i = 0; i < filters.participant_ids.size(); ++i) {
+            if (i > 0) parts_list += ", ";
+            parts_list += std::format("'{}'", filters.participant_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "any(pid IN n.participant_ids WHERE list_contains([{}], pid))", parts_list));
+    }
+
+    // Exclude participant filter
+    if (!filters.exclude_participant_ids.empty()) {
+        std::string exclude_list;
+        for (size_t i = 0; i < filters.exclude_participant_ids.size(); ++i) {
+            if (i > 0) exclude_list += ", ";
+            exclude_list += std::format("'{}'", filters.exclude_participant_ids[i]);
+        }
+        result.clauses.push_back(std::format(
+            "NOT any(pid IN n.participant_ids WHERE list_contains([{}], pid))", exclude_list));
+    }
+
+    return result;
+}
+
+std::string join_filter_clauses(const std::vector<std::string>& clauses) {
+    if (clauses.empty()) return {};
+
+    std::string result;
+    for (size_t i = 0; i < clauses.size(); ++i) {
+        if (i > 0) result += "\nAND ";
+        result += clauses[i];
+    }
+    return result;
+}
+
+} // namespace graphiti

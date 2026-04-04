@@ -3,7 +3,7 @@
 #include <cmath>
 #include <vector>
 
-#include "../../src/utils/cosine.h"
+#include "utils/cosine.h"
 
 using namespace graphiti;
 

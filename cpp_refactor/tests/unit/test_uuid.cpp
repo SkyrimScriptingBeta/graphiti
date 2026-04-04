@@ -5,7 +5,7 @@
 #include <string>
 
 // Access internal header for testing
-#include "../../src/utils/uuid.h"
+#include "utils/uuid.h"
 
 using namespace graphiti;
 

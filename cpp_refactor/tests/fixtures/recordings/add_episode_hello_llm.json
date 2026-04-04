@@ -1,0 +1,114 @@
+[
+  {
+    "error": null,
+    "json_schema": "Example 1:\n{\"extracted_entities\": [{\"name\": \"Zenith Corp\", \"entity_type_id\": 0}, {\"name\": \"Mara Chen\", \"entity_type_id\": 0}, {\"name\": \"PostgreSQL\", \"entity_type_id\": 0}]}\n\nExample 2:\n{\"extracted_entities\": [{\"name\": \"Sprint 3\", \"entity_type_id\": 0}, {\"name\": \"Terraform\", \"entity_type_id\": 0}, {\"name\": \"auth-service\", \"entity_type_id\": 0}, {\"name\": \"Juno\", \"entity_type_id\": 0}, {\"name\": \"Rex\", \"entity_type_id\": 0}]}",
+    "messages": [
+      {
+        "content": "You are an AI assistant that extracts entity nodes from conversational messages. Your primary task is to extract and classify the speaker and other significant entities mentioned in the conversation.\nDo not escape unicode characters.\n",
+        "role": "system"
+      },
+      {
+        "content": "<ENTITY TYPES>\n[{\"entity_type_id\": 0, \"entity_type_name\": \"Entity\", \"entity_type_description\": \"A general entity\"}]\n</ENTITY TYPES>\n\n<PREVIOUS MESSAGES>\n[]\n</PREVIOUS MESSAGES>\n\n<CURRENT MESSAGE>\nAlice works at Acme Corp as a software engineer.\n</CURRENT MESSAGE>\n\nInstructions:\n\nYou are given a conversation context and a CURRENT MESSAGE. Your task is to extract **entity nodes** mentioned **explicitly or implicitly** in the CURRENT MESSAGE.\nPronoun references such as he/she/they or this/that/those should be disambiguated to the names of the reference entities. Only extract distinct entities from the CURRENT MESSAGE. Don't extract pronouns like you, me, he/she/they, we/us as entities.\n\n1. **Speaker Extraction**: Always extract the speaker (the part before the colon `:` in each dialogue line) as the first entity node.\n   - If the speaker is mentioned again in the message, treat both mentions as a **single entity**.\n\n2. **Entity Identification**:\n   - Extract all significant entities, concepts, or actors that are **explicitly or implicitly** mentioned in the CURRENT MESSAGE.\n   - **Exclude** entities mentioned only in the PREVIOUS MESSAGES (they are for context only).\n\n3. **Entity Classification**:\n   - Use the descriptions in ENTITY TYPES to classify each extracted entity.\n   - Assign the appropriate `entity_type_id` for each one.\n\n4. **Exclusions**:\n   - Do NOT extract entities representing relationships or actions.\n   - Do NOT extract dates, times, or other temporal information—these will be handled separately.\n\n5. **Formatting**:\n   - Be **explicit and unambiguous** in naming entities (e.g., use full names when available).\n\n",
+        "role": "user"
+      }
+    ],
+    "model_size": "small",
+    "prompt_name": "extract_message",
+    "response": {
+      "extracted_entities": [
+        {
+          "entity_type_id": 0,
+          "name": "Alice"
+        },
+        {
+          "entity_type_id": 0,
+          "name": "Acme Corp"
+        }
+      ]
+    }
+  },
+  {
+    "error": null,
+    "json_schema": "Example 1:\n{\"summaries\": [{\"name\": \"Juno\", \"summary\": \"Backend developer building auth-service, works with Terraform.\"}, {\"name\": \"Zenith Corp\", \"summary\": \"Software company building distributed systems.\"}]}\n\nExample 2:\n{\"summaries\": [{\"name\": \"Rex\", \"summary\": \"Architect responsible for system design and PR reviews since March 2025.\"}]}",
+    "messages": [
+      {
+        "content": "You are a helpful assistant that generates concise entity summaries from provided context.\nDo not escape unicode characters.\n",
+        "role": "system"
+      },
+      {
+        "content": "Given the MESSAGES and a list of ENTITIES, generate an updated summary for each entity that needs one.\nEach summary must be under 500 characters.\n\nGuidelines:\n        1. Output only factual content. Never explain what you're doing, why, or mention limitations/constraints.\n        2. Only use the provided messages, entity, and entity context to set attribute values.\n        3. Keep the summary concise and to the point. STATE FACTS DIRECTLY IN UNDER 250 CHARACTERS.\n\n        Example summaries:\n        BAD: \"This is the only activity in the context. The user listened to this song. No other details were provided to include in this summary.\"\n        GOOD: \"User played 'Blue Monday' by New Order (electronic genre) on 2024-12-03 at 14:22 UTC.\"\n        BAD: \"Based on the messages provided, the user attended a meeting. This summary focuses on that event as it was the main topic discussed.\"\n        GOOD: \"User attended Q3 planning meeting with sales team on March 15.\"\n        BAD: \"The context shows John ordered pizza. Due to length constraints, other details are omitted from this summary.\"\n        GOOD: \"John ordered pepperoni pizza from Mario's at 7:30 PM, delivered to office.\"\n\n<MESSAGES>\n[]\nAlice works at Acme Corp as a software engineer.\n</MESSAGES>\n\n<ENTITIES>\n[{\"name\":\"Alice\",\"summary\":\"\"},{\"name\":\"Acme Corp\",\"summary\":\"\"}]\n</ENTITIES>\n\nFor each entity, combine relevant information from the MESSAGES with any existing summary content.\nOnly return summaries for entities that have meaningful information to summarize.\nIf an entity has no relevant information in the messages and no existing summary, you may skip it.",
+        "role": "user"
+      }
+    ],
+    "model_size": "small",
+    "prompt_name": "extract_summaries_batch",
+    "response": {
+      "summaries": [
+        {
+          "name": "Alice",
+          "summary": "Alice works at Acme Corp as a software engineer."
+        }
+      ]
+    }
+  },
+  {
+    "error": null,
+    "json_schema": "Preferred relation types (use these when they fit, or derive your own in SCREAMING_SNAKE_CASE):\nHAS_ROLE, MEMBER_OF, LEADS, SAME_AS, WORKS_WITH, WRITES, PRODUCES, REVIEWS, VALIDATES, USES, ATTACHES, DEPENDS_ON, IMPLEMENTS, BUILT_WITH, RESPONSIBLE_FOR, REQUIRES, TRANSITIONS_TO, BLOCKS, UNBLOCKS, KICKED_OFF_BY, DISCOVERED, LEARNED_FROM, CONTRADICTS, SUPERSEDES, CAUSED_BY, FOLLOWS, VIOLATES, CITES, INTRODUCED_IN, REMOVED_IN, REPLACED_BY, CHANGED_FROM, IS_A, DEVELOPS\n\nExample 1:\n{\"edges\": [{\"source_entity_name\": \"Mara Chen\", \"target_entity_name\": \"Zenith Corp\", \"relation_type\": \"MEMBER_OF\", \"fact\": \"Mara Chen is a member of Zenith Corp\", \"valid_at\": \"2025-01-15T00:00:00Z\", \"invalid_at\": null}, {\"source_entity_name\": \"Mara Chen\", \"target_entity_name\": \"PostgreSQL\", \"relation_type\": \"WORKS_WITH\", \"fact\": \"Mara Chen works with PostgreSQL for data storage\", \"valid_at\": null, \"invalid_at\": null}]}\n\nExample 2:\n{\"edges\": [{\"source_entity_name\": \"Juno\", \"target_entity_name\": \"auth-service\", \"relation_type\": \"DEVELOPS\", \"fact\": \"Juno develops the auth-service\", \"valid_at\": null, \"invalid_at\": null}, {\"source_entity_name\": \"Rex\", \"target_entity_name\": \"Juno\", \"relation_type\": \"HAS_ROLE\", \"fact\": \"Rex has the role of architect on the team\", \"valid_at\": \"2025-03-01T00:00:00Z\", \"invalid_at\": null}, {\"source_entity_name\": \"auth-service\", \"target_entity_name\": \"Sprint 3\", \"relation_type\": \"INTRODUCED_IN\", \"fact\": \"auth-service was introduced in Sprint 3\", \"valid_at\": null, \"invalid_at\": null}, {\"source_entity_name\": \"Terraform\", \"target_entity_name\": \"auth-service\", \"relation_type\": \"DEPENDS_ON\", \"fact\": \"auth-service depends on Terraform for infrastructure\", \"valid_at\": null, \"invalid_at\": null}]}",
+    "messages": [
+      {
+        "content": "You are an expert fact extractor that extracts fact triples from text. 1. Extracted fact triples should also be extracted with relevant date information. 2. Treat the CURRENT TIME as the time the CURRENT MESSAGE was sent. All temporal information should be extracted relative to this time.\nDo not escape unicode characters.\n",
+        "role": "system"
+      },
+      {
+        "content": "<PREVIOUS_MESSAGES>\n[]\n</PREVIOUS_MESSAGES>\n\n<CURRENT_MESSAGE>\nAlice works at Acme Corp as a software engineer.\n</CURRENT_MESSAGE>\n\n<ENTITIES>\n[{\"name\":\"Alice\"},{\"name\":\"Acme Corp\"}]\n</ENTITIES>\n\n<REFERENCE_TIME>\n2026-04-04T00:47:07.017470Z  # ISO 8601 (UTC); used to resolve relative time mentions\n</REFERENCE_TIME>\n# TASK\nExtract all factual relationships between the given ENTITIES based on the CURRENT MESSAGE.\nBe thorough — extract every relationship between entities, including roles, responsibilities, dependencies, ownership, and process flows. Aim to capture all meaningful connections, not just the most obvious ones.\nOnly extract facts that:\n- involve two DISTINCT ENTITIES from the ENTITIES list,\n- are clearly stated or unambiguously implied in the CURRENT MESSAGE,\n    and can be represented as edges in a knowledge graph.\n- Facts should include entity names rather than pronouns whenever possible.\n\nYou may use information from the PREVIOUS MESSAGES only to disambiguate references or support continuity.\n\n\n\n\n# EXTRACTION RULES\n\n1. **Entity Name Validation**: `source_entity_name` and `target_entity_name` must use only the `name` values from the ENTITIES list provided above.\n   - **CRITICAL**: Using names not in the list will cause the edge to be rejected\n2. Each fact must involve two **distinct** entities.\n3. Do not emit duplicate or semantically redundant facts.\n4. The `fact` should closely paraphrase the original source sentence(s). Do not verbatim quote the original text.\n5. Use `REFERENCE_TIME` to resolve vague or relative temporal expressions (e.g., \"last week\").\n6. Do **not** hallucinate or infer temporal bounds from unrelated events.\n\n# RELATION TYPE RULES\n\n- If FACT_TYPES are provided and the relationship matches one of the types (considering the entity type signature), use that fact_type_name as the `relation_type`.\n- Otherwise, prefer one of these standard relation types when they fit:\n  HAS_ROLE, MEMBER_OF, LEADS, SAME_AS, IS_A, WORKS_WITH, DEVELOPS, DEPENDS_ON, IMPLEMENTS, BUILT_WITH, RESPONSIBLE_FOR, WRITES, REVIEWS, VALIDATES, USES, ATTACHES, REQUIRES, TRANSITIONS_TO, BLOCKS, UNBLOCKS, KICKED_OFF_BY, DISCOVERED, LEARNED_FROM, CONTRADICTS, SUPERSEDES, CAUSED_BY, FOLLOWS, VIOLATES, CITES, INTRODUCED_IN, REMOVED_IN, REPLACED_BY, CHANGED_FROM, PRODUCES\n- If none of the above fit, derive a `relation_type` in SCREAMING_SNAKE_CASE.\n\n# DATETIME RULES\n\n- Use ISO 8601 with \"Z\" suffix (UTC) (e.g., 2025-04-30T00:00:00Z).\n- If the fact is ongoing (present tense), set `valid_at` to REFERENCE_TIME.\n- If a change/termination is expressed, set `invalid_at` to the relevant timestamp.\n- Leave both fields `null` if no explicit or resolvable time is stated.\n- If only a date is mentioned (no time), assume 00:00:00.\n- If only a year is mentioned, use January 1st at 00:00:00.\n\n**IMPORTANT: Extract at most 3 edges. After 3, close the JSON array and STOP.**",
+        "role": "user"
+      }
+    ],
+    "model_size": "small",
+    "prompt_name": "extract_edges",
+    "response": {
+      "edges": [
+        {
+          "fact": "Alice is a member of Acme Corp",
+          "invalid_at": null,
+          "relation_type": "MEMBER_OF",
+          "source_entity_name": "Alice",
+          "target_entity_name": "Acme Corp",
+          "valid_at": "2026-04-04T00:47:07Z"
+        },
+        {
+          "fact": "Alice has the role of software engineer at Acme Corp",
+          "invalid_at": null,
+          "relation_type": "HAS_ROLE",
+          "source_entity_name": "Alice",
+          "target_entity_name": "Acme Corp",
+          "valid_at": "2026-04-04T00:47:07Z"
+        }
+      ]
+    }
+  },
+  {
+    "error": null,
+    "json_schema": "Example 1:\n{\"summaries\": [{\"name\": \"Juno\", \"summary\": \"Backend developer building auth-service, works with Terraform.\"}, {\"name\": \"Zenith Corp\", \"summary\": \"Software company building distributed systems.\"}]}\n\nExample 2:\n{\"summaries\": [{\"name\": \"Rex\", \"summary\": \"Architect responsible for system design and PR reviews since March 2025.\"}]}",
+    "messages": [
+      {
+        "content": "You are a helpful assistant that generates concise entity summaries from provided context.\nDo not escape unicode characters.\n",
+        "role": "system"
+      },
+      {
+        "content": "Given the MESSAGES and a list of ENTITIES, generate an updated summary for each entity that needs one.\nEach summary must be under 500 characters.\n\nGuidelines:\n        1. Output only factual content. Never explain what you're doing, why, or mention limitations/constraints.\n        2. Only use the provided messages, entity, and entity context to set attribute values.\n        3. Keep the summary concise and to the point. STATE FACTS DIRECTLY IN UNDER 250 CHARACTERS.\n\n        Example summaries:\n        BAD: \"This is the only activity in the context. The user listened to this song. No other details were provided to include in this summary.\"\n        GOOD: \"User played 'Blue Monday' by New Order (electronic genre) on 2024-12-03 at 14:22 UTC.\"\n        BAD: \"Based on the messages provided, the user attended a meeting. This summary focuses on that event as it was the main topic discussed.\"\n        GOOD: \"User attended Q3 planning meeting with sales team on March 15.\"\n        BAD: \"The context shows John ordered pizza. Due to length constraints, other details are omitted from this summary.\"\n        GOOD: \"John ordered pepperoni pizza from Mario's at 7:30 PM, delivered to office.\"\n\n<MESSAGES>\n[]\nAlice works at Acme Corp as a software engineer.\n</MESSAGES>\n\n<ENTITIES>\n[{\"name\":\"Alice\",\"summary\":\"Alice works at Acme Corp as a software engineer.\"},{\"name\":\"Acme Corp\",\"summary\":\"\"}]\n</ENTITIES>\n\nFor each entity, combine relevant information from the MESSAGES with any existing summary content.\nOnly return summaries for entities that have meaningful information to summarize.\nIf an entity has no relevant information in the messages and no existing summary, you may skip it.",
+        "role": "user"
+      }
+    ],
+    "model_size": "small",
+    "prompt_name": "extract_summaries_batch",
+    "response": {
+      "summaries": [
+        {
+          "name": "Alice",
+          "summary": "Alice works at Acme Corp as a software engineer."
+        }
+      ]
+    }
+  }
+]

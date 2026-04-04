@@ -924,7 +924,6 @@ Return edges in this format:
             ee.source_id = episode.source_id;
             ee.source_context = episode.source_context;
             ee.participant_ids = episode.participant_ids;
-            graphiti::log_callsite("episode-save-mentions-edge");
             (void)impl_->writer_client->save_episodic_edge(ee);
         }
     } else {
@@ -1660,7 +1659,6 @@ Result<AddBulkEpisodeResults> Graphiti::add_episode_bulk(AddEpisodeBulkOptions o
                 edge.source_id = episodes[i].source_id;
                 edge.source_context = episodes[i].source_context;
                 edge.participant_ids = episodes[i].participant_ids;
-                graphiti::log_callsite("bulk-save-mentions-edge");
                 (void)impl_->writer_client->save_episodic_edge(edge);
             }
         } else {

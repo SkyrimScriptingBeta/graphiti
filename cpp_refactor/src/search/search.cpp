@@ -145,9 +145,7 @@ Result<NodeSearchResult> hybrid_node_search(
     }
 
     // Run BM25 and cosine searches
-    graphiti::log_callsite("hybrid-node-bm25");
     auto bm25_result = driver.search_entity_nodes_bm25(query, group_id, limit, filters);
-    graphiti::log_callsite("hybrid-node-cosine");
     auto cosine_result = driver.search_entity_nodes_cosine(query_embedding, group_id, 0.0f, limit, filters);
 
     // Collect all nodes by UUID for final assembly

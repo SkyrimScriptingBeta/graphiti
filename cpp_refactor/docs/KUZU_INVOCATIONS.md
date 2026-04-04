@@ -44,8 +44,7 @@ Excludes: the driver implementation itself, tests, and the kuzu_writer_server.
 | 16 | 873 | `save_entity_edge_embedding(uuid, embedding)` | UUID, float vector | Discarded | Step 9: store fact embedding for cosine search | ⚡CALLSITE:episode-save-edge-embedding |
 | 17 | 879 | `driver.get_entity_edge(uuid)` | Edge UUID of contradicted edge | If exists, mark invalid | Step 9: fetch contradicted edges to set expired_at/invalid_at | ⚡CALLSITE:episode-fetch-contradicted-edge |
 | 18 | 887 | `save_entity_edge(edge)` | Edge with expired_at and invalid_at set | Discarded | Step 9: persist invalidated/contradicted edges (soft delete) | ⚡CALLSITE:episode-invalidate-contradicted-edge |
-| 19 | 908 | `save_episodic_edge(ee)` | EpisodicEdge: episode→entity MENTIONS relationship | Discarded | Step 10: create MENTIONS edges (writer path only) | ⚡CALLSITE:episode-save-mentions-edge |
-| 20 | 920 | `build_fts_indices()` | None | Discarded | Step 10b: rebuild FTS after entity inserts | ⚡CALLSITE:episode-rebuild-fts-after-persist |
+| 19 | 920 | `build_fts_indices()` | None | Discarded | Step 10b: rebuild FTS after entity inserts | ⚡CALLSITE:episode-rebuild-fts-after-persist |
 | 21 | 930 | `get_saga_by_name(name, gid)` | Saga name, group_id | If not found, create new | Step 11: find or create saga | ⚡CALLSITE:episode-find-saga |
 | 22 | 941 | `save_saga_node(saga_node)` | New SagaNode | Discarded | Step 11: persist new saga | ⚡CALLSITE:episode-save-saga-node |
 | 23 | 952 | `get_last_episode_in_saga(saga_uuid, exclude)` | Saga UUID, current episode UUID to exclude | If valid, chain episodes | Step 11: find previous episode for NEXT_EPISODE edge | ⚡CALLSITE:episode-find-last-in-saga |
@@ -65,8 +64,7 @@ Excludes: the driver implementation itself, tests, and the kuzu_writer_server.
 | 32 | 1574 | `save_entity_node_embedding(uuid, embedding)` | UUID, float vector | Discarded | Step 9: store name embeddings | ⚡CALLSITE:bulk-save-entity-embedding |
 | 33 | 1582 | `save_entity_edge(edge)` | EntityEdge | Discarded | Step 9: persist edges | ⚡CALLSITE:bulk-save-entity-edge |
 | 34 | 1587 | `save_entity_edge_embedding(uuid, embedding)` | UUID, float vector | Discarded | Step 9: store edge embeddings | ⚡CALLSITE:bulk-save-edge-embedding |
-| 35 | 1628 | `save_episodic_edge(edge)` | EpisodicEdge MENTIONS | Discarded | Step 10: create MENTIONS edges (writer path) | ⚡CALLSITE:bulk-save-mentions-edge |
-| 36 | 1641 | `build_fts_indices()` | None | Discarded | Step 10b: rebuild FTS after bulk inserts | ⚡CALLSITE:bulk-rebuild-fts-after-persist |
+| 35 | 1641 | `build_fts_indices()` | None | Discarded | Step 10b: rebuild FTS after bulk inserts | ⚡CALLSITE:bulk-rebuild-fts-after-persist |
 | 37 | 1651 | `get_saga_by_name(name, gid)` | Saga name, group_id | Check existence | Step 11: find/create saga | ⚡CALLSITE:bulk-find-saga |
 | 38 | 1662 | `save_saga_node(saga_node)` | SagaNode | Discarded | Step 11: persist saga | ⚡CALLSITE:bulk-save-saga-node |
 | 39 | 1676 | `get_last_episode_in_saga(saga_uuid)` | Saga UUID (no exclude in bulk) | Chain episodes | Step 11: find last episode in saga | ⚡CALLSITE:bulk-find-last-in-saga |
@@ -146,10 +144,7 @@ Excludes: the driver implementation itself, tests, and the kuzu_writer_server.
 
 ### hybrid_node_search()
 
-| # | Line | Method | Parameters | Return Usage | Why | ID |
-|---|------|--------|------------|-------------|-----|----|
-| 69 | 145 | `driver.search_entity_nodes_bm25(query, gid, limit, filters)` | Query, group_id, limit, filters | Nodes → node_map | BM25 text search on nodes | ⚡CALLSITE:hybrid-node-bm25 |
-| 70 | 146 | `driver.search_entity_nodes_cosine(embedding, gid, 0.0f, limit, filters)` | Embedding, group_id, min=0.0, limit, filters | Merged with BM25 | Cosine similarity on node embeddings | ⚡CALLSITE:hybrid-node-cosine |
+> **NOTE:** `hybrid_node_search()` is dead code — defined but never called from any public API path. Removed from callsite tracking. Should be wired up or deleted in a future cleanup.
 
 ### episode_search()
 
@@ -274,7 +269,9 @@ Excludes: the driver implementation itself, tests, and the kuzu_writer_server.
 
 ## Summary
 
-**Total application-level Kuzu invocations: 100**
+**Total application-level Kuzu invocations: 96**
+
+> 4 removed: 2 writer-path-only branches (same operation as covered non-writer path), 2 dead code (hybrid_node_search never called).
 
 ### By Category
 

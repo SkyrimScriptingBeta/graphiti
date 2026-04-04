@@ -1,12 +1,20 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_vector.hpp>
+#include <graphiti/graph_store.h>
 #include <graphiti/types.h>
 #include <graphiti/search_filters.h>
-#include <driver/kuzu_driver.h>
+#include <driver/kuzu_graph_store.h>
 #include <search/search_filters.h>
 #include <nlohmann/json.hpp>
 
 using namespace graphiti;
+
+// Helper: create a KuzuGraphStore accessed through the GraphStore interface
+static std::unique_ptr<KuzuGraphStore> make_store() {
+    auto store = std::make_unique<KuzuGraphStore>(":memory:");
+    REQUIRE(store->setup_schema().has_value());
+    return store;
+}
 
 // ============================================================================
 // JSON round-trip tests for agent_id/agent_ids fields
@@ -34,7 +42,6 @@ TEST_CASE("EntityNode JSON round-trip with empty agent_ids", "[agent_attribution
     node.name = "Bob";
     node.group_id = "g";
     node.created_at = std::chrono::system_clock::now();
-    // agent_ids defaults to empty
 
     nlohmann::json j = node;
     auto restored = j.get<EntityNode>();
@@ -111,12 +118,11 @@ TEST_CASE("CommunityNode JSON round-trip with agent_ids", "[agent_attribution][t
 }
 
 // ============================================================================
-// Kuzu persistence tests for agent_id/agent_ids
+// GraphStore persistence tests for agent_id/agent_ids
 // ============================================================================
 
-TEST_CASE("Entity node persists agent_ids to Kuzu", "[agent_attribution][kuzu]") {
-    KuzuDriver driver(":memory:");
-    REQUIRE(driver.setup_schema().has_value());
+TEST_CASE("Entity node persists agent_ids via GraphStore", "[agent_attribution][store]") {
+    auto store = make_store();
 
     EntityNode node;
     node.uuid = "entity-agent-test";
@@ -125,36 +131,33 @@ TEST_CASE("Entity node persists agent_ids to Kuzu", "[agent_attribution][kuzu]")
     node.created_at = std::chrono::system_clock::now();
     node.agent_ids = {"agent-a", "agent-b"};
 
-    REQUIRE(driver.save_entity_node(node).has_value());
+    REQUIRE(store->persist_entity(node).has_value());
 
-    auto result = driver.get_entity_node("entity-agent-test");
+    auto result = store->get_entity("entity-agent-test");
     REQUIRE(result.has_value());
     REQUIRE(result.value().agent_ids.size() == 2);
     REQUIRE(result.value().agent_ids[0] == "agent-a");
     REQUIRE(result.value().agent_ids[1] == "agent-b");
 }
 
-TEST_CASE("Entity node with empty agent_ids persists correctly", "[agent_attribution][kuzu]") {
-    KuzuDriver driver(":memory:");
-    REQUIRE(driver.setup_schema().has_value());
+TEST_CASE("Entity node with empty agent_ids persists correctly via GraphStore", "[agent_attribution][store]") {
+    auto store = make_store();
 
     EntityNode node;
     node.uuid = "entity-no-agent";
     node.name = "Bob";
     node.group_id = "g";
     node.created_at = std::chrono::system_clock::now();
-    // agent_ids defaults to empty
 
-    REQUIRE(driver.save_entity_node(node).has_value());
+    REQUIRE(store->persist_entity(node).has_value());
 
-    auto result = driver.get_entity_node("entity-no-agent");
+    auto result = store->get_entity("entity-no-agent");
     REQUIRE(result.has_value());
     REQUIRE(result.value().agent_ids.empty());
 }
 
-TEST_CASE("Episodic node persists agent_id to Kuzu", "[agent_attribution][kuzu]") {
-    KuzuDriver driver(":memory:");
-    REQUIRE(driver.setup_schema().has_value());
+TEST_CASE("Episodic node persists agent_id via GraphStore", "[agent_attribution][store]") {
+    auto store = make_store();
 
     EpisodicNode node;
     node.uuid = "ep-agent-test";
@@ -167,31 +170,29 @@ TEST_CASE("Episodic node persists agent_id to Kuzu", "[agent_attribution][kuzu]"
     node.valid_at = node.created_at;
     node.agent_id = "agent-a";
 
-    REQUIRE(driver.save_episodic_node(node).has_value());
+    REQUIRE(store->persist_episode(node).has_value());
 
-    auto result = driver.get_episodic_node("ep-agent-test");
+    auto result = store->get_episode("ep-agent-test");
     REQUIRE(result.has_value());
     REQUIRE(result.value().agent_id == "agent-a");
 }
 
-TEST_CASE("Entity edge persists agent_ids to Kuzu", "[agent_attribution][kuzu]") {
-    KuzuDriver driver(":memory:");
-    REQUIRE(driver.setup_schema().has_value());
+TEST_CASE("Entity edge persists agent_ids via GraphStore", "[agent_attribution][store]") {
+    auto store = make_store();
 
-    // Create source and target nodes first
     EntityNode src;
     src.uuid = "src-node";
     src.name = "Alice";
     src.group_id = "g";
     src.created_at = std::chrono::system_clock::now();
-    REQUIRE(driver.save_entity_node(src).has_value());
+    REQUIRE(store->persist_entity(src).has_value());
 
     EntityNode tgt;
     tgt.uuid = "tgt-node";
     tgt.name = "Acme Corp";
     tgt.group_id = "g";
     tgt.created_at = std::chrono::system_clock::now();
-    REQUIRE(driver.save_entity_node(tgt).has_value());
+    REQUIRE(store->persist_entity(tgt).has_value());
 
     EntityEdge edge;
     edge.uuid = "edge-agent-test";
@@ -203,18 +204,17 @@ TEST_CASE("Entity edge persists agent_ids to Kuzu", "[agent_attribution][kuzu]")
     edge.created_at = std::chrono::system_clock::now();
     edge.agent_ids = {"agent-a", "agent-b"};
 
-    REQUIRE(driver.save_entity_edge(edge).has_value());
+    REQUIRE(store->persist_edge(edge).has_value());
 
-    auto result = driver.get_entity_edge("edge-agent-test");
+    auto result = store->get_edge("edge-agent-test");
     REQUIRE(result.has_value());
     REQUIRE(result.value().agent_ids.size() == 2);
     REQUIRE(result.value().agent_ids[0] == "agent-a");
     REQUIRE(result.value().agent_ids[1] == "agent-b");
 }
 
-TEST_CASE("Community node persists agent_ids to Kuzu", "[agent_attribution][kuzu]") {
-    KuzuDriver driver(":memory:");
-    REQUIRE(driver.setup_schema().has_value());
+TEST_CASE("Community node persists agent_ids via GraphStore", "[agent_attribution][store]") {
+    auto store = make_store();
 
     CommunityNode node;
     node.uuid = "comm-agent-test";
@@ -224,37 +224,36 @@ TEST_CASE("Community node persists agent_ids to Kuzu", "[agent_attribution][kuzu
     node.summary = "About tech";
     node.agent_ids = {"agent-a"};
 
-    REQUIRE(driver.save_community_node(node).has_value());
+    REQUIRE(store->persist_community(node).has_value());
 
-    auto result = driver.get_community_node("comm-agent-test");
+    // Verify via BM25 search (GraphStore doesn't expose get_community_node)
+    REQUIRE(store->rebuild_indices().has_value());
+    auto result = store->search_communities_bm25("Tech", "g", 10);
     REQUIRE(result.has_value());
-    REQUIRE(result.value().agent_ids.size() == 1);
-    REQUIRE(result.value().agent_ids[0] == "agent-a");
+    REQUIRE(!result.value().empty());
+    REQUIRE(result.value()[0].agent_ids.size() == 1);
+    REQUIRE(result.value()[0].agent_ids[0] == "agent-a");
 }
 
-TEST_CASE("agent_ids accumulates through entity node update", "[agent_attribution][kuzu]") {
-    KuzuDriver driver(":memory:");
-    REQUIRE(driver.setup_schema().has_value());
+TEST_CASE("agent_ids accumulates through entity node update via GraphStore", "[agent_attribution][store]") {
+    auto store = make_store();
 
-    // Save node with agent-a
     EntityNode node;
     node.uuid = "entity-accum";
     node.name = "Alice";
     node.group_id = "g";
     node.created_at = std::chrono::system_clock::now();
     node.agent_ids = {"agent-a"};
-    REQUIRE(driver.save_entity_node(node).has_value());
+    REQUIRE(store->persist_entity(node).has_value());
 
-    // Read it back
-    auto r1 = driver.get_entity_node("entity-accum");
+    auto r1 = store->get_entity("entity-accum");
     REQUIRE(r1.has_value());
     REQUIRE(r1.value().agent_ids == std::vector<std::string>{"agent-a"});
 
-    // Update with accumulated agent_ids (simulating dedup merge)
     node.agent_ids = {"agent-a", "agent-b"};
-    REQUIRE(driver.save_entity_node(node).has_value());
+    REQUIRE(store->persist_entity(node).has_value());
 
-    auto r2 = driver.get_entity_node("entity-accum");
+    auto r2 = store->get_entity("entity-accum");
     REQUIRE(r2.has_value());
     REQUIRE(r2.value().agent_ids.size() == 2);
     REQUIRE(r2.value().agent_ids[0] == "agent-a");
@@ -266,11 +265,9 @@ TEST_CASE("agent_ids accumulates through entity node update", "[agent_attributio
 // ============================================================================
 
 TEST_CASE("Entity nodes searchable with agent_ids filter via BM25", "[agent_attribution][search]") {
-    KuzuDriver driver(":memory:");
-    REQUIRE(driver.setup_schema().has_value());
-    REQUIRE(driver.build_fts_indices().has_value());
+    auto store = make_store();
+    REQUIRE(store->rebuild_indices().has_value());
 
-    // Create two nodes from different agents
     EntityNode node_a;
     node_a.uuid = "node-a";
     node_a.name = "Alice";
@@ -278,7 +275,7 @@ TEST_CASE("Entity nodes searchable with agent_ids filter via BM25", "[agent_attr
     node_a.created_at = std::chrono::system_clock::now();
     node_a.summary = "Alice is an engineer";
     node_a.agent_ids = {"agent-a"};
-    REQUIRE(driver.save_entity_node(node_a).has_value());
+    REQUIRE(store->persist_entity(node_a).has_value());
 
     EntityNode node_b;
     node_b.uuid = "node-b";
@@ -287,17 +284,14 @@ TEST_CASE("Entity nodes searchable with agent_ids filter via BM25", "[agent_attr
     node_b.created_at = std::chrono::system_clock::now();
     node_b.summary = "Bob is a designer";
     node_b.agent_ids = {"agent-b"};
-    REQUIRE(driver.save_entity_node(node_b).has_value());
+    REQUIRE(store->persist_entity(node_b).has_value());
 
-    // Rebuild FTS indices to include new nodes
-    REQUIRE(driver.build_fts_indices().has_value());
+    REQUIRE(store->rebuild_indices().has_value());
 
-    // Search without agent filter: should find both
-    auto all = driver.search_entity_nodes_bm25("Alice Bob", "g", 10);
+    auto all = store->search_entities_bm25("Alice Bob", "g", 10);
     REQUIRE(all.has_value());
-    REQUIRE(all.value().size() >= 1);  // BM25 may return partial
+    REQUIRE(all.value().size() >= 1);
 
-    // The agent_ids are persisted — verify they came back
     bool found_a = false, found_b = false;
     for (auto& n : all.value()) {
         if (n.uuid == "node-a") {
@@ -316,14 +310,12 @@ TEST_CASE("SearchFilters agent_ids generates correct Cypher clause", "[agent_att
     SearchFilters filters;
     filters.agent_ids = {"agent-a", "agent-b"};
 
-    // Test edge filter
     auto edge_result = build_edge_filter_clauses(filters);
     REQUIRE(edge_result.clauses.size() == 1);
     REQUIRE(edge_result.clauses[0].find("any(aid IN e.agent_ids") != std::string::npos);
     REQUIRE(edge_result.clauses[0].find("'agent-a'") != std::string::npos);
     REQUIRE(edge_result.clauses[0].find("'agent-b'") != std::string::npos);
 
-    // Test node filter
     auto node_result = build_node_filter_clauses(filters);
     REQUIRE(node_result.clauses.size() == 1);
     REQUIRE(node_result.clauses[0].find("any(aid IN n.agent_ids") != std::string::npos);
@@ -331,10 +323,8 @@ TEST_CASE("SearchFilters agent_ids generates correct Cypher clause", "[agent_att
 
 TEST_CASE("SearchFilters empty agent_ids generates no clause", "[agent_attribution][filters]") {
     SearchFilters filters;
-    // agent_ids is empty by default
 
     auto edge_result = build_edge_filter_clauses(filters);
-    // Should have no agent-related clauses
     for (auto& clause : edge_result.clauses) {
         REQUIRE(clause.find("agent_ids") == std::string::npos);
     }

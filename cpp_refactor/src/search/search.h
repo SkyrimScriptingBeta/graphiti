@@ -42,19 +42,6 @@ Result<SearchResult> hybrid_edge_search(
     int bfs_max_depth = 3
 );
 
-// Hybrid node search: BM25 + cosine + optional BFS, merged with RRF.
-Result<NodeSearchResult> hybrid_node_search(
-    KuzuDriver& driver,
-    EmbedderClient& embedder,
-    std::string_view query,
-    std::string_view group_id,
-    int limit = 10,
-    float min_score = 0.0f,
-    const SearchFilters* filters = nullptr,
-    const std::vector<std::string>* bfs_origin_uuids = nullptr,
-    int bfs_max_depth = 3
-);
-
 // Episode search: BM25 fulltext on episode content.
 Result<EpisodeSearchResult> episode_search(
     KuzuDriver& driver,

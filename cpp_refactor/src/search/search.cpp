@@ -121,85 +121,9 @@ Result<SearchResult> hybrid_edge_search(
 // ============================================================================
 // Hybrid node search
 // ============================================================================
-
-Result<NodeSearchResult> hybrid_node_search(
-    KuzuDriver& driver,
-    EmbedderClient& embedder,
-    std::string_view query,
-    std::string_view group_id,
-    int limit,
-    float min_score,
-    const SearchFilters* filters,
-    const std::vector<std::string>* bfs_origin_uuids,
-    int bfs_max_depth
-) {
-    // Generate query embedding
-    std::vector<float> query_embedding;
-    try {
-        query_embedding = embedder.create(query);
-    } catch (const std::exception& e) {
-        return std::unexpected(GraphitiError{
-            ErrorCode::embedding_error,
-            std::format("Failed to generate query embedding: {}", e.what())
-        });
-    }
-
-    // Run BM25 and cosine searches
-    auto bm25_result = driver.search_entity_nodes_bm25(query, group_id, limit, filters);
-    auto cosine_result = driver.search_entity_nodes_cosine(query_embedding, group_id, 0.0f, limit, filters);
-
-    // Collect all nodes by UUID for final assembly
-    std::unordered_map<std::string, EntityNode> node_map;
-
-    std::vector<std::string> bm25_uuids;
-    if (bm25_result.has_value()) {
-        for (auto& node : bm25_result.value()) {
-            bm25_uuids.push_back(node.uuid);
-            node_map.emplace(node.uuid, std::move(node));
-        }
-    }
-
-    std::vector<std::string> cosine_uuids;
-    if (cosine_result.has_value()) {
-        for (auto& node : cosine_result.value()) {
-            cosine_uuids.push_back(node.uuid);
-            if (!node_map.contains(node.uuid)) {
-                node_map.emplace(node.uuid, std::move(node));
-            }
-        }
-    }
-
-    // BFS search for nodes
-    std::vector<std::string> bfs_uuids;
-    if (bfs_origin_uuids && !bfs_origin_uuids->empty()) {
-        auto bfs_result = node_bfs_search(
-            driver, *bfs_origin_uuids, bfs_max_depth, filters, group_id, 2 * limit
-        );
-        if (bfs_result.has_value()) {
-            for (auto& node : bfs_result.value()) {
-                bfs_uuids.push_back(node.uuid);
-                if (!node_map.contains(node.uuid)) {
-                    node_map.emplace(node.uuid, std::move(node));
-                }
-            }
-        }
-    }
-
-    // Merge with RRF
-    auto [merged_uuids, scores] = rrf({bm25_uuids, cosine_uuids, bfs_uuids}, 1, min_score);
-
-    // Assemble final results
-    NodeSearchResult result;
-    for (size_t i = 0; i < merged_uuids.size() && static_cast<int>(i) < limit; ++i) {
-        auto it = node_map.find(merged_uuids[i]);
-        if (it != node_map.end()) {
-            result.nodes.push_back(std::move(it->second));
-            result.scores.push_back(scores[i]);
-        }
-    }
-
-    return result;
-}
+// NOTE: hybrid_node_search() was removed — dead code ported from Python where
+// it was also unused. The search_orchestrator() handles all node search paths.
+// ============================================================================
 
 // ============================================================================
 // Episode search (BM25 only)

@@ -86,10 +86,16 @@ Result<std::vector<EntityEdge>> extract_edges(
     LLMClient& llm,
     const ExtractEdgesInput& input
 ) {
-    // Build node name -> UUID lookup
+    // Build node name -> UUID lookup (case-insensitive)
+    // After dedup, node names may be lowercased (e.g. "Agentic" → "agentic")
+    // but the edge extraction LLM uses the original casing, so we normalize.
+    auto to_lower = [](std::string s) {
+        for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return s;
+    };
     std::unordered_map<std::string, std::string> name_to_uuid;
     for (auto& node : input.nodes) {
-        name_to_uuid[node.name] = node.uuid;
+        name_to_uuid[to_lower(node.name)] = node.uuid;
     }
 
     // Build shards — split entities into groups of shard_size
@@ -164,11 +170,13 @@ Result<std::vector<EntityEdge>> extract_edges(
     std::vector<EntityEdge> edges;
 
     for (auto& ext : all_extracted.edges) {
-        auto src_it = name_to_uuid.find(ext.source_entity_name);
-        auto tgt_it = name_to_uuid.find(ext.target_entity_name);
+        auto src_it = name_to_uuid.find(to_lower(ext.source_entity_name));
+        auto tgt_it = name_to_uuid.find(to_lower(ext.target_entity_name));
 
         // Skip edges with unresolvable entity names
         if (src_it == name_to_uuid.end() || tgt_it == name_to_uuid.end()) {
+            log_debug("[graphiti]   ⚠️ dropped edge: \"%s\" → \"%s\" (entity not found)\n",
+                      ext.source_entity_name.c_str(), ext.target_entity_name.c_str());
             continue;
         }
 

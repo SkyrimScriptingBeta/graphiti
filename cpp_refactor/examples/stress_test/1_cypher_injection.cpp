@@ -28,7 +28,7 @@ static KuzuGraphStore make_store() {
         std::cerr << "Schema setup failed: " << r.error().message << "\n";
         std::exit(1);
     }
-    store.rebuild_indices();
+    (void)store.rebuild_indices();
     return store;
 }
 
@@ -41,7 +41,7 @@ static void save_test_data(KuzuGraphStore& store) {
     alice.group_id = "g";
     alice.created_at = now;
     alice.agent_ids = {"scout"};
-    store.persist_entity(alice);
+    (void)store.persist_entity(alice);
 
     EntityNode bob;
     bob.uuid = "bob-uuid";
@@ -49,7 +49,7 @@ static void save_test_data(KuzuGraphStore& store) {
     bob.group_id = "g";
     bob.created_at = now;
     bob.agent_ids = {"analyst"};
-    store.persist_entity(bob);
+    (void)store.persist_entity(bob);
 
     EntityEdge edge;
     edge.uuid = "edge-uuid";
@@ -60,9 +60,9 @@ static void save_test_data(KuzuGraphStore& store) {
     edge.fact = "Alice knows Bob";
     edge.created_at = now;
     edge.agent_ids = {"scout"};
-    store.persist_edge(edge);
+    (void)store.persist_edge(edge);
 
-    store.rebuild_indices();
+    (void)store.rebuild_indices();
 }
 
 int main() {
@@ -239,14 +239,14 @@ int main() {
         src.name = "Src";
         src.group_id = "g";
         src.created_at = now;
-        store.persist_entity(src);
+        (void)store.persist_entity(src);
 
         EntityNode tgt;
         tgt.uuid = "tgt";
         tgt.name = "Tgt";
         tgt.group_id = "g";
         tgt.created_at = now;
-        store.persist_entity(tgt);
+        (void)store.persist_entity(tgt);
 
         std::vector<std::pair<std::string, std::string>> nasty_facts = {
             {"quote-in-fact", "Alice said 'hello' to Bob"},

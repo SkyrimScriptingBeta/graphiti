@@ -22,7 +22,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         auto result = g.add_episode({
             .name = "unicode-test",
@@ -47,7 +47,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         auto result = g.add_episode({
             .name = "emoji-test",
@@ -75,7 +75,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         auto result = g.add_episode({
             .name = "code-injection",
@@ -104,7 +104,7 @@ The team uses JSON: {"name": "Alice", "role": "engineer"})",
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Episode 1: Alice works at Acme
         auto r1 = g.add_episode({
@@ -119,7 +119,7 @@ The team uses JSON: {"name": "Alice", "role": "engineer"})",
         stress::test("contradictory episode succeeds", r2.has_value());
 
         // Search should reflect the updated state
-        g.build_indices();
+        (void)g.build_indices();
         auto search = g.search({.query = "Where does Alice work?", .group_id = "g"});
         stress::test("search after contradiction works", search.has_value());
         if (search.has_value()) {
@@ -141,7 +141,7 @@ The team uses JSON: {"name": "Alice", "role": "engineer"})",
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         std::string content = "Alice works at Acme Corp as a software engineer.";
 
@@ -167,7 +167,7 @@ The team uses JSON: {"name": "Alice", "role": "engineer"})",
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         int success = 0;
         int fail = 0;
@@ -194,7 +194,7 @@ The team uses JSON: {"name": "Alice", "role": "engineer"})",
         stress::test("rapid-fire: all 5 episodes succeed", success == 5);
 
         // Search across all rapid episodes
-        g.build_indices();
+        (void)g.build_indices();
         auto search = g.search({.query = "Person engineer", .group_id = "rapid", .num_results = 20});
         stress::test("search across rapid episodes works",
             search.has_value());
@@ -208,7 +208,7 @@ The team uses JSON: {"name": "Alice", "role": "engineer"})",
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Empty agent_id
         auto r1 = g.add_episode({.name = "no-agent", .body = "Alice works at Acme.",
@@ -235,7 +235,7 @@ The team uses JSON: {"name": "Alice", "role": "engineer"})",
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Very long group_id
         std::string long_group(500, 'G');

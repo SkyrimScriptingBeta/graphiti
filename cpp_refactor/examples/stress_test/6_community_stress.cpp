@@ -31,7 +31,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         auto result = g.build_communities({"nonexistent_group"});
         stress::test("build_communities on empty graph succeeds", result.has_value());
@@ -48,7 +48,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Empty group_ids = auto-detect all groups (which is none here)
         auto result = g.build_communities({});
@@ -63,7 +63,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Ingest 3 related episodes to create a connected entity graph
         auto r1 = g.add_episode({
@@ -82,7 +82,7 @@ int main() {
         stress::test("episode 3 ingest", r3.has_value());
 
         // Rebuild indices (FTS)
-        g.build_indices();
+        (void)g.build_indices();
 
         auto result = g.build_communities({"community_test"});
         stress::test("build_communities after ingest succeeds", result.has_value());
@@ -111,19 +111,19 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
-        g.add_episode({.name = "ep1", .body = "Alice works at Acme Corp.",
+        (void)g.add_episode({.name = "ep1", .body = "Alice works at Acme Corp.",
             .source_description = "chat", .reference_time = now, .group_id = "search_test"});
-        g.add_episode({.name = "ep2", .body = "Bob works at Acme Corp with Alice.",
+        (void)g.add_episode({.name = "ep2", .body = "Bob works at Acme Corp with Alice.",
             .source_description = "chat", .reference_time = now + std::chrono::seconds(60), .group_id = "search_test"});
 
-        g.build_indices();
+        (void)g.build_indices();
         auto communities = g.build_communities({"search_test"});
         stress::test("communities built for search test", communities.has_value());
 
         // Rebuild FTS after community creation
-        g.build_indices();
+        (void)g.build_indices();
 
         auto search = g.search_advanced({
             .query = "Who works at Acme?",
@@ -151,11 +151,11 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
-        g.add_episode({.name = "ep1", .body = "Alice and Bob work at Acme Corp.",
+        (void)g.add_episode({.name = "ep1", .body = "Alice and Bob work at Acme Corp.",
             .source_description = "chat", .reference_time = now, .group_id = "rebuild_test"});
-        g.build_indices();
+        (void)g.build_indices();
 
         // First build
         auto first = g.build_communities({"rebuild_test"});
@@ -163,10 +163,10 @@ int main() {
         size_t first_count = first.has_value() ? first.value().first.size() : 0;
 
         // Add more data
-        g.add_episode({.name = "ep2",
+        (void)g.add_episode({.name = "ep2",
             .body = "Charlie and Diana also joined Acme Corp. They work with Alice.",
             .source_description = "chat", .reference_time = now + std::chrono::seconds(60), .group_id = "rebuild_test"});
-        g.build_indices();
+        (void)g.build_indices();
 
         // Rebuild — should clear old communities first
         auto second = g.build_communities({"rebuild_test"});
@@ -183,12 +183,12 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Build initial graph + communities
-        g.add_episode({.name = "ep1", .body = "Alice and Bob work at Acme Corp together.",
+        (void)g.add_episode({.name = "ep1", .body = "Alice and Bob work at Acme Corp together.",
             .source_description = "chat", .reference_time = now, .group_id = "update_test"});
-        g.build_indices();
+        (void)g.build_indices();
         auto communities = g.build_communities({"update_test"});
         stress::test("initial communities built", communities.has_value());
 
@@ -215,27 +215,27 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Create a dense graph: 5 episodes mentioning 10+ distinct entities
         // all connected through a shared hub
-        g.add_episode({.name = "large1",
+        (void)g.add_episode({.name = "large1",
             .body = "Alice, Bob, Charlie, and Diana all work at MegaCorp headquarters.",
             .source_description = "chat", .reference_time = now, .group_id = "large_cluster"});
-        g.add_episode({.name = "large2",
+        (void)g.add_episode({.name = "large2",
             .body = "Eve, Frank, and Grace also work at MegaCorp. Eve reports to Alice.",
             .source_description = "chat", .reference_time = now + std::chrono::seconds(30), .group_id = "large_cluster"});
-        g.add_episode({.name = "large3",
+        (void)g.add_episode({.name = "large3",
             .body = "Hank and Iris joined MegaCorp last week. They work with Bob and Charlie.",
             .source_description = "chat", .reference_time = now + std::chrono::seconds(60), .group_id = "large_cluster"});
-        g.add_episode({.name = "large4",
+        (void)g.add_episode({.name = "large4",
             .body = "Jack is the CEO of MegaCorp. Diana, Eve, and Frank report to Jack.",
             .source_description = "chat", .reference_time = now + std::chrono::seconds(90), .group_id = "large_cluster"});
-        g.add_episode({.name = "large5",
+        (void)g.add_episode({.name = "large5",
             .body = "MegaCorp is headquartered in San Francisco. All employees work there.",
             .source_description = "chat", .reference_time = now + std::chrono::seconds(120), .group_id = "large_cluster"});
 
-        g.build_indices();
+        (void)g.build_indices();
 
         auto result = g.build_communities({"large_cluster"});
         stress::test("large cluster community build succeeds", result.has_value());
@@ -259,17 +259,17 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
-        g.add_episode({.name = "special1",
+        (void)g.add_episode({.name = "special1",
             .body = "O'Brien works at Acme & Associates LLC. "
             "His colleague \"Bob\" (also known as B.J.) is there too.",
             .source_description = "chat", .reference_time = now, .group_id = "special_chars"});
-        g.add_episode({.name = "special2",
+        (void)g.add_episode({.name = "special2",
             .body = "O'Brien and \"Bob\" collaborate on the Q&A system at Acme & Associates.",
             .source_description = "chat", .reference_time = now + std::chrono::seconds(60), .group_id = "special_chars"});
 
-        g.build_indices();
+        (void)g.build_indices();
 
         auto result = g.build_communities({"special_chars"});
         stress::test("special chars in communities succeeds", result.has_value());
@@ -285,14 +285,14 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
-        g.add_episode({.name = "mg1", .body = "Alice works at Acme Corp.",
+        (void)g.add_episode({.name = "mg1", .body = "Alice works at Acme Corp.",
             .source_description = "chat", .reference_time = now, .group_id = "group_a"});
-        g.add_episode({.name = "mg2", .body = "Bob works at TechCo.",
+        (void)g.add_episode({.name = "mg2", .body = "Bob works at TechCo.",
             .source_description = "chat", .reference_time = now, .group_id = "group_b"});
 
-        g.build_indices();
+        (void)g.build_indices();
 
         // Build communities for both groups at once
         auto result = g.build_communities({"group_a", "group_b"});
@@ -320,11 +320,11 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
-        g.add_episode({.name = "auto1", .body = "Alice works at Acme Corp.",
+        (void)g.add_episode({.name = "auto1", .body = "Alice works at Acme Corp.",
             .source_description = "chat", .reference_time = now, .group_id = "auto_group"});
-        g.build_indices();
+        (void)g.build_indices();
 
         // Empty group_ids = auto-detect all groups
         auto result = g.build_communities({});
@@ -341,10 +341,10 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         for (int cycle = 0; cycle < 3; ++cycle) {
-            g.add_episode({
+            (void)g.add_episode({
                 .name = std::format("cycle-{}", cycle),
                 .body = std::format("Person_{} works at Company_{} doing Task_{}.",
                     cycle, cycle, cycle),
@@ -352,7 +352,7 @@ int main() {
                 .reference_time = now + std::chrono::seconds(cycle * 60),
                 .group_id = "rapid_rebuild"});
 
-            g.build_indices();
+            (void)g.build_indices();
 
             auto result = g.build_communities({"rapid_rebuild"});
             stress::test(
@@ -371,16 +371,16 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
-        g.add_episode({.name = "del1", .body = "Alice works at Acme.",
+        (void)g.add_episode({.name = "del1", .body = "Alice works at Acme.",
             .source_description = "chat", .reference_time = now, .group_id = "delete_test"});
-        g.build_indices();
+        (void)g.build_indices();
 
         auto c1 = g.build_communities({"delete_test"});
         stress::test("communities before delete", c1.has_value());
 
-        g.delete_group("delete_test");
+        (void)g.delete_group("delete_test");
 
         auto c2 = g.build_communities({"delete_test"});
         stress::test("communities after delete succeeds", c2.has_value());

@@ -30,13 +30,13 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Seed some data first
         auto r = g.add_episode({.name = "seed", .body = "Alice works at Acme Corp. Bob is the CTO.",
             .source_description = "test", .reference_time = now, .group_id = "g"});
         stress::test("seed data succeeds", r.has_value());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Launch 8 threads all searching concurrently
         constexpr int NUM_THREADS = 8;
@@ -74,7 +74,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         constexpr int NUM_THREADS = 4;
         std::atomic<int> success_count{0};
@@ -126,12 +126,12 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Seed data
-        g.add_episode({.name = "seed", .body = "Alice is an engineer.",
+        (void)g.add_episode({.name = "seed", .body = "Alice is an engineer.",
             .source_description = "test", .reference_time = now, .group_id = "mixed"});
-        g.build_indices();
+        (void)g.build_indices();
 
         std::atomic<int> read_ok{0};
         std::atomic<int> write_ok{0};

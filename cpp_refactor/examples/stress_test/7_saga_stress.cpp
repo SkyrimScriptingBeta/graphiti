@@ -30,7 +30,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         auto result = g.add_episode({
             .name = "ep1",
@@ -52,7 +52,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Episode 1
         auto r1 = g.add_episode({
@@ -104,7 +104,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         auto r1 = g.add_episode({
             .name = "ep1", .body = "The project started with requirement gathering.",
@@ -132,7 +132,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Saga 1: Alice's journey
         auto r1 = g.add_episode({
@@ -177,7 +177,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         std::vector<RawEpisode> episodes;
         for (int i = 0; i < 3; ++i) {
@@ -209,7 +209,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Apostrophes, quotes, unicode
         auto r1 = g.add_episode({
@@ -234,7 +234,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         auto r1 = g.add_episode({
             .name = "agent_saga1",
@@ -262,13 +262,13 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Build initial data + communities
-        g.add_episode({.name = "combo1", .body = "Alice and Bob work at Acme Corp.",
+        (void)g.add_episode({.name = "combo1", .body = "Alice and Bob work at Acme Corp.",
             .source_description = "chat", .reference_time = now, .group_id = "combo_group"});
-        g.build_indices();
-        g.build_communities({"combo_group"});
+        (void)g.build_indices();
+        (void)g.build_communities({"combo_group"});
 
         // Add episode with BOTH saga and update_communities
         auto result = g.add_episode({
@@ -288,7 +288,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         std::string long_saga_name(500, 'A');
         long_saga_name += "_saga";
@@ -306,7 +306,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         auto r1 = g.add_episode({
             .name = "cross1", .body = "Alice works in Group X.",

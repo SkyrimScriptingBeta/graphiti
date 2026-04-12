@@ -60,7 +60,7 @@ int main() {
         config.embedder.api_key = api_key;
 
         Graphiti g(std::move(config));
-        g.build_indices();
+        (void)g.build_indices();
 
         auto result = g.add_episode({
             .name = "bad-model", .body = "Alice works at Acme.",
@@ -85,7 +85,7 @@ int main() {
         config.embedder.model = "text-embedding-nonexistent";
 
         Graphiti g(std::move(config));
-        g.build_indices();
+        (void)g.build_indices();
 
         auto result = g.add_episode({
             .name = "bad-embedder", .body = "Alice works at Acme.",
@@ -119,7 +119,7 @@ int main() {
         config.embedder.api_key = api_key;
 
         Graphiti g(std::move(config));
-        g.build_indices();
+        (void)g.build_indices();
 
         // Succeed first
         auto r1 = g.add_episode({.name = "ok-1", .body = "Alice works at Acme.",
@@ -178,11 +178,11 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
-        g.add_episode({.name = "ep", .body = "Alice works at Acme.",
+        (void)g.add_episode({.name = "ep", .body = "Alice works at Acme.",
             .source_description = "test", .reference_time = now, .group_id = "g"});
-        g.build_indices();
+        (void)g.build_indices();
 
         // Filter with epoch time (1970-01-01)
         SearchFilters epoch_filter;
@@ -244,9 +244,9 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
-        g.add_episode({.name = "ep", .body = "Alice works at Acme.",
+        (void)g.add_episode({.name = "ep", .body = "Alice works at Acme.",
             .source_description = "test", .reference_time = now, .group_id = "g"});
 
         auto result = g.search({.query = "Alice", .group_id = "g", .num_results = 0});
@@ -263,9 +263,9 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
-        g.add_episode({.name = "ep", .body = "Alice works at Acme.",
+        (void)g.add_episode({.name = "ep", .body = "Alice works at Acme.",
             .source_description = "test", .reference_time = now, .group_id = "g"});
 
         auto result = g.search({.query = "Alice", .group_id = "g", .num_results = -1});
@@ -287,10 +287,10 @@ int main() {
         auto c2 = stress::make_config();
 
         Graphiti g1(std::move(c1));
-        g1.build_indices();
+        (void)g1.build_indices();
 
         Graphiti g2(std::move(c2));
-        g2.build_indices();
+        (void)g2.build_indices();
 
         auto r1 = g1.add_episode({.name = "inst1", .body = "Alice from instance 1.",
             .source_description = "test", .reference_time = now, .group_id = "g1"});

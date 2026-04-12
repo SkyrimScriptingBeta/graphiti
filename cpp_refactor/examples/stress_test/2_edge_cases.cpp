@@ -33,7 +33,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         auto result = g.search({.query = "hello", .group_id = "test_group"});
         stress::test("search on empty graph returns ok",
@@ -62,7 +62,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Ingest something
         auto add = g.add_episode({
@@ -86,7 +86,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         auto result = g.add_episode({
             .name = "empty-ep", .body = "",
@@ -108,7 +108,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         auto result = g.add_episode({
             .name = "", .body = "Alice works at Acme.",
@@ -129,7 +129,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // 10KB of text — should work but might be slow
         std::string long_body;
@@ -155,7 +155,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         std::vector<RawEpisode> empty_episodes;
         auto result = g.add_episode_bulk({.episodes = empty_episodes});
@@ -172,7 +172,7 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         std::vector<RawEpisode> single = {{
             .name = "solo",
@@ -201,10 +201,10 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
         // Add some data first
-        g.add_episode({.name = "ep", .body = "Alice works at Acme.",
+        (void)g.add_episode({.name = "ep", .body = "Alice works at Acme.",
             .source_description = "test", .reference_time = now, .group_id = "g"});
 
         auto result = g.search({.query = "", .group_id = "g"});
@@ -221,9 +221,9 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
-        g.add_episode({.name = "ep", .body = "Alice works at Acme Corp.",
+        (void)g.add_episode({.name = "ep", .body = "Alice works at Acme Corp.",
             .source_description = "test", .reference_time = now, .group_id = "g"});
 
         std::vector<std::pair<std::string, std::string>> queries = {
@@ -259,9 +259,9 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
-        g.add_episode({.name = "ep", .body = "Alice works at Acme Corp as an engineer.",
+        (void)g.add_episode({.name = "ep", .body = "Alice works at Acme Corp as an engineer.",
             .source_description = "test", .reference_time = now, .group_id = "g"});
 
         // Rebuild indices after data — FTS should still work
@@ -278,11 +278,11 @@ int main() {
     // ====================================================================
     {
         Graphiti g(stress::make_config());
-        g.build_indices();
+        (void)g.build_indices();
 
-        g.add_episode({.name = "ep", .body = "Alice works at Acme Corp as an engineer.",
+        (void)g.add_episode({.name = "ep", .body = "Alice works at Acme Corp as an engineer.",
             .source_description = "test", .reference_time = now, .group_id = "g"});
-        g.build_indices(); // rebuild for FTS
+        (void)g.build_indices(); // rebuild for FTS
 
         // Try all the recipe configs
         struct Recipe {

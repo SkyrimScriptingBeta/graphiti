@@ -9,7 +9,7 @@
  */
 
 #include "shared.h"
-#include "driver/kuzu_driver.h"
+#include <driver/kuzu_graph_store.h>
 
 #include <main/kuzu.h>
 
@@ -44,15 +44,15 @@ static std::string format_ids(const std::vector<std::string>& ids) {
 int main() {
     shared::require_api_key(); // validate env before opening DB
 
-    // Open the DB directly via KuzuDriver for raw query access
-    graphiti::KuzuDriver driver(shared::db_path());
-    auto setup = driver.setup_schema();
+    // Open the DB directly via KuzuGraphStore for raw query access
+    graphiti::KuzuGraphStore store(shared::db_path());
+    auto setup = store.setup_schema();
     if (!setup.has_value()) {
         std::cerr << "Schema setup error: " << setup.error().message << "\n";
         return 1;
     }
 
-    auto* conn = driver.connection();
+    auto* conn = store.connection();
 
     // --- Episodes ---
     shared::print_separator("EPISODES (each has a single agent_id)");

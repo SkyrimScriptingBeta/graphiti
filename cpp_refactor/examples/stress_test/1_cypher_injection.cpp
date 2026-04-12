@@ -15,24 +15,24 @@
  */
 
 #include "shared.h"
-#include "driver/kuzu_driver.h"
+#include <driver/kuzu_graph_store.h>
 
 #include <format>
 
 using namespace graphiti;
 
-static KuzuDriver make_driver() {
-    KuzuDriver driver(":memory:");
-    auto r = driver.setup_schema();
+static KuzuGraphStore make_store() {
+    KuzuGraphStore store(":memory:");
+    auto r = store.setup_schema();
     if (!r.has_value()) {
         std::cerr << "Schema setup failed: " << r.error().message << "\n";
         std::exit(1);
     }
-    driver.build_fts_indices();
-    return driver;
+    store.rebuild_indices();
+    return store;
 }
 
-static void save_test_data(KuzuDriver& driver) {
+static void save_test_data(KuzuGraphStore& store) {
     auto now = std::chrono::system_clock::now();
 
     EntityNode alice;
@@ -41,7 +41,7 @@ static void save_test_data(KuzuDriver& driver) {
     alice.group_id = "g";
     alice.created_at = now;
     alice.agent_ids = {"scout"};
-    driver.save_entity_node(alice);
+    store.persist_entity(alice);
 
     EntityNode bob;
     bob.uuid = "bob-uuid";
@@ -49,7 +49,7 @@ static void save_test_data(KuzuDriver& driver) {
     bob.group_id = "g";
     bob.created_at = now;
     bob.agent_ids = {"analyst"};
-    driver.save_entity_node(bob);
+    store.persist_entity(bob);
 
     EntityEdge edge;
     edge.uuid = "edge-uuid";
@@ -60,9 +60,9 @@ static void save_test_data(KuzuDriver& driver) {
     edge.fact = "Alice knows Bob";
     edge.created_at = now;
     edge.agent_ids = {"scout"};
-    driver.save_entity_edge(edge);
+    store.persist_edge(edge);
 
-    driver.build_fts_indices();
+    store.rebuild_indices();
 }
 
 int main() {
@@ -74,8 +74,8 @@ int main() {
     // ====================================================================
     stress::separator("agent_ids injection");
     {
-        auto driver = make_driver();
-        save_test_data(driver);
+        auto store = make_store();
+        save_test_data(store);
 
         // Classic SQL injection: break out of string literal
         std::vector<std::string> payloads = {
@@ -95,7 +95,7 @@ int main() {
             SearchFilters filters;
             filters.agent_ids = {payload};
 
-            auto result = driver.search_entity_edges_bm25(
+            auto result = store.search_edges_bm25(
                 "Alice", "g", 10, &filters);
 
             // We expect either:
@@ -123,13 +123,13 @@ int main() {
     // ====================================================================
     stress::separator("edge_types injection");
     {
-        auto driver = make_driver();
-        save_test_data(driver);
+        auto store = make_store();
+        save_test_data(store);
 
         SearchFilters filters;
         filters.edge_types = {"KNOWS' OR TRUE OR name='"};
 
-        auto result = driver.search_entity_edges_bm25("Alice", "g", 10, &filters);
+        auto result = store.search_edges_bm25("Alice", "g", 10, &filters);
         bool safe = !result.has_value() || result.value().size() <= 1;
         stress::test("edge_types with quote injection", safe);
         if (result.has_value()) {
@@ -144,13 +144,13 @@ int main() {
     // ====================================================================
     stress::separator("node_labels injection");
     {
-        auto driver = make_driver();
-        save_test_data(driver);
+        auto store = make_store();
+        save_test_data(store);
 
         SearchFilters filters;
         filters.node_labels = {"Person']) OR TRUE OR list_has_all(n.labels, ['"};
 
-        auto result = driver.search_entity_nodes_bm25("Alice", "g", 10, &filters);
+        auto result = store.search_entities_bm25("Alice", "g", 10, &filters);
         bool safe = !result.has_value() || result.value().size() <= 1;
         stress::test("node_labels with quote injection", safe);
         if (result.has_value()) {
@@ -165,7 +165,7 @@ int main() {
     // ====================================================================
     stress::separator("Special character persistence");
     {
-        auto driver = make_driver();
+        auto store = make_store();
 
         auto now = std::chrono::system_clock::now();
 
@@ -195,7 +195,7 @@ int main() {
             node.group_id = "g";
             node.created_at = now;
 
-            auto save_result = driver.save_entity_node(node);
+            auto save_result = store.persist_entity(node);
             if (!save_result.has_value()) {
                 stress::test(
                     std::format("save '{}' (len={})", label, name.size()),
@@ -205,7 +205,7 @@ int main() {
             }
 
             // Read it back and verify round-trip
-            auto get_result = driver.get_entity_node("nasty-" + label);
+            auto get_result = store.get_entity("nasty-" + label);
             if (!get_result.has_value()) {
                 stress::test(
                     std::format("roundtrip '{}' (len={})", label, name.size()),
@@ -230,7 +230,7 @@ int main() {
     // ====================================================================
     stress::separator("Entity edge with injection-style facts");
     {
-        auto driver = make_driver();
+        auto store = make_store();
 
         auto now = std::chrono::system_clock::now();
 
@@ -239,14 +239,14 @@ int main() {
         src.name = "Src";
         src.group_id = "g";
         src.created_at = now;
-        driver.save_entity_node(src);
+        store.persist_entity(src);
 
         EntityNode tgt;
         tgt.uuid = "tgt";
         tgt.name = "Tgt";
         tgt.group_id = "g";
         tgt.created_at = now;
-        driver.save_entity_node(tgt);
+        store.persist_entity(tgt);
 
         std::vector<std::pair<std::string, std::string>> nasty_facts = {
             {"quote-in-fact", "Alice said 'hello' to Bob"},
@@ -269,14 +269,14 @@ int main() {
             edge.fact = fact;
             edge.created_at = now;
 
-            auto save_result = driver.save_entity_edge(edge);
+            auto save_result = store.persist_edge(edge);
             if (!save_result.has_value()) {
                 stress::test(std::format("edge save '{}'", label), false);
                 std::cout << std::format("    -> error: {}\n", save_result.error().message);
                 continue;
             }
 
-            auto get_result = driver.get_entity_edge(edge.uuid);
+            auto get_result = store.get_edge(edge.uuid);
             bool matches = get_result.has_value() && get_result.value().fact == fact;
             stress::test(std::format("edge roundtrip '{}' (len={})", label, fact.size()), matches);
         }

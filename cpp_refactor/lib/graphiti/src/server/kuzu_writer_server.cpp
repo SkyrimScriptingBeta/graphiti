@@ -10,7 +10,7 @@
 //     --kuzu keel=/path/to/keel/knowledge \
 //     --kuzu wrench=/path/to/wrench/knowledge
 
-#include "driver/kuzu_driver.h"
+#include <driver/kuzu_graph_store.h>
 
 #include <main/kuzu.h>
 #include <CLI/CLI.hpp>
@@ -46,7 +46,7 @@ static void signal_handler(int) {
 // --- Per-DB write queue ---
 struct DbQueue {
     std::string name;
-    std::unique_ptr<KuzuDriver> driver;
+    std::unique_ptr<KuzuGraphStore> store;
     std::thread worker;
     std::mutex mu;
     std::condition_variable cv;
@@ -96,54 +96,60 @@ static TimePoint parse_timepoint(const json& j) {
 }
 
 // --- Request dispatcher ---
-static json dispatch(KuzuDriver& driver, const std::string& method, const json& params) {
+static json dispatch(KuzuGraphStore& store, const std::string& method, const json& params) {
     // --- Writes ---
-    if (method == "save_entity_node") {
+    if (method == "persist_entity") {
         auto node = params.at("node").get<EntityNode>();
-        auto r = driver.save_entity_node(node);
+        std::optional<std::vector<float>> embedding;
+        if (params.contains("embedding") && !params["embedding"].is_null())
+            embedding = params["embedding"].get<std::vector<float>>();
+        auto r = store.persist_entity(node, embedding);
         if (!r.has_value()) return {{"error", {{"code", -1}, {"message", r.error().message}}}};
         return {{"result", {{"ok", true}}}};
     }
-    if (method == "save_entity_node_embedding") {
+    if (method == "persist_entity_embedding") {
         auto uuid = params.at("uuid").get<std::string>();
         auto embedding = params.at("embedding").get<std::vector<float>>();
-        auto r = driver.save_entity_node_embedding(uuid, embedding);
+        auto r = store.persist_entity_embedding(uuid, embedding);
         if (!r.has_value()) return {{"error", {{"code", -1}, {"message", r.error().message}}}};
         return {{"result", {{"ok", true}}}};
     }
-    if (method == "save_entity_edge") {
+    if (method == "persist_edge") {
         auto edge = params.at("edge").get<EntityEdge>();
-        auto r = driver.save_entity_edge(edge);
+        std::optional<std::vector<float>> embedding;
+        if (params.contains("embedding") && !params["embedding"].is_null())
+            embedding = params["embedding"].get<std::vector<float>>();
+        auto r = store.persist_edge(edge, embedding);
         if (!r.has_value()) return {{"error", {{"code", -1}, {"message", r.error().message}}}};
         return {{"result", {{"ok", true}}}};
     }
-    if (method == "save_entity_edge_embedding") {
+    if (method == "persist_edge_embedding") {
         auto uuid = params.at("uuid").get<std::string>();
         auto embedding = params.at("embedding").get<std::vector<float>>();
-        auto r = driver.save_entity_edge_embedding(uuid, embedding);
+        auto r = store.persist_edge_embedding(uuid, embedding);
         if (!r.has_value()) return {{"error", {{"code", -1}, {"message", r.error().message}}}};
         return {{"result", {{"ok", true}}}};
     }
-    if (method == "save_episodic_node") {
+    if (method == "persist_episode") {
         auto node = params.at("node").get<EpisodicNode>();
-        auto r = driver.save_episodic_node(node);
+        auto r = store.persist_episode(node);
         if (!r.has_value()) return {{"error", {{"code", -1}, {"message", r.error().message}}}};
         return {{"result", {{"ok", true}}}};
     }
-    if (method == "save_episodic_edge") {
+    if (method == "persist_mention") {
         auto edge = params.at("edge").get<EpisodicEdge>();
-        auto r = driver.save_episodic_edge(edge);
+        auto r = store.persist_mention(edge);
         if (!r.has_value()) return {{"error", {{"code", -1}, {"message", r.error().message}}}};
         return {{"result", {{"ok", true}}}};
     }
-    if (method == "save_saga_node") {
+    if (method == "persist_saga") {
         auto node = params.at("node").get<SagaNode>();
-        auto r = driver.save_saga_node(node);
+        auto r = store.persist_saga(node);
         if (!r.has_value()) return {{"error", {{"code", -1}, {"message", r.error().message}}}};
         return {{"result", {{"ok", true}}}};
     }
-    if (method == "save_has_episode_edge") {
-        auto r = driver.save_has_episode_edge(
+    if (method == "link_saga_episode") {
+        auto r = store.link_saga_episode(
             params.at("uuid").get<std::string>(),
             params.at("saga_uuid").get<std::string>(),
             params.at("episode_uuid").get<std::string>(),
@@ -153,11 +159,11 @@ static json dispatch(KuzuDriver& driver, const std::string& method, const json& 
         if (!r.has_value()) return {{"error", {{"code", -1}, {"message", r.error().message}}}};
         return {{"result", {{"ok", true}}}};
     }
-    if (method == "save_next_episode_edge") {
-        auto r = driver.save_next_episode_edge(
+    if (method == "link_episode_sequence") {
+        auto r = store.link_episode_sequence(
             params.at("uuid").get<std::string>(),
-            params.at("source_episode_uuid").get<std::string>(),
-            params.at("target_episode_uuid").get<std::string>(),
+            params.at("prev_episode_uuid").get<std::string>(),
+            params.at("next_episode_uuid").get<std::string>(),
             params.at("group_id").get<std::string>(),
             parse_timepoint(params.at("created_at"))
         );
@@ -166,9 +172,9 @@ static json dispatch(KuzuDriver& driver, const std::string& method, const json& 
     }
 
     // --- Reads (need write-lock view for consistency) ---
-    if (method == "get_entity_node") {
+    if (method == "get_entity") {
         auto uuid = params.at("uuid").get<std::string>();
-        auto r = driver.get_entity_node(uuid);
+        auto r = store.get_entity(uuid);
         if (!r.has_value()) {
             if (r.error().code == ErrorCode::not_found)
                 return {{"result", {{"node", nullptr}}}};
@@ -176,27 +182,27 @@ static json dispatch(KuzuDriver& driver, const std::string& method, const json& 
         }
         return {{"result", {{"node", r.value()}}}};
     }
-    if (method == "get_saga_by_name") {
+    if (method == "find_saga") {
         auto name = params.at("name").get<std::string>();
         auto group_id = params.at("group_id").get<std::string>();
-        auto r = driver.get_saga_by_name(name, group_id);
+        auto r = store.find_saga(name, group_id);
         if (!r.has_value()) return {{"error", {{"code", -1}, {"message", r.error().message}}}};
         if (r.value().has_value())
             return {{"result", {{"node", r.value().value()}}}};
         return {{"result", {{"node", nullptr}}}};
     }
-    if (method == "get_last_episode_in_saga") {
+    if (method == "get_last_saga_episode") {
         auto saga_uuid = params.at("saga_uuid").get<std::string>();
         auto exclude = params.value("exclude_episode_uuid", "");
-        auto r = driver.get_last_episode_in_saga(saga_uuid, exclude);
+        auto r = store.get_last_saga_episode(saga_uuid, exclude);
         if (!r.has_value()) return {{"error", {{"code", -1}, {"message", r.error().message}}}};
         if (r.value().has_value())
             return {{"result", {{"episode_uuid", r.value().value()}}}};
         return {{"result", {{"episode_uuid", nullptr}}}};
     }
 
-    if (method == "build_fts_indices") {
-        auto r = driver.build_fts_indices();
+    if (method == "rebuild_indices") {
+        auto r = store.rebuild_indices();
         if (!r) return {{"error", {{"code", -1}, {"message", r.error().message}}}};
         return {{"result", true}};
     }
@@ -237,16 +243,16 @@ int main(int argc, char** argv) {
         fprintf(stderr, "[kuzu-writer] Opening DB '%s' at %s ...\n", name.c_str(), path.c_str());
         auto queue = std::make_unique<DbQueue>();
         queue->name = name;
-        queue->driver = std::make_unique<KuzuDriver>(path, /*read_only=*/false);
+        queue->store = std::make_unique<KuzuGraphStore>(path, /*read_only=*/false);
 
         // Ensure schema and FTS indices are set up
-        auto schema_result = queue->driver->setup_schema();
+        auto schema_result = queue->store->setup_schema();
         if (!schema_result.has_value()) {
             fprintf(stderr, "[kuzu-writer] ERROR: Failed to setup schema for '%s': %s\n",
                     name.c_str(), schema_result.error().message.c_str());
             return 1;
         }
-        auto fts_result = queue->driver->build_fts_indices();
+        auto fts_result = queue->store->rebuild_indices();
         if (!fts_result.has_value()) {
             fprintf(stderr, "[kuzu-writer] WARNING: Failed to build FTS indices for '%s': %s\n",
                     name.c_str(), fts_result.error().message.c_str());
@@ -300,8 +306,8 @@ int main(int argc, char** argv) {
         auto* queue = it->second.get();
         auto* ws_raw = &ws;
 
-        queue->enqueue([ws_raw, id, method, params, &driver = *queue->driver] {
-            json response = dispatch(driver, method, params);
+        queue->enqueue([ws_raw, id, method, params, &store = *queue->store] {
+            json response = dispatch(store, method, params);
             response["jsonrpc"] = "2.0";
             response["id"] = id;
             ws_raw->send(response.dump());
@@ -334,8 +340,8 @@ int main(int argc, char** argv) {
         if (now - last_checkpoint >= checkpoint_interval) {
             last_checkpoint = now;
             for (auto& [name, queue] : queues) {
-                queue->enqueue([&driver = *queue->driver, &name] {
-                    auto* conn = driver.connection();
+                queue->enqueue([&store = *queue->store, &name] {
+                    auto* conn = store.connection();
                     if (conn) {
                         auto result = conn->query("CHECKPOINT;");
                         if (result->isSuccess()) {
@@ -353,7 +359,7 @@ int main(int argc, char** argv) {
     // Final checkpoint before shutdown
     fprintf(stderr, "[kuzu-writer] Running final CHECKPOINT on all DBs...\n");
     for (auto& [name, queue] : queues) {
-        auto* conn = queue->driver->connection();
+        auto* conn = queue->store->connection();
         if (conn) {
             auto result = conn->query("CHECKPOINT;");
             if (result->isSuccess()) {

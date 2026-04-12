@@ -11,7 +11,7 @@
  */
 
 #include "shared.h"
-#include "driver/kuzu_driver.h"
+#include <driver/kuzu_graph_store.h>
 
 #include <chrono>
 #include <format>
@@ -145,7 +145,7 @@ int main() {
     }
 
     // ====================================================================
-    stress::separator("KUZU DRIVER: INVALID DB PATH");
+    stress::separator("KUZU GRAPH STORE: INVALID DB PATH");
     // ====================================================================
     {
         // Try various bad paths
@@ -156,8 +156,8 @@ int main() {
 
         for (auto& path : bad_paths) {
             try {
-                KuzuDriver driver(path);
-                auto r = driver.setup_schema();
+                KuzuGraphStore store(path);
+                auto r = store.setup_schema();
                 std::cout << std::format("    -> path '{}': {}\n",
                     path.empty() ? "(empty)" : path,
                     r.has_value() ? "succeeded" : "error");
